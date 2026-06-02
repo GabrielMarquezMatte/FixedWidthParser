@@ -1,4 +1,4 @@
-namespace Benchmarks.Formatters
+namespace FixedWidthParser.Formatters
 {
     public interface IColumnFormatter<TModel>
     {

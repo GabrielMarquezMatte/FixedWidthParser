@@ -1,5 +1,5 @@
 using CommunityToolkit.HighPerformance.Buffers;
-namespace Benchmarks.Processors
+namespace FixedWidthParser.Processors
 {
     public sealed class StringColumnProcessor<TModel> : IColumnProcessor<TModel> where TModel : allows ref struct
     {

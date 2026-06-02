@@ -1,6 +1,6 @@
 using System.Globalization;
 using BenchmarkDotNet.Attributes;
-using Benchmarks.Writers;
+using FixedWidthParser.Writers;
 
 namespace Benchmarks.Perf
 {

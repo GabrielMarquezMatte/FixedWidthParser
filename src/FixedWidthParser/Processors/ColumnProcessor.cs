@@ -1,6 +1,6 @@
 using CommunityToolkit.HighPerformance.Buffers;
 
-namespace Benchmarks.Processors
+namespace FixedWidthParser.Processors
 {
     public sealed class ColumnProcessor<TModel, TProperty> : IColumnProcessor<TModel> where TProperty : ISpanParsable<TProperty> where TModel : allows ref struct
     {

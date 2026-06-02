@@ -1,4 +1,4 @@
-namespace Benchmarks.Formatters
+namespace FixedWidthParser.Formatters
 {
     public sealed class SpanFormattableColumnFormatter<TModel, TProperty>(int start, int length, RefGetter<TModel, TProperty> getter) : IColumnFormatter<TModel> where TProperty : ISpanFormattable
     {

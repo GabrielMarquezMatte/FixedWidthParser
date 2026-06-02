@@ -1,6 +1,4 @@
 using BenchmarkDotNet.Running;
-using Benchmarks.Attributes;
-using Benchmarks.Parsers;
 
 namespace Benchmarks
 {
