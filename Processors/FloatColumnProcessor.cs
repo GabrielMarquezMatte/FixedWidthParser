@@ -21,7 +21,7 @@ namespace Benchmarks.Processors
                 return false;
             }
             var length = Math.Min(_length, value.Length - _start);
-            var slice = value.Slice(_start, length).TrimEnd(' ');
+            var slice = value.Slice(_start, length);
             if (!FastFloatParser.TryParseFloat(slice, out var parsedValue))
             {
                 return false;
