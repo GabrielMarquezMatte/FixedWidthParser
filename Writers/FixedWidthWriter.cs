@@ -125,6 +125,15 @@ namespace Benchmarks.Writers
         public void WriteMany(Stream stream, IEnumerable<TModel> models, IFormatProvider? formatProvider = null)
         {
             using var writer = new StreamWriter(stream, leaveOpen: true);
+            WriteMany(writer, models, formatProvider);
+        }
+
+        /// <summary>
+        /// Escreve uma coleção de modelos reaproveitando um StreamWriter já existente
+        /// (evita alocar/descartar um StreamWriter por chamada).
+        /// </summary>
+        public void WriteMany(StreamWriter writer, IEnumerable<TModel> models, IFormatProvider? formatProvider = null)
+        {
             Span<char> lineBuffer = _lineLength <= 1024 ? stackalloc char[_lineLength] : new char[_lineLength];
             foreach (var model in models)
             {
@@ -133,6 +142,34 @@ namespace Benchmarks.Writers
                 foreach (ref readonly var formatter in _formatters.AsSpan())
                 {
                     formatter.Format(in modelRef, lineBuffer, formatProvider);
+                }
+                writer.WriteLine(lineBuffer);
+            }
+        }
+
+        /// <summary>
+        /// Escreve uma coleção contígua de modelos sobre uma Stream, sem alocar enumerador
+        /// (itera por ref readonly, evitando cópia de cada struct).
+        /// </summary>
+        public void WriteMany(Stream stream, ReadOnlySpan<TModel> models, IFormatProvider? formatProvider = null)
+        {
+            using var writer = new StreamWriter(stream, leaveOpen: true);
+            WriteMany(writer, models, formatProvider);
+        }
+
+        /// <summary>
+        /// Escreve uma coleção contígua de modelos reaproveitando um StreamWriter existente,
+        /// sem alocar enumerador (itera por ref readonly, evitando cópia de cada struct).
+        /// </summary>
+        public void WriteMany(StreamWriter writer, ReadOnlySpan<TModel> models, IFormatProvider? formatProvider = null)
+        {
+            Span<char> lineBuffer = _lineLength <= 1024 ? stackalloc char[_lineLength] : new char[_lineLength];
+            foreach (ref readonly var model in models)
+            {
+                lineBuffer.Fill(' ');
+                foreach (ref readonly var formatter in _formatters.AsSpan())
+                {
+                    formatter.Format(in model, lineBuffer, formatProvider);
                 }
                 writer.WriteLine(lineBuffer);
             }

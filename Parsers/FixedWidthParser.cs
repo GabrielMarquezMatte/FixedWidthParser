@@ -8,8 +8,8 @@ namespace Benchmarks.Parsers
 {
     public sealed class FixedWidthParser<TModel> where TModel : new()
     {
-        private readonly Func<TModel> _modelFactory = BuildModelFactory();
-        private readonly IColumnProcessor<TModel>[] _processors = BuildProcessors();
+        private static readonly Func<TModel> _modelFactory = BuildModelFactory();
+        private static readonly IColumnProcessor<TModel>[] _processors = BuildProcessors();
         private static Func<TModel> BuildModelFactory()
         {
             var ctor = typeof(TModel).GetConstructor(Type.EmptyTypes);

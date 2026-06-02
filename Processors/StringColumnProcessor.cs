@@ -14,9 +14,13 @@ namespace Benchmarks.Processors
         }
         public bool TryProcess(ref TModel model, IFormatProvider? formatProvider, ReadOnlySpan<char> value, StringPool? pool)
         {
-            if (value.Length < _start + _length) return false;
-
-            var slice = value.Slice(_start, _length).TrimEnd(' ');
+            if (_start >= value.Length)
+            {
+                _setter(ref model, string.Empty);
+                return true;
+            }
+            var length = Math.Min(_length, value.Length - _start);
+            var slice = value.Slice(_start, length).TrimEnd(' ');
             if (pool is null)
             {
                 _setter(ref model, slice.ToString());
