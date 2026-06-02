@@ -16,11 +16,12 @@ namespace Benchmarks.Processors
         }
         public bool TryProcess(ref TModel model, IFormatProvider? formatProvider, ReadOnlySpan<char> value, StringPool? stringPool)
         {
-            if (value.Length < _start + _length)
+            if (_start >= value.Length)
             {
                 return false;
             }
-            var slice = value.Slice(_start, _length).TrimEnd(' ');
+            var length = Math.Min(_length, value.Length - _start);
+            var slice = value.Slice(_start, length).TrimEnd(' ');
             if (!FastFloatParser.TryParseFloat(slice, out var parsedValue))
             {
                 return false;
