@@ -2,7 +2,7 @@ using CommunityToolkit.HighPerformance.Buffers;
 
 namespace Benchmarks.Processors
 {
-    public sealed class ColumnProcessor<TModel, TProperty> : IColumnProcessor<TModel> where TProperty : ISpanParsable<TProperty>
+    public sealed class ColumnProcessor<TModel, TProperty> : IColumnProcessor<TModel> where TProperty : ISpanParsable<TProperty> where TModel : allows ref struct
     {
         private readonly int _start;
         private readonly int _length;

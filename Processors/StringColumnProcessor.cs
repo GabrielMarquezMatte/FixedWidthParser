@@ -1,7 +1,7 @@
 using CommunityToolkit.HighPerformance.Buffers;
 namespace Benchmarks.Processors
 {
-    public sealed class StringColumnProcessor<TModel> : IColumnProcessor<TModel>
+    public sealed class StringColumnProcessor<TModel> : IColumnProcessor<TModel> where TModel : allows ref struct
     {
         private readonly int _start;
         private readonly int _length;
