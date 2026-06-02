@@ -1,3 +1,9 @@
 <Solution>
-  <Project Path="Benchmarks.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/FixedWidthParser/FixedWidthParser.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Benchmarks/Benchmarks.csproj" />
+    <Project Path="tests/FixedWidthParser.Tests/FixedWidthParser.Tests.csproj" />
+  </Folder>
 </Solution>

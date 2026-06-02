@@ -1,4 +1,4 @@
-namespace Benchmarks.Formatters
+namespace FixedWidthParser.Formatters
 {
     public sealed class StringColumnFormatter<TModel>(int start, int length, RefGetter<TModel, string> getter) : IColumnFormatter<TModel>
     {

@@ -1,11 +1,11 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
-using Benchmarks.Attributes;
-using Benchmarks.Processors;
+using FixedWidthParser.Attributes;
+using FixedWidthParser.Processors;
 using CommunityToolkit.HighPerformance.Buffers;
 
-namespace Benchmarks.Parsers
+namespace FixedWidthParser.Parsers
 {
     public sealed class FixedWidthParser<TModel> where TModel : new(), allows ref struct
     {
@@ -43,50 +43,31 @@ namespace Benchmarks.Parsers
             return processors.ToArray();
         }
 
-        private static bool CreateColumnProcessor(PropertyInfo prop, [NotNullWhen(true)] out IColumnProcessor<TModel>? processor)
+        private static bool CreateColumnProcessor(MemberInfo member, [NotNullWhen(true)] out IColumnProcessor<TModel>? processor)
         {
-            var attribute = prop.GetCustomAttribute<FixedColumnAttribute>();
+            var attribute = member.GetCustomAttribute<FixedColumnAttribute>();
             if (attribute is null)
             {
                 processor = null;
                 return false;
             }
             var targetExpr = Expression.Parameter(typeof(TModel).MakeByRefType(), "model");
-            var valueExpr = Expression.Parameter(prop.PropertyType, "value");
-            var propExpr = Expression.Property(targetExpr, prop);
-            var assignExpr = Expression.Assign(propExpr, valueExpr);
-            var actionType = typeof(RefAction<,>).MakeGenericType(typeof(TModel), prop.PropertyType);
-            var setter = Expression.Lambda(actionType, assignExpr, targetExpr, valueExpr).Compile();
-            var processorType = prop.PropertyType switch
+            var (memberType, memberExpr) = member switch
             {
-                Type t when t == typeof(string) => typeof(StringColumnProcessor<>).MakeGenericType(typeof(TModel)),
-                Type t when t == typeof(double) => typeof(DoubleColumnProcessor<>).MakeGenericType(typeof(TModel)),
-                Type t when t == typeof(float) => typeof(FloatColumnProcessor<>).MakeGenericType(typeof(TModel)),
-                _ => typeof(ColumnProcessor<,>).MakeGenericType(typeof(TModel), prop.PropertyType)
+                PropertyInfo p => (p.PropertyType, Expression.Property(targetExpr, p)),
+                FieldInfo f => (f.FieldType, Expression.Field(targetExpr, f)),
+                _ => throw new ArgumentException($"Membro não suportado: {member.GetType().Name}", nameof(member))
             };
-            processor = (IColumnProcessor<TModel>)Activator.CreateInstance(processorType, attribute.Start, attribute.Length, setter)!;
-            return true;
-        }
-        private static bool CreateColumnProcessor(FieldInfo field, [NotNullWhen(true)] out IColumnProcessor<TModel>? processor)
-        {
-            var attribute = field.GetCustomAttribute<FixedColumnAttribute>();
-            if (attribute is null)
-            {
-                processor = null;
-                return false;
-            }
-            var targetExpr = Expression.Parameter(typeof(TModel).MakeByRefType(), "model");
-            var valueExpr = Expression.Parameter(field.FieldType, "value");
-            var fieldExpr = Expression.Field(targetExpr, field);
-            var assignExpr = Expression.Assign(fieldExpr, valueExpr);
-            var actionType = typeof(RefAction<,>).MakeGenericType(typeof(TModel), field.FieldType);
+            var valueExpr = Expression.Parameter(memberType, "value");
+            var assignExpr = Expression.Assign(memberExpr, valueExpr);
+            var actionType = typeof(RefAction<,>).MakeGenericType(typeof(TModel), memberType);
             var setter = Expression.Lambda(actionType, assignExpr, targetExpr, valueExpr).Compile();
-            var processorType = field.FieldType switch
+            var processorType = memberType switch
             {
                 Type t when t == typeof(string) => typeof(StringColumnProcessor<>).MakeGenericType(typeof(TModel)),
                 Type t when t == typeof(double) => typeof(DoubleColumnProcessor<>).MakeGenericType(typeof(TModel)),
                 Type t when t == typeof(float) => typeof(FloatColumnProcessor<>).MakeGenericType(typeof(TModel)),
-                _ => typeof(ColumnProcessor<,>).MakeGenericType(typeof(TModel), field.FieldType)
+                _ => typeof(ColumnProcessor<,>).MakeGenericType(typeof(TModel), memberType)
             };
             processor = (IColumnProcessor<TModel>)Activator.CreateInstance(processorType, attribute.Start, attribute.Length, setter)!;
             return true;

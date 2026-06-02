@@ -1,4 +1,4 @@
-namespace Benchmarks.Attributes
+namespace FixedWidthParser.Attributes
 {
     [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false)]
     public sealed class FixedColumnAttribute(int start, int length) : Attribute

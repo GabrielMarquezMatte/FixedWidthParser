@@ -1,7 +1,7 @@
 using CommunityToolkit.HighPerformance.Buffers;
 using csFastFloat;
 
-namespace Benchmarks.Processors
+namespace FixedWidthParser.Processors
 {
     public sealed class DoubleColumnProcessor<TModel> : IColumnProcessor<TModel> where TModel : allows ref struct
     {

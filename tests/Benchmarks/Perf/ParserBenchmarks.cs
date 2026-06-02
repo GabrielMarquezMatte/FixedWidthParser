@@ -1,7 +1,7 @@
 using System.Globalization;
 using BenchmarkDotNet.Attributes;
-using Benchmarks.Parsers;
 using CommunityToolkit.HighPerformance.Buffers;
+using FixedWidthParser.Parsers;
 
 namespace Benchmarks.Perf
 {

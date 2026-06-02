@@ -1,4 +1,4 @@
-using Benchmarks.Attributes;
+using FixedWidthParser.Attributes;
 
 namespace Benchmarks
 {
