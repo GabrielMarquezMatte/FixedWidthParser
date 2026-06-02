@@ -3,7 +3,7 @@ using csFastFloat;
 
 namespace Benchmarks.Processors
 {
-    public sealed class FloatColumnProcessor<TModel> : IColumnProcessor<TModel>
+    public sealed class FloatColumnProcessor<TModel> : IColumnProcessor<TModel> where TModel : allows ref struct
     {
         private readonly int _start;
         private readonly int _length;
