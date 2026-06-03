@@ -6,7 +6,7 @@ namespace Benchmarks.Perf
 {
     /// <summary>
     /// Mede o caminho quente de escrita fixed-width. Escreve em Stream.Null para isolar
-    /// formatação + encoding do custo de I/O em disco. WriteMany_ReuseWriter é o baseline.
+    /// formatação + encoding do custo de I/O em disco. WriteMany_NewStream é o baseline.
     /// </summary>
     [Config(typeof(RegressionConfig))]
     public class WriterBenchmarks
@@ -59,11 +59,24 @@ namespace Benchmarks.Perf
             _writer.WriteMany(_sink, _models.AsSpan(), Culture);
         }
 
-        /// <summary>Caminho assíncrono (ArrayPool + WriteLineAsync). Mede o overhead async.</summary>
+        /// <summary>
+        /// Async criando um StreamWriter por chamada (overload de Stream). Mistura o custo do
+        /// StreamWriter novo com o overhead da máquina de estados async — comparável ao NewStream.
+        /// </summary>
         [Benchmark]
-        public async Task WriteMany_Async()
+        public Task WriteMany_AsyncNewStream()
         {
-            await _writer.WriteManyAsync(Stream.Null, _models, Culture);
+            return _writer.WriteManyAsync(Stream.Null, _models, Culture);
+        }
+
+        /// <summary>
+        /// Async reaproveitando o StreamWriter (overload de StreamWriter). Isola o overhead puro
+        /// da assincronia: comparado a WriteMany_ReuseWriter, a diferença é só o async.
+        /// </summary>
+        [Benchmark]
+        public Task WriteMany_AsyncReuseWriter()
+        {
+            return _writer.WriteManyAsync(_sink, _models, Culture);
         }
     }
 }

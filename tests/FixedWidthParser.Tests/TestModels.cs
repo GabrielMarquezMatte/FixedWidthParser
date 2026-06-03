@@ -51,6 +51,14 @@ namespace FixedWidthParser.Tests
         [FixedColumn(5, 4)] public int Quantity;
     }
 
+    /// <summary>Modelo de coluna única, conveniente para os testes de leitura.</summary>
+    public readonly record struct CodeModel
+    {
+        public CodeModel() => Code = string.Empty;
+
+        [FixedColumn(0, 3)] public string Code { get; init; }
+    }
+
     /// <summary>Modelo com coluna decimal (passa pelo ColumnProcessor genérico, ciente de cultura).</summary>
     public readonly record struct DecimalModel
     {
