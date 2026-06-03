@@ -99,6 +99,21 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 6, Alignment = Alignment.Right)] public string Code { get; init; }
     }
 
+    /// <summary>Modelo ref struct — exercita a constraint allows ref struct do parser.</summary>
+    public ref struct RefPersonModel
+    {
+        public RefPersonModel()
+        {
+            Name = string.Empty;
+            Age = 0;
+            Salary = 0.0;
+        }
+
+        [FixedColumn(0, 10)] public string Name { get; set; }
+        [FixedColumn(10, 5)] public int Age { get; set; }
+        [FixedColumn(15, 10)] public double Salary { get; set; }
+    }
+
     /// <summary>Modelo de coluna única, conveniente para os testes de leitura.</summary>
     public readonly record struct CodeModel
     {
@@ -115,7 +130,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 12)] public decimal Amount { get; init; }
     }
 
-    /// <summary>Duas colunas string sobrepostas em [2,5), para leitura.</summary>
+    /// <summary>Duas colunas sobrepostas em [2,5) — layout inválido (deve falhar na construção).</summary>
     public readonly record struct OverlapReadModel
     {
         public OverlapReadModel()
@@ -128,7 +143,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(2, 5)] public string Right { get; init; }
     }
 
-    /// <summary>Duas colunas string sobrepostas em [3,6), para escrita.</summary>
+    /// <summary>Duas colunas sobrepostas em [3,6) — layout inválido (deve falhar na construção).</summary>
     public readonly record struct OverlapWriteModel
     {
         public OverlapWriteModel()
@@ -139,5 +154,34 @@ namespace FixedWidthParser.Tests
 
         [FixedColumn(0, 6)] public string Left { get; init; }
         [FixedColumn(3, 6)] public string Right { get; init; }
+    }
+
+    /// <summary>Start negativo — layout inválido.</summary>
+    public readonly record struct NegativeStartModel
+    {
+        public NegativeStartModel() => Value = string.Empty;
+
+        [FixedColumn(-1, 5)] public string Value { get; init; }
+    }
+
+    /// <summary>Length zero — layout inválido.</summary>
+    public readonly record struct ZeroLengthModel
+    {
+        public ZeroLengthModel() => Value = string.Empty;
+
+        [FixedColumn(0, 0)] public string Value { get; init; }
+    }
+
+    /// <summary>Colunas adjacentes mas sem sobreposição — layout válido (caso de borda).</summary>
+    public readonly record struct AdjacentColumnsModel
+    {
+        public AdjacentColumnsModel()
+        {
+            First = string.Empty;
+            Second = string.Empty;
+        }
+
+        [FixedColumn(0, 5)] public string First { get; init; }
+        [FixedColumn(5, 5)] public string Second { get; init; }
     }
 }

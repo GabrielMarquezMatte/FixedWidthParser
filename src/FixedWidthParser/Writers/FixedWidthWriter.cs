@@ -16,25 +16,24 @@ namespace FixedWidthParser.Writers
             var properties = typeof(TModel).GetProperties();
             var fields = typeof(TModel).GetFields();
             List<IColumnFormatter<TModel>> formatters = new(properties.Length + fields.Length);
+            List<(int Start, int Length, string Name)> columns = new(properties.Length + fields.Length);
             int maxLen = 0;
-            foreach (var prop in properties)
-            {
-                AddFormatter(prop, formatters, ref maxLen);
-            }
-            foreach (var field in fields)
-            {
-                AddFormatter(field, formatters, ref maxLen);
-            }
+
+            foreach (var prop in properties) AddFormatter(prop);
+            foreach (var field in fields) AddFormatter(field);
+
+            ColumnLayoutValidator.Validate(columns, typeof(TModel));
             _formatters = formatters.ToArray();
             _lineLength = maxLen;
-        }
 
-        private static void AddFormatter(MemberInfo member, List<IColumnFormatter<TModel>> formatters, ref int maxLen)
-        {
-            var attribute = member.GetCustomAttribute<FixedColumnAttribute>();
-            if (attribute is null) return;
-            maxLen = Math.Max(maxLen, attribute.Start + attribute.Length);
-            formatters.Add(CreateFormatter(member, attribute));
+            void AddFormatter(MemberInfo member)
+            {
+                var attribute = member.GetCustomAttribute<FixedColumnAttribute>();
+                if (attribute is null) return;
+                maxLen = Math.Max(maxLen, attribute.Start + attribute.Length);
+                columns.Add((attribute.Start, attribute.Length, member.Name));
+                formatters.Add(CreateFormatter(member, attribute));
+            }
         }
 
         private static IColumnFormatter<TModel> CreateFormatter(MemberInfo member, FixedColumnAttribute attribute)

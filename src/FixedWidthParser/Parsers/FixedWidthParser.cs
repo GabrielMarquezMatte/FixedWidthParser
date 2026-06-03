@@ -1,6 +1,6 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Processors;
 using CommunityToolkit.HighPerformance.Buffers;
@@ -9,8 +9,30 @@ namespace FixedWidthParser.Parsers
 {
     public sealed class FixedWidthParser<TModel> where TModel : new(), allows ref struct
     {
-        private static readonly Func<TModel> _modelFactory = BuildModelFactory();
-        private static readonly IColumnProcessor<TModel>[] _processors = BuildProcessors();
+        private static readonly Func<TModel> _modelFactory;
+        private static readonly IColumnProcessor<TModel>[] _processors;
+        private static readonly ExceptionDispatchInfo? _buildError;
+
+        // O build é estático (uma vez por tipo). Capturamos qualquer erro de layout/configuração
+        // e o relançamos do construtor de instância, para o chamador receber uma exceção limpa
+        // em vez de um TypeInitializationException ao primeiro uso.
+        static FixedWidthParser()
+        {
+            try
+            {
+                _modelFactory = BuildModelFactory();
+                _processors = BuildProcessors();
+            }
+            catch (Exception ex)
+            {
+                _modelFactory = null!;
+                _processors = [];
+                _buildError = ExceptionDispatchInfo.Capture(ex);
+            }
+        }
+
+        public FixedWidthParser() => _buildError?.Throw();
+
         private static Func<TModel> BuildModelFactory()
         {
             var ctor = typeof(TModel).GetConstructor(Type.EmptyTypes);
@@ -26,31 +48,25 @@ namespace FixedWidthParser.Parsers
             var properties = typeof(TModel).GetProperties();
             var fields = typeof(TModel).GetFields();
             List<IColumnProcessor<TModel>> processors = new(properties.Length + fields.Length);
-            foreach (var prop in properties)
-            {
-                if (CreateColumnProcessor(prop, out var processor))
-                {
-                    processors.Add(processor);
-                }
-            }
-            foreach (var field in fields)
-            {
-                if (CreateColumnProcessor(field, out var processor))
-                {
-                    processors.Add(processor);
-                }
-            }
+            List<(int Start, int Length, string Name)> columns = new(properties.Length + fields.Length);
+
+            foreach (var prop in properties) Add(prop);
+            foreach (var field in fields) Add(field);
+
+            ColumnLayoutValidator.Validate(columns, typeof(TModel));
             return processors.ToArray();
+
+            void Add(MemberInfo member)
+            {
+                var attribute = member.GetCustomAttribute<FixedColumnAttribute>();
+                if (attribute is null) return;
+                columns.Add((attribute.Start, attribute.Length, member.Name));
+                processors.Add(CreateColumnProcessor(member, attribute));
+            }
         }
 
-        private static bool CreateColumnProcessor(MemberInfo member, [NotNullWhen(true)] out IColumnProcessor<TModel>? processor)
+        private static IColumnProcessor<TModel> CreateColumnProcessor(MemberInfo member, FixedColumnAttribute attribute)
         {
-            var attribute = member.GetCustomAttribute<FixedColumnAttribute>();
-            if (attribute is null)
-            {
-                processor = null;
-                return false;
-            }
             var targetExpr = Expression.Parameter(typeof(TModel).MakeByRefType(), "model");
             var (memberType, memberExpr) = member switch
             {
@@ -69,8 +85,7 @@ namespace FixedWidthParser.Parsers
                 Type t when t == typeof(float) => typeof(FloatColumnProcessor<>).MakeGenericType(typeof(TModel)),
                 _ => typeof(ColumnProcessor<,>).MakeGenericType(typeof(TModel), memberType)
             };
-            processor = (IColumnProcessor<TModel>)Activator.CreateInstance(processorType, attribute.Start, attribute.Length, setter)!;
-            return true;
+            return (IColumnProcessor<TModel>)Activator.CreateInstance(processorType, attribute.Start, attribute.Length, setter)!;
         }
 
         public bool TryParse(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
