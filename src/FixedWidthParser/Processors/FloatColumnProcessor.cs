@@ -16,10 +16,6 @@ namespace FixedWidthParser.Processors
         }
         public bool TryProcess(ref TModel model, IFormatProvider? formatProvider, ReadOnlySpan<char> value, StringPool? stringPool)
         {
-            if (_start >= value.Length)
-            {
-                return false;
-            }
             var length = Math.Min(_length, value.Length - _start);
             var slice = value.Slice(_start, length);
             var decimalSeparator = CultureHelpers.GetDecimalSeparator(formatProvider);

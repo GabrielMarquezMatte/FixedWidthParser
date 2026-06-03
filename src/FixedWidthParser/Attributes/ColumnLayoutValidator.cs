@@ -7,23 +7,23 @@ namespace FixedWidthParser.Attributes
     /// </summary>
     public static class ColumnLayoutValidator
     {
-        public static void Validate(List<(int Start, int Length, string Name)> columns, Type modelType)
+        public static void Validate(Span<(int Start, int Length, string Name)> columns, Type modelType)
         {
-            foreach (var column in columns)
+            foreach (var (Start, Length, Name) in columns)
             {
-                if (column.Start < 0)
+                if (Start < 0)
                 {
                     throw new InvalidOperationException(
-                        $"Column \"{column.Name}\" in {modelType.Name} has a negative Start ({column.Start}).");
+                        $"Column \"{Name}\" in {modelType.Name} has a negative Start ({Start}).");
                 }
-                if (column.Length < 1)
+                if (Length < 1)
                 {
                     throw new InvalidOperationException(
-                        $"Column \"{column.Name}\" in {modelType.Name} has an invalid Length ({column.Length}); it must be >= 1.");
+                        $"Column \"{Name}\" in {modelType.Name} has an invalid Length ({Length}); it must be >= 1.");
                 }
             }
 
-            if (columns.Count < 2)
+            if (columns.Length < 2)
             {
                 return;
             }
@@ -32,7 +32,7 @@ namespace FixedWidthParser.Attributes
             columns.Sort(static (a, b) => a.Start != b.Start ? a.Start.CompareTo(b.Start) : a.Length.CompareTo(b.Length));
             var farthest = columns[0];
             int maxEnd = farthest.Start + farthest.Length;
-            for (int i = 1; i < columns.Count; i++)
+            for (int i = 1; i < columns.Length; i++)
             {
                 var current = columns[i];
                 if (current.Start < maxEnd)
