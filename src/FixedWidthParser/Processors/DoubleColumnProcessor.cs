@@ -22,7 +22,8 @@ namespace FixedWidthParser.Processors
             }
             var length = Math.Min(_length, value.Length - _start);
             var slice = value.Slice(_start, length);
-            if (!FastDoubleParser.TryParseDouble(slice, out var parsedValue))
+            var decimalSeparator = CultureHelpers.GetDecimalSeparator(formatProvider);
+            if (!FastDoubleParser.TryParseDouble(slice, out var parsedValue, decimal_separator: decimalSeparator))
             {
                 return false;
             }

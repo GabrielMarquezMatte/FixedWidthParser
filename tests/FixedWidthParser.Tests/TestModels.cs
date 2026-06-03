@@ -50,4 +50,38 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 5)] public string Code;
         [FixedColumn(5, 4)] public int Quantity;
     }
+
+    /// <summary>Modelo com coluna decimal (passa pelo ColumnProcessor genérico, ciente de cultura).</summary>
+    public readonly record struct DecimalModel
+    {
+        public DecimalModel() => Amount = 0m;
+
+        [FixedColumn(0, 12)] public decimal Amount { get; init; }
+    }
+
+    /// <summary>Duas colunas string sobrepostas em [2,5), para leitura.</summary>
+    public readonly record struct OverlapReadModel
+    {
+        public OverlapReadModel()
+        {
+            Left = string.Empty;
+            Right = string.Empty;
+        }
+
+        [FixedColumn(0, 5)] public string Left { get; init; }
+        [FixedColumn(2, 5)] public string Right { get; init; }
+    }
+
+    /// <summary>Duas colunas string sobrepostas em [3,6), para escrita.</summary>
+    public readonly record struct OverlapWriteModel
+    {
+        public OverlapWriteModel()
+        {
+            Left = string.Empty;
+            Right = string.Empty;
+        }
+
+        [FixedColumn(0, 6)] public string Left { get; init; }
+        [FixedColumn(3, 6)] public string Right { get; init; }
+    }
 }
