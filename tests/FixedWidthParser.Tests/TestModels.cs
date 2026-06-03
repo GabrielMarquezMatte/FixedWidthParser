@@ -184,4 +184,42 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 5)] public string First { get; init; }
         [FixedColumn(5, 5)] public string Second { get; init; }
     }
+
+    /// <summary>
+    /// ISpanFormattable that emits a configurable number of 'X' characters. Used to force the
+    /// writer's ArrayPool fallback when the formatted text exceeds the stack buffer.
+    /// </summary>
+    public readonly struct RepeatedChar(int count) : ISpanFormattable
+    {
+        public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider)
+        {
+            if (destination.Length < count)
+            {
+                charsWritten = 0;
+                return false;
+            }
+            destination[..count].Fill('X');
+            charsWritten = count;
+            return true;
+        }
+
+        public string ToString(string? format, IFormatProvider? formatProvider) => new('X', count);
+        public override string ToString() => new('X', count);
+    }
+
+    /// <summary>Single column of a value type that can format wider than the stack buffer.</summary>
+    public readonly record struct WideValueModel
+    {
+        public WideValueModel() => Value = default;
+
+        [FixedColumn(0, 4, Overflow = OverflowBehavior.Truncate)] public RepeatedChar Value { get; init; }
+    }
+
+    /// <summary>Right-aligned column that truncates on overflow (keeps the rightmost characters).</summary>
+    public readonly record struct RightTruncateModel
+    {
+        public RightTruncateModel() => Code = string.Empty;
+
+        [FixedColumn(0, 4, Alignment = Alignment.Right, Overflow = OverflowBehavior.Truncate)] public string Code { get; init; }
+    }
 }
