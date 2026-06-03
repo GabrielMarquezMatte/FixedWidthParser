@@ -72,6 +72,40 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
+        public void Write_FormattedValueLargerThanStackBuffer_UsesArrayPoolFallback()
+        {
+            var writer = new FixedWidthWriter<WideValueModel>();
+
+            // 700 chars > 256 (stack buffer) and > 512 (first rented buffer): exercises the
+            // ArrayPool fallback and its grow (size *= 2) path. Column is 4 wide + Truncate.
+            string line = WriteOne(writer, new WideValueModel { Value = new RepeatedChar(700) });
+
+            Assert.Equal("XXXX", line);
+        }
+
+        [Fact]
+        public void Write_FormattedValueJustOverStackBuffer_FitsFirstRentedBuffer()
+        {
+            var writer = new FixedWidthWriter<WideValueModel>();
+
+            // 300 chars > 256 (stack) but <= 512: fallback succeeds on the first rented buffer.
+            string line = WriteOne(writer, new WideValueModel { Value = new RepeatedChar(300) });
+
+            Assert.Equal("XXXX", line);
+        }
+
+        [Fact]
+        public void Write_RightAlignedOverflow_TruncatesKeepingRightmostChars()
+        {
+            var writer = new FixedWidthWriter<RightTruncateModel>();
+
+            // "ABCDEF" (6) in a right-aligned width-4 column → keeps the last 4 chars.
+            string line = WriteOne(writer, new RightTruncateModel { Code = "ABCDEF" });
+
+            Assert.Equal("CDEF", line);
+        }
+
+        [Fact]
         public void Write_StringOverflow_TruncatesByDefault()
         {
             // Default string behavior preserved (PersonModel.Name has width 10).

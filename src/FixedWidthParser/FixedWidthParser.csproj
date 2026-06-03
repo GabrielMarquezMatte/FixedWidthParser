@@ -1,10 +1,36 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
+    <!-- Ship XML docs (members without a doc comment do not warn). -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <PackageId>FixedWidthParser</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Gabriel Matte</Authors>
+    <Title>FixedWidthParser</Title>
+    <Description>High-performance, low-allocation parsing and writing of fixed-width (flat) files for .NET. Attribute-driven column mapping, sync/async batch reading (IEnumerable/IAsyncEnumerable), configurable formatting, culture awareness and ref struct support.</Description>
+    <PackageTags>fixed-width;flat-file;parser;writer;parsing;serialization;performance;span;low-allocation</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryType>git</RepositoryType>
+    <PackageReleaseNotes>Initial release.</PackageReleaseNotes>
+
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.HighPerformance" Version="8.4.2" />
