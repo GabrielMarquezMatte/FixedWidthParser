@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using FixedWidthParser.Attributes;
 
 namespace FixedWidthParser.Tests
@@ -133,6 +134,7 @@ namespace FixedWidthParser.Tests
     /// <summary>Two columns overlapping at [2,5) — invalid layout (must fail on construction).</summary>
     public readonly record struct OverlapReadModel
     {
+        [ExcludeFromCodeCoverage]
         public OverlapReadModel()
         {
             Left = string.Empty;
@@ -146,6 +148,7 @@ namespace FixedWidthParser.Tests
     /// <summary>Two columns overlapping at [3,6) — invalid layout (must fail on construction).</summary>
     public readonly record struct OverlapWriteModel
     {
+        [ExcludeFromCodeCoverage]
         public OverlapWriteModel()
         {
             Left = string.Empty;
@@ -159,6 +162,7 @@ namespace FixedWidthParser.Tests
     /// <summary>Negative Start — invalid layout.</summary>
     public readonly record struct NegativeStartModel
     {
+        [ExcludeFromCodeCoverage]
         public NegativeStartModel() => Value = string.Empty;
 
         [FixedColumn(-1, 5)] public string Value { get; init; }
@@ -167,6 +171,7 @@ namespace FixedWidthParser.Tests
     /// <summary>Zero Length — invalid layout.</summary>
     public readonly record struct ZeroLengthModel
     {
+        [ExcludeFromCodeCoverage]
         public ZeroLengthModel() => Value = string.Empty;
 
         [FixedColumn(0, 0)] public string Value { get; init; }
@@ -175,6 +180,7 @@ namespace FixedWidthParser.Tests
     /// <summary>Adjacent but non-overlapping columns — valid layout (edge case).</summary>
     public readonly record struct AdjacentColumnsModel
     {
+        [ExcludeFromCodeCoverage]
         public AdjacentColumnsModel()
         {
             First = string.Empty;
@@ -203,7 +209,9 @@ namespace FixedWidthParser.Tests
             return true;
         }
 
+        [ExcludeFromCodeCoverage]
         public string ToString(string? format, IFormatProvider? formatProvider) => new('X', count);
+        [ExcludeFromCodeCoverage]
         public override string ToString() => new('X', count);
     }
 

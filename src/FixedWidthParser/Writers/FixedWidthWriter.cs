@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Formatters;
 
@@ -22,7 +23,7 @@ namespace FixedWidthParser.Writers
             foreach (var prop in properties) AddFormatter(prop);
             foreach (var field in fields) AddFormatter(field);
 
-            ColumnLayoutValidator.Validate(columns, typeof(TModel));
+            ColumnLayoutValidator.Validate(CollectionsMarshal.AsSpan(columns), typeof(TModel));
             _formatters = formatters.ToArray();
             _lineLength = maxLen;
 

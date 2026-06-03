@@ -4,6 +4,7 @@ using System.Runtime.ExceptionServices;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Processors;
 using CommunityToolkit.HighPerformance.Buffers;
+using System.Runtime.InteropServices;
 
 namespace FixedWidthParser.Parsers
 {
@@ -53,7 +54,7 @@ namespace FixedWidthParser.Parsers
             foreach (var prop in properties) Add(prop);
             foreach (var field in fields) Add(field);
 
-            ColumnLayoutValidator.Validate(columns, typeof(TModel));
+            ColumnLayoutValidator.Validate(CollectionsMarshal.AsSpan(columns), typeof(TModel));
             return processors.ToArray();
 
             void Add(MemberInfo member)
