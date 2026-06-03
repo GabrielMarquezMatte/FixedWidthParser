@@ -51,6 +51,54 @@ namespace FixedWidthParser.Tests
         [FixedColumn(5, 4)] public int Quantity;
     }
 
+    /// <summary>Inteiro alinhado à direita com espaço.</summary>
+    public readonly record struct RightAlignedModel
+    {
+        public RightAlignedModel() => Value = 0;
+
+        [FixedColumn(0, 5, Alignment = Alignment.Right)] public int Value { get; init; }
+    }
+
+    /// <summary>Inteiro com zero-padding à direita.</summary>
+    public readonly record struct ZeroPaddedModel
+    {
+        public ZeroPaddedModel() => Value = 0;
+
+        [FixedColumn(0, 5, Alignment = Alignment.Right, Padding = '0')] public int Value { get; init; }
+    }
+
+    /// <summary>Double com format string fixa ("F2").</summary>
+    public readonly record struct FormattedModel
+    {
+        public FormattedModel() => Amount = 0;
+
+        [FixedColumn(0, 8, Format = "F2")] public double Amount { get; init; }
+    }
+
+    /// <summary>Coluna numérica estreita; overflow padrão (lança).</summary>
+    public readonly record struct NarrowModel
+    {
+        public NarrowModel() => Value = 0;
+
+        [FixedColumn(0, 3)] public int Value { get; init; }
+    }
+
+    /// <summary>Coluna numérica estreita; overflow opt-in para truncar.</summary>
+    public readonly record struct NarrowTruncateModel
+    {
+        public NarrowTruncateModel() => Value = 0;
+
+        [FixedColumn(0, 3, Overflow = OverflowBehavior.Truncate)] public int Value { get; init; }
+    }
+
+    /// <summary>String alinhada à direita.</summary>
+    public readonly record struct RightStringModel
+    {
+        public RightStringModel() => Code = string.Empty;
+
+        [FixedColumn(0, 6, Alignment = Alignment.Right)] public string Code { get; init; }
+    }
+
     /// <summary>Modelo de coluna única, conveniente para os testes de leitura.</summary>
     public readonly record struct CodeModel
     {
