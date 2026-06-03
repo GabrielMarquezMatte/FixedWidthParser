@@ -48,10 +48,17 @@ namespace FixedWidthParser.Writers
             };
             var delegateType = typeof(RefGetter<,>).MakeGenericType(typeof(TModel), memberType);
             var getter = Expression.Lambda(delegateType, memberExpr, targetExpr).Compile();
-            var formatterType = memberType == typeof(string)
+            bool isString = memberType == typeof(string);
+            // Resolve o overflow Default por tipo: string trunca, numéricos lançam.
+            var overflow = attribute.Overflow == OverflowBehavior.Default
+                ? (isString ? OverflowBehavior.Truncate : OverflowBehavior.Throw)
+                : attribute.Overflow;
+            var options = new ColumnFormatOptions(attribute.Alignment, attribute.Padding, attribute.Format, overflow);
+            var formatterType = isString
                 ? typeof(StringColumnFormatter<>).MakeGenericType(typeof(TModel))
                 : typeof(SpanFormattableColumnFormatter<,>).MakeGenericType(typeof(TModel), memberType);
-            return (IColumnFormatter<TModel>)Activator.CreateInstance(formatterType, attribute.Start, attribute.Length, getter)!;
+            return (IColumnFormatter<TModel>)Activator.CreateInstance(
+                formatterType, attribute.Start, attribute.Length, options, member.Name, getter)!;
         }
 
         /// <summary>
