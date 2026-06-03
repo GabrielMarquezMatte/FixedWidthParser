@@ -11,7 +11,7 @@ namespace FixedWidthParser.Formatters
             var slice = buffer.Slice(start, length);
             var value = getter(in model);
 
-            // Formata num buffer temporário e então coloca na coluna com alinhamento/preenchimento.
+            // Format into a temporary buffer, then place it in the column with alignment/padding.
             Span<char> stack = stackalloc char[256];
             if (value.TryFormat(stack, out int written, options.Format, formatProvider))
             {
@@ -19,7 +19,7 @@ namespace FixedWidthParser.Formatters
                 return;
             }
 
-            // Raro: o texto formatado excede o buffer da pilha; cresce via ArrayPool.
+            // Rare: the formatted text exceeds the stack buffer; grow via ArrayPool.
             for (int size = 512; ; size *= 2)
             {
                 char[] rented = ArrayPool<char>.Shared.Rent(size);

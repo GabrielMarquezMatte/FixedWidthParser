@@ -13,9 +13,9 @@ namespace FixedWidthParser.Parsers
         private static readonly IColumnProcessor<TModel>[] _processors;
         private static readonly ExceptionDispatchInfo? _buildError;
 
-        // O build é estático (uma vez por tipo). Capturamos qualquer erro de layout/configuração
-        // e o relançamos do construtor de instância, para o chamador receber uma exceção limpa
-        // em vez de um TypeInitializationException ao primeiro uso.
+        // The build is static (once per type). Any layout/configuration error is captured and
+        // rethrown from the instance constructor, so the caller gets a clean exception instead of
+        // a TypeInitializationException on first use.
         static FixedWidthParser()
         {
             try
@@ -72,7 +72,7 @@ namespace FixedWidthParser.Parsers
             {
                 PropertyInfo p => (p.PropertyType, Expression.Property(targetExpr, p)),
                 FieldInfo f => (f.FieldType, Expression.Field(targetExpr, f)),
-                _ => throw new ArgumentException($"Membro não suportado: {member.GetType().Name}", nameof(member))
+                _ => throw new ArgumentException($"Unsupported member: {member.GetType().Name}", nameof(member))
             };
             var valueExpr = Expression.Parameter(memberType, "value");
             var assignExpr = Expression.Assign(memberExpr, valueExpr);

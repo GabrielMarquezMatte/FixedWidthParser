@@ -2,7 +2,7 @@ using FixedWidthParser.Attributes;
 
 namespace FixedWidthParser.Tests
 {
-    /// <summary>Modelo baseado em propriedades (string + int + double).</summary>
+    /// <summary>Property-based model (string + int + double).</summary>
     public readonly record struct PersonModel
     {
         public PersonModel()
@@ -17,7 +17,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(15, 10)] public double Salary { get; init; }
     }
 
-    /// <summary>Modelo com coluna string ao final, para exercitar linha curta.</summary>
+    /// <summary>Model with a trailing string column, to exercise short lines.</summary>
     public readonly record struct TrailingStringModel
     {
         public TrailingStringModel()
@@ -30,7 +30,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(5, 10)] public string Note { get; init; }
     }
 
-    /// <summary>Modelo com coluna float.</summary>
+    /// <summary>Model with a float column.</summary>
     public readonly record struct MeasurementModel
     {
         public MeasurementModel() => Value = 0f;
@@ -38,7 +38,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 8)] public float Value { get; init; }
     }
 
-    /// <summary>Modelo baseado em campos públicos (exercita o caminho de FieldInfo).</summary>
+    /// <summary>Model based on public fields (exercises the FieldInfo path).</summary>
     public struct ProductModel
     {
         public ProductModel()
@@ -51,7 +51,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(5, 4)] public int Quantity;
     }
 
-    /// <summary>Inteiro alinhado à direita com espaço.</summary>
+    /// <summary>Integer right-aligned with spaces.</summary>
     public readonly record struct RightAlignedModel
     {
         public RightAlignedModel() => Value = 0;
@@ -59,7 +59,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 5, Alignment = Alignment.Right)] public int Value { get; init; }
     }
 
-    /// <summary>Inteiro com zero-padding à direita.</summary>
+    /// <summary>Integer zero-padded on the right.</summary>
     public readonly record struct ZeroPaddedModel
     {
         public ZeroPaddedModel() => Value = 0;
@@ -67,7 +67,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 5, Alignment = Alignment.Right, Padding = '0')] public int Value { get; init; }
     }
 
-    /// <summary>Double com format string fixa ("F2").</summary>
+    /// <summary>Double with a fixed format string ("F2").</summary>
     public readonly record struct FormattedModel
     {
         public FormattedModel() => Amount = 0;
@@ -75,7 +75,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 8, Format = "F2")] public double Amount { get; init; }
     }
 
-    /// <summary>Coluna numérica estreita; overflow padrão (lança).</summary>
+    /// <summary>Narrow numeric column; default overflow (throws).</summary>
     public readonly record struct NarrowModel
     {
         public NarrowModel() => Value = 0;
@@ -83,7 +83,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 3)] public int Value { get; init; }
     }
 
-    /// <summary>Coluna numérica estreita; overflow opt-in para truncar.</summary>
+    /// <summary>Narrow numeric column; opt-in overflow truncation.</summary>
     public readonly record struct NarrowTruncateModel
     {
         public NarrowTruncateModel() => Value = 0;
@@ -91,7 +91,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 3, Overflow = OverflowBehavior.Truncate)] public int Value { get; init; }
     }
 
-    /// <summary>String alinhada à direita.</summary>
+    /// <summary>Right-aligned string.</summary>
     public readonly record struct RightStringModel
     {
         public RightStringModel() => Code = string.Empty;
@@ -99,7 +99,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 6, Alignment = Alignment.Right)] public string Code { get; init; }
     }
 
-    /// <summary>Modelo ref struct — exercita a constraint allows ref struct do parser.</summary>
+    /// <summary>Ref struct model — exercises the parser's allows ref struct constraint.</summary>
     public ref struct RefPersonModel
     {
         public RefPersonModel()
@@ -114,7 +114,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(15, 10)] public double Salary { get; set; }
     }
 
-    /// <summary>Modelo de coluna única, conveniente para os testes de leitura.</summary>
+    /// <summary>Single-column model, convenient for the reader tests.</summary>
     public readonly record struct CodeModel
     {
         public CodeModel() => Code = string.Empty;
@@ -122,7 +122,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 3)] public string Code { get; init; }
     }
 
-    /// <summary>Modelo com coluna decimal (passa pelo ColumnProcessor genérico, ciente de cultura).</summary>
+    /// <summary>Model with a decimal column (goes through the generic, culture-aware ColumnProcessor).</summary>
     public readonly record struct DecimalModel
     {
         public DecimalModel() => Amount = 0m;
@@ -130,7 +130,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 12)] public decimal Amount { get; init; }
     }
 
-    /// <summary>Duas colunas sobrepostas em [2,5) — layout inválido (deve falhar na construção).</summary>
+    /// <summary>Two columns overlapping at [2,5) — invalid layout (must fail on construction).</summary>
     public readonly record struct OverlapReadModel
     {
         public OverlapReadModel()
@@ -143,7 +143,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(2, 5)] public string Right { get; init; }
     }
 
-    /// <summary>Duas colunas sobrepostas em [3,6) — layout inválido (deve falhar na construção).</summary>
+    /// <summary>Two columns overlapping at [3,6) — invalid layout (must fail on construction).</summary>
     public readonly record struct OverlapWriteModel
     {
         public OverlapWriteModel()
@@ -156,7 +156,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(3, 6)] public string Right { get; init; }
     }
 
-    /// <summary>Start negativo — layout inválido.</summary>
+    /// <summary>Negative Start — invalid layout.</summary>
     public readonly record struct NegativeStartModel
     {
         public NegativeStartModel() => Value = string.Empty;
@@ -164,7 +164,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(-1, 5)] public string Value { get; init; }
     }
 
-    /// <summary>Length zero — layout inválido.</summary>
+    /// <summary>Zero Length — invalid layout.</summary>
     public readonly record struct ZeroLengthModel
     {
         public ZeroLengthModel() => Value = string.Empty;
@@ -172,7 +172,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 0)] public string Value { get; init; }
     }
 
-    /// <summary>Colunas adjacentes mas sem sobreposição — layout válido (caso de borda).</summary>
+    /// <summary>Adjacent but non-overlapping columns — valid layout (edge case).</summary>
     public readonly record struct AdjacentColumnsModel
     {
         public AdjacentColumnsModel()

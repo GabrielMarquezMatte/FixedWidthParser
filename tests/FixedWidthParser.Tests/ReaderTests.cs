@@ -8,7 +8,7 @@ namespace FixedWidthParser.Tests
 {
     public class ReaderTests
     {
-        // Linhas no layout do PersonModel (Name[0,10) Age[10,5) Salary[15,10)), 25 chars cada.
+        // Lines in the PersonModel layout (Name[0,10) Age[10,5) Salary[15,10)), 25 chars each.
         private const string TwoPeople =
             "John Doe  30   60000.00  \n" +
             "Jane      28   55000.00  ";
@@ -29,9 +29,9 @@ namespace FixedWidthParser.Tests
         }
 
         [Theory]
-        [InlineData("ABC\nDEF\n")]   // LF + quebra final
+        [InlineData("ABC\nDEF\n")]   // LF + trailing newline
         [InlineData("ABC\r\nDEF\r\n")] // CRLF
-        [InlineData("ABC\nDEF")]      // sem quebra na última linha
+        [InlineData("ABC\nDEF")]      // no trailing newline on the last line
         public void Read_HandlesLineEndingsAndTrailingNewline(string text)
         {
             var reader = new FixedWidthReader<CodeModel>();
@@ -54,7 +54,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Read_LineLongerThanBuffer_StillParses()
         {
-            // bufferSize minúsculo força compactação e crescimento do buffer (linha de 25 chars).
+            // A tiny bufferSize forces buffer compaction and growth (25-char lines).
             var reader = new FixedWidthReader<PersonModel>(Inv, bufferSize: 4);
 
             var people = reader.Read(new StringReader(TwoPeople)).ToList();
@@ -69,12 +69,12 @@ namespace FixedWidthParser.Tests
         public void Read_InvalidLine_ThrowsWithLineNumber()
         {
             var reader = new FixedWidthReader<PersonModel>(Inv);
-            var text = "John Doe  30   60000.00  \nJane      XX   55000.00  "; // Age inválido na linha 2
+            var text = "John Doe  30   60000.00  \nJane      XX   55000.00  "; // invalid Age on line 2
 
             var ex = Assert.Throws<FormatException>(
                 () => reader.Read(new StringReader(text)).ToList());
 
-            Assert.Contains("Linha 2", ex.Message);
+            Assert.Contains("Line 2", ex.Message);
         }
 
         [Fact]
@@ -122,7 +122,7 @@ namespace FixedWidthParser.Tests
             }
         }
 
-        // ----------------------- Leitura assíncrona -----------------------
+        // ----------------------- Asynchronous reading -----------------------
 
         [Fact]
         public async Task ReadAsync_MultipleLines_ParsesAll()
@@ -157,7 +157,7 @@ namespace FixedWidthParser.Tests
                 await foreach (var _ in reader.ReadAsync(new StringReader(text))) { }
             });
 
-            Assert.Contains("Linha 2", ex.Message);
+            Assert.Contains("Line 2", ex.Message);
         }
 
         [Fact]

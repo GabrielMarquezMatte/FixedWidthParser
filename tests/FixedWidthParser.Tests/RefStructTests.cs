@@ -4,8 +4,8 @@ using static FixedWidthParser.Tests.TestHelpers;
 namespace FixedWidthParser.Tests
 {
     /// <summary>
-    /// Confirma que a constraint <c>allows ref struct</c> do parser é real: um modelo ref struct
-    /// é construído e parseado em runtime (Func/expression trees aceitam ref struct no .NET 10).
+    /// Confirms the parser's <c>allows ref struct</c> constraint is real: a ref struct model is
+    /// built and parsed at runtime (Func/expression trees accept ref struct on .NET 10).
     /// </summary>
     public class RefStructTests
     {

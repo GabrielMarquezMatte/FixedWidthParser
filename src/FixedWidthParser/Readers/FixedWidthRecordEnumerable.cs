@@ -6,11 +6,11 @@ using FixedWidthParser.Parsers;
 namespace FixedWidthParser.Readers
 {
     /// <summary>
-    /// Sequência de modelos lida sob demanda de um <see cref="TextReader"/>, <b>sem alocar uma
-    /// string por linha</b>: as linhas são lidas em blocos para um buffer de caracteres alugado
-    /// do <see cref="ArrayPool{T}"/> e fatiadas como <see cref="ReadOnlySpan{T}"/> direto ao
-    /// parser. Expõe um enumerador <see langword="struct"/> para iteração sem alocação em
-    /// <c>foreach</c>, e implementa <see cref="IEnumerable{T}"/> para interoperar com LINQ.
+    /// A lazily-read sequence of models from a <see cref="TextReader"/>, <b>without allocating a
+    /// string per line</b>: lines are read in blocks into a character buffer rented from the
+    /// <see cref="ArrayPool{T}"/> and sliced as <see cref="ReadOnlySpan{T}"/> straight into the
+    /// parser. Exposes a <see langword="struct"/> enumerator for allocation-free iteration in
+    /// <c>foreach</c>, and implements <see cref="IEnumerable{T}"/> for LINQ interop.
     /// </summary>
     public sealed class FixedWidthRecordEnumerable<TModel> : IEnumerable<TModel> where TModel : new()
     {
@@ -37,7 +37,7 @@ namespace FixedWidthParser.Readers
             _bufferSize = bufferSize;
         }
 
-        /// <summary>Enumerador struct: iteração em <c>foreach</c> sem alocar no heap.</summary>
+        /// <summary>Struct enumerator: <c>foreach</c> iteration without heap allocation.</summary>
         public Enumerator GetEnumerator()
             => new(_parser, _readerFactory(), _ownsReader, _formatProvider, _stringPool, _bufferSize);
 
@@ -52,9 +52,9 @@ namespace FixedWidthParser.Readers
             private readonly StringPool? _stringPool;
             private TextReader? _reader;
             private char[] _buffer;
-            private int _start;    // início dos dados ainda não consumidos
-            private int _end;      // fim dos dados válidos no buffer
-            private int _scanFrom; // posição a partir da qual ainda não procuramos '\n'
+            private int _start;    // start of the data not yet consumed
+            private int _end;      // end of the valid data in the buffer
+            private int _scanFrom; // position from which we have not yet searched for '\n'
             private bool _eof;
             private int _lineNumber;
             private TModel _current;
@@ -106,14 +106,14 @@ namespace FixedWidthParser.Readers
                                 Parse(line);
                                 return true;
                             }
-                            continue; // pula linhas vazias
+                            continue; // skip empty lines
                         }
-                        _scanFrom = _end; // nenhum '\n' no que já foi lido
+                        _scanFrom = _end; // no '\n' in what has been read so far
                     }
 
                     if (_eof)
                     {
-                        // Última linha sem quebra de linha final.
+                        // Last line without a trailing newline.
                         if (_start < _end)
                         {
                             int contentEnd = _end;
@@ -140,13 +140,13 @@ namespace FixedWidthParser.Readers
                 if (!_parser.TryParse(line, _formatProvider, _stringPool, out _current))
                 {
                     throw new FormatException(
-                        $"Linha {_lineNumber} não pôde ser convertida em {typeof(TModel).Name}: \"{line.ToString()}\".");
+                        $"Line {_lineNumber} could not be parsed into {typeof(TModel).Name}: \"{line.ToString()}\".");
                 }
             }
 
             private void Refill(TextReader reader)
             {
-                // Compacta os dados não consumidos para o início do buffer.
+                // Compact the unconsumed data to the start of the buffer.
                 if (_start > 0)
                 {
                     int len = _end - _start;
@@ -155,7 +155,7 @@ namespace FixedWidthParser.Readers
                     _scanFrom -= _start;
                     _start = 0;
                 }
-                // Buffer cheio com uma única linha parcial: dobra a capacidade.
+                // Buffer full with a single partial line: double the capacity.
                 if (_end == _buffer.Length)
                 {
                     var bigger = ArrayPool<char>.Shared.Rent(_buffer.Length * 2);
@@ -179,7 +179,7 @@ namespace FixedWidthParser.Readers
                 _reader = null;
             }
 
-            public readonly void Reset() => throw new NotSupportedException("A leitura é de passagem única.");
+            public readonly void Reset() => throw new NotSupportedException("Reading is single-pass.");
         }
     }
 }

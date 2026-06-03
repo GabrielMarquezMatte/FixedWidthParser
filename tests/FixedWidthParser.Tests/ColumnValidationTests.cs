@@ -4,8 +4,8 @@ using FixedWidthParser.Writers;
 namespace FixedWidthParser.Tests
 {
     /// <summary>
-    /// Validação de layout na construção: Start &gt;= 0, Length &gt;= 1 e sem colunas sobrepostas.
-    /// Falha cedo, com mensagem clara, em vez de erros obscuros por linha em tempo de execução.
+    /// Layout validation on construction: Start &gt;= 0, Length &gt;= 1 and no overlapping columns.
+    /// Fails early, with a clear message, instead of obscure per-line errors at runtime.
     /// </summary>
     public class ColumnValidationTests
     {
@@ -13,14 +13,14 @@ namespace FixedWidthParser.Tests
         public void Parser_OverlappingColumns_ThrowsOnConstruction()
         {
             var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthParser<OverlapReadModel>());
-            Assert.Contains("sobrepostas", ex.Message);
+            Assert.Contains("Overlapping", ex.Message);
         }
 
         [Fact]
         public void Writer_OverlappingColumns_ThrowsOnConstruction()
         {
             var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthWriter<OverlapWriteModel>());
-            Assert.Contains("sobrepostas", ex.Message);
+            Assert.Contains("Overlapping", ex.Message);
         }
 
         [Fact]
@@ -40,7 +40,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void AdjacentColumns_AreValid()
         {
-            // Colunas encostadas (fim de uma == início da outra) não se sobrepõem.
+            // Touching columns (end of one == start of the next) do not overlap.
             var parser = new FixedWidthParser<AdjacentColumnsModel>();
             var writer = new FixedWidthWriter<AdjacentColumnsModel>();
 

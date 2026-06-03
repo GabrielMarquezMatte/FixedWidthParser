@@ -11,7 +11,7 @@ namespace FixedWidthParser.Tests
         {
             var parser = new FixedWidthParser<PersonModel>();
 
-            //                              Name      Age  Salary
+            //                         Name      Age  Salary
             bool ok = parser.TryParse("John Doe  30   60000.00  ", Inv, null, out var model);
 
             Assert.True(ok);
@@ -45,7 +45,7 @@ namespace FixedWidthParser.Tests
         {
             var parser = new FixedWidthParser<PersonModel>();
 
-            // Linha termina antes da coluna Age (start 10): processador numérico falha.
+            // The line ends before the Age column (start 10): the numeric processor fails.
             bool ok = parser.TryParse("John", Inv, null, out _);
 
             Assert.False(ok);
@@ -56,7 +56,7 @@ namespace FixedWidthParser.Tests
         {
             var parser = new FixedWidthParser<TrailingStringModel>();
 
-            // Linha cobre apenas Id; a coluna string (start 5) fica fora e vira string vazia.
+            // The line only covers Id; the string column (start 5) falls outside and becomes empty.
             bool ok = parser.TryParse("42", Inv, null, out var model);
 
             Assert.True(ok);

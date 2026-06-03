@@ -8,7 +8,7 @@ namespace FixedWidthParser.Tests
     {
         public static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-        /// <summary>Escreve um modelo e devolve a linha já sem a quebra de linha final.</summary>
+        /// <summary>Writes a model and returns the line without the trailing newline.</summary>
         public static string WriteOne<T>(FixedWidthWriter<T> writer, in T model, IFormatProvider? formatProvider = null)
         {
             using var ms = new MemoryStream();

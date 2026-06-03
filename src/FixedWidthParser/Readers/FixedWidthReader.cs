@@ -5,9 +5,9 @@ using FixedWidthParser.Parsers;
 namespace FixedWidthParser.Readers
 {
     /// <summary>
-    /// Lê modelos a partir de fontes textuais (TextReader, Stream ou arquivo) de forma
-    /// preguiçosa e com baixa alocação. Configurado uma vez com cultura, <see cref="StringPool"/>
-    /// opcional e tamanho de buffer; reutilizável para várias leituras.
+    /// Reads models from text sources (TextReader, Stream or file) lazily and with low
+    /// allocation. Configured once with culture, an optional <see cref="StringPool"/> and a
+    /// buffer size; reusable across multiple reads.
     /// </summary>
     public sealed class FixedWidthReader<TModel> where TModel : new()
     {
@@ -24,7 +24,7 @@ namespace FixedWidthParser.Readers
             _bufferSize = bufferSize;
         }
 
-        /// <summary>Lê de um <see cref="TextReader"/> existente (passagem única; não o descarta).</summary>
+        /// <summary>Reads from an existing <see cref="TextReader"/> (single pass; does not dispose it).</summary>
         public FixedWidthRecordEnumerable<TModel> Read(TextReader reader)
         {
             ArgumentNullException.ThrowIfNull(reader);
@@ -33,8 +33,8 @@ namespace FixedWidthParser.Readers
         }
 
         /// <summary>
-        /// Lê de uma <see cref="Stream"/> (passagem única). Descarta o <see cref="StreamReader"/>
-        /// criado internamente; <paramref name="leaveOpen"/> controla o fechamento da Stream.
+        /// Reads from a <see cref="Stream"/> (single pass). Disposes the internally created
+        /// <see cref="StreamReader"/>; <paramref name="leaveOpen"/> controls closing the stream.
         /// </summary>
         public FixedWidthRecordEnumerable<TModel> Read(Stream stream, Encoding? encoding = null, bool leaveOpen = false)
         {
@@ -46,7 +46,7 @@ namespace FixedWidthParser.Readers
                 ownsReader: true, _formatProvider, _stringPool, _bufferSize);
         }
 
-        /// <summary>Lê de um arquivo. Reenumerável: cada iteração abre o arquivo novamente.</summary>
+        /// <summary>Reads from a file. Re-enumerable: each iteration opens the file again.</summary>
         public FixedWidthRecordEnumerable<TModel> ReadFile(string path, Encoding? encoding = null)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
@@ -57,7 +57,7 @@ namespace FixedWidthParser.Readers
                 ownsReader: true, _formatProvider, _stringPool, _bufferSize);
         }
 
-        /// <summary>Lê de um <see cref="TextReader"/> existente via await foreach (não o descarta).</summary>
+        /// <summary>Reads from an existing <see cref="TextReader"/> via await foreach (does not dispose it).</summary>
         public FixedWidthAsyncRecordEnumerable<TModel> ReadAsync(TextReader reader)
         {
             ArgumentNullException.ThrowIfNull(reader);
@@ -66,8 +66,8 @@ namespace FixedWidthParser.Readers
         }
 
         /// <summary>
-        /// Lê de uma <see cref="Stream"/> via await foreach (passagem única). Descarta o
-        /// <see cref="StreamReader"/> criado; <paramref name="leaveOpen"/> controla a Stream.
+        /// Reads from a <see cref="Stream"/> via await foreach (single pass). Disposes the created
+        /// <see cref="StreamReader"/>; <paramref name="leaveOpen"/> controls the stream.
         /// </summary>
         public FixedWidthAsyncRecordEnumerable<TModel> ReadAsync(Stream stream, Encoding? encoding = null, bool leaveOpen = false)
         {
@@ -80,8 +80,8 @@ namespace FixedWidthParser.Readers
         }
 
         /// <summary>
-        /// Lê de um arquivo via await foreach, com I/O assíncrono de verdade (FileStream
-        /// useAsync). Reenumerável: cada iteração reabre o arquivo.
+        /// Reads from a file via await foreach, with true asynchronous I/O (FileStream useAsync).
+        /// Re-enumerable: each iteration reopens the file.
         /// </summary>
         public FixedWidthAsyncRecordEnumerable<TModel> ReadFileAsync(string path, Encoding? encoding = null)
         {

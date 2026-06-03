@@ -6,17 +6,17 @@ using BenchmarkDotNet.Order;
 namespace Benchmarks.Perf
 {
     /// <summary>
-    /// Configuração base para detecção de regressão: ordena por velocidade, mede alocações
-    /// e exporta JSON completo em BenchmarkDotNet.Artifacts/results para comparar entre commits.
+    /// Base config for regression detection: orders by speed, measures allocations and exports
+    /// full JSON to BenchmarkDotNet.Artifacts/results for comparison across commits.
     /// </summary>
     public sealed class RegressionConfig : ManualConfig
     {
         public RegressionConfig()
         {
-            // MemoryDiagnoser: aloca por op (chave para regressões de GC).
+            // MemoryDiagnoser: allocations per op (key for GC regressions).
             AddDiagnoser(MemoryDiagnoser.Default);
-            // JSON completo em BenchmarkDotNet.Artifacts/results para arquivar/comparar entre commits.
-            // (O MarkdownExporter.GitHub já vem no config padrão do BenchmarkSwitcher.)
+            // Full JSON in BenchmarkDotNet.Artifacts/results to archive/compare across commits.
+            // (MarkdownExporter.GitHub already ships in the BenchmarkSwitcher default config.)
             AddExporter(JsonExporter.Full);
             WithOrderer(new DefaultOrderer(SummaryOrderPolicy.FastestToSlowest));
         }

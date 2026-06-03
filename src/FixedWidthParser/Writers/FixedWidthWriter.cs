@@ -43,12 +43,12 @@ namespace FixedWidthParser.Writers
             {
                 PropertyInfo p => (p.PropertyType, Expression.Property(targetExpr, p)),
                 FieldInfo f => (f.FieldType, Expression.Field(targetExpr, f)),
-                _ => throw new ArgumentException($"Membro não suportado: {member.GetType().Name}", nameof(member))
+                _ => throw new ArgumentException($"Unsupported member: {member.GetType().Name}", nameof(member))
             };
             var delegateType = typeof(RefGetter<,>).MakeGenericType(typeof(TModel), memberType);
             var getter = Expression.Lambda(delegateType, memberExpr, targetExpr).Compile();
             bool isString = memberType == typeof(string);
-            // Resolve o overflow Default por tipo: string trunca, numéricos lançam.
+            // Resolve Default overflow per type: string truncates, numeric throws.
             var overflow = attribute.Overflow == OverflowBehavior.Default
                 ? (isString ? OverflowBehavior.Truncate : OverflowBehavior.Throw)
                 : attribute.Overflow;
@@ -61,8 +61,8 @@ namespace FixedWidthParser.Writers
         }
 
         /// <summary>
-        /// Formata uma única linha do modelo no buffer informado: preenche com espaços e
-        /// aplica cada formatter de coluna. Núcleo compartilhado por todos os overloads de escrita.
+        /// Formats a single model line into the given buffer: fills it with spaces and applies
+        /// each column formatter. Shared core used by every write overload.
         /// </summary>
         private void FormatLine(in TModel model, Span<char> lineBuffer, IFormatProvider? formatProvider)
         {
@@ -120,7 +120,7 @@ namespace FixedWidthParser.Writers
         }
 
         /// <summary>
-        /// Escreve um único modelo diretamente em uma Stream.
+        /// Writes a single model directly to a Stream.
         /// </summary>
         public void Write(Stream stream, in TModel model, IFormatProvider? formatProvider = null)
         {
@@ -129,7 +129,7 @@ namespace FixedWidthParser.Writers
         }
 
         /// <summary>
-        /// Escreve uma coleção de modelos em uma Stream de forma contínua.
+        /// Writes a collection of models to a Stream continuously.
         /// </summary>
         public void WriteMany(Stream stream, IEnumerable<TModel> models, IFormatProvider? formatProvider = null)
         {
@@ -138,8 +138,8 @@ namespace FixedWidthParser.Writers
         }
 
         /// <summary>
-        /// Escreve uma coleção de modelos reaproveitando um StreamWriter já existente
-        /// (evita alocar/descartar um StreamWriter por chamada).
+        /// Writes a collection of models reusing an existing StreamWriter
+        /// (avoids allocating/disposing a StreamWriter per call).
         /// </summary>
         public void WriteMany(StreamWriter writer, IEnumerable<TModel> models, IFormatProvider? formatProvider = null)
         {
@@ -152,8 +152,8 @@ namespace FixedWidthParser.Writers
         }
 
         /// <summary>
-        /// Escreve uma coleção contígua de modelos sobre uma Stream, sem alocar enumerador
-        /// (itera por ref readonly, evitando cópia de cada struct).
+        /// Writes a contiguous collection of models to a Stream without allocating an enumerator
+        /// (iterates by ref readonly, avoiding a copy of each struct).
         /// </summary>
         public void WriteMany(Stream stream, ReadOnlySpan<TModel> models, IFormatProvider? formatProvider = null)
         {
@@ -162,8 +162,8 @@ namespace FixedWidthParser.Writers
         }
 
         /// <summary>
-        /// Escreve uma coleção contígua de modelos reaproveitando um StreamWriter existente,
-        /// sem alocar enumerador (itera por ref readonly, evitando cópia de cada struct).
+        /// Writes a contiguous collection of models reusing an existing StreamWriter, without
+        /// allocating an enumerator (iterates by ref readonly, avoiding a copy of each struct).
         /// </summary>
         public void WriteMany(StreamWriter writer, ReadOnlySpan<TModel> models, IFormatProvider? formatProvider = null)
         {
