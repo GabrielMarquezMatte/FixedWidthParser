@@ -6,16 +6,16 @@ using static FixedWidthParser.Tests.TestHelpers;
 namespace FixedWidthParser.Tests
 {
     /// <summary>
-    /// Cobre o tratamento de cultura. O caminho genérico (ISpanParsable, ex.: decimal) e a
-    /// escrita via ISpanFormattable respeitam o IFormatProvider. Os processadores de
-    /// double/float derivam o separador decimal da cultura e o repassam ao csFastFloat, de
-    /// modo que também passam a respeitar o IFormatProvider (com '.' como padrão quando nulo).
+    /// Covers culture handling. The generic path (ISpanParsable, e.g. decimal) and writing via
+    /// ISpanFormattable honor the IFormatProvider. The double/float processors derive the decimal
+    /// separator from the culture and pass it to csFastFloat, so they also honor the
+    /// IFormatProvider (with '.' as the default when null).
     /// </summary>
     public class CultureTests
     {
         private static readonly CultureInfo DeDe = CultureInfo.GetCultureInfo("de-DE");
 
-        // ----- Caminho genérico (decimal): respeita a cultura -----
+        // ----- Generic path (decimal): honors the culture -----
 
         [Fact]
         public void Parse_DecimalColumn_HonorsCommaCulture()
@@ -39,7 +39,7 @@ namespace FixedWidthParser.Tests
             Assert.Equal(1234.56m, model.Amount);
         }
 
-        // ----- Caminho double: separador decimal derivado da cultura -----
+        // ----- Double path: decimal separator derived from the culture -----
 
         [Fact]
         public void Parse_DoubleColumn_HonorsCommaCulture()
@@ -85,7 +85,7 @@ namespace FixedWidthParser.Tests
             Assert.Equal(3.14f, model.Value, 2);
         }
 
-        // ----- Escrita: respeita a cultura (ISpanFormattable) -----
+        // ----- Writing: honors the culture (ISpanFormattable) -----
 
         [Fact]
         public void Write_DoubleColumn_UsesCultureDecimalSeparator()
@@ -94,11 +94,11 @@ namespace FixedWidthParser.Tests
 
             string line = WriteOne(writer, new PersonModel { Name = "Bob", Age = 30, Salary = 1234.5 }, DeDe);
 
-            // Coluna Salary em [15,25): formatada com vírgula sob de-DE.
+            // Salary column at [15,25): formatted with a comma under de-DE.
             Assert.Equal("1234,5", line[15..21]);
         }
 
-        // ----- Round-trip sob cultura com vírgula agora preserva o valor -----
+        // ----- Round-trip under a comma culture now preserves the value -----
 
         [Fact]
         public void RoundTrip_DoubleColumn_UnderCommaCulture_PreservesValue()
@@ -107,7 +107,7 @@ namespace FixedWidthParser.Tests
             var parser = new FixedWidthParser<PersonModel>();
             var original = new PersonModel { Name = "Bob", Age = 30, Salary = 1234.5 };
 
-            // Escrita gera "1234,5"; leitura usa o mesmo separador da cultura → mesmo valor.
+            // Writing produces "1234,5"; reading uses the same culture separator → same value.
             string line = WriteOne(writer, original, DeDe);
             bool ok = parser.TryParse(line, DeDe, null, out var parsed);
 

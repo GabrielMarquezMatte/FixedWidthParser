@@ -4,7 +4,7 @@ using static FixedWidthParser.Tests.TestHelpers;
 namespace FixedWidthParser.Tests
 {
     /// <summary>
-    /// Formatação configurável por coluna: alinhamento, preenchimento, format string e overflow.
+    /// Per-column configurable formatting: alignment, padding, format string and overflow.
     /// </summary>
     public class WriterFormattingTests
     {
@@ -35,7 +35,7 @@ namespace FixedWidthParser.Tests
 
             string line = WriteOne(writer, new FormattedModel { Amount = 1234.5 });
 
-            // "F2" → "1234.50" (7 chars), alinhado à esquerda em 8 → uma de preenchimento.
+            // "F2" → "1234.50" (7 chars), left-aligned in 8 → one padding char.
             Assert.Equal("1234.50 ", line);
         }
 
@@ -67,14 +67,14 @@ namespace FixedWidthParser.Tests
 
             string line = WriteOne(writer, new NarrowTruncateModel { Value = 12345 });
 
-            // Alinhamento à esquerda → mantém os primeiros caracteres.
+            // Left alignment → keeps the first characters.
             Assert.Equal("123", line);
         }
 
         [Fact]
         public void Write_StringOverflow_TruncatesByDefault()
         {
-            // Comportamento padrão de string preservado (PersonModel.Name tem largura 10).
+            // Default string behavior preserved (PersonModel.Name has width 10).
             var writer = new FixedWidthWriter<PersonModel>();
 
             string line = WriteOne(writer, new PersonModel { Name = "VeryLongName", Age = 1, Salary = 0 });

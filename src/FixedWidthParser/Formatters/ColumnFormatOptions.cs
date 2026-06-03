@@ -3,10 +3,10 @@ using FixedWidthParser.Attributes;
 namespace FixedWidthParser.Formatters
 {
     /// <summary>
-    /// Opções de formatação resolvidas de uma coluna (alinhamento, preenchimento, format string e
-    /// política de overflow já resolvida para <see cref="OverflowBehavior.Truncate"/> ou
-    /// <see cref="OverflowBehavior.Throw"/>). Centraliza a colocação do conteúdo na fatia da linha,
-    /// compartilhada por todos os formatters.
+    /// Resolved formatting options for a column (alignment, padding, format string and an overflow
+    /// policy already resolved to <see cref="OverflowBehavior.Truncate"/> or
+    /// <see cref="OverflowBehavior.Throw"/>). Centralizes placing the content into the line slice,
+    /// shared by all formatters.
     /// </summary>
     public readonly struct ColumnFormatOptions(Alignment alignment, char padding, string? format, OverflowBehavior overflow)
     {
@@ -16,8 +16,8 @@ namespace FixedWidthParser.Formatters
         public OverflowBehavior Overflow { get; } = overflow;
 
         /// <summary>
-        /// Escreve <paramref name="content"/> na fatia <paramref name="slice"/> da coluna,
-        /// aplicando alinhamento, preenchimento e overflow.
+        /// Writes <paramref name="content"/> into the column slice <paramref name="slice"/>,
+        /// applying alignment, padding and overflow.
         /// </summary>
         public void WriteInto(ReadOnlySpan<char> content, Span<char> slice, string columnName)
         {
@@ -43,10 +43,10 @@ namespace FixedWidthParser.Formatters
             if (Overflow == OverflowBehavior.Throw)
             {
                 throw new InvalidOperationException(
-                    $"Valor \"{content}\" ({length} caracteres) excede a largura {width} da coluna \"{columnName}\".");
+                    $"Value \"{content}\" ({length} chars) exceeds the width {width} of column \"{columnName}\".");
             }
 
-            // Truncate: mantém os caracteres do lado do alinhamento.
+            // Truncate: keep the characters on the alignment side.
             if (Alignment == Alignment.Right)
             {
                 content[(length - width)..].CopyTo(slice);

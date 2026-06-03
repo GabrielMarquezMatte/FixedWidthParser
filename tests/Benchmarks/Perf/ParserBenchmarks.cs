@@ -6,8 +6,8 @@ using FixedWidthParser.Parsers;
 namespace Benchmarks.Perf
 {
     /// <summary>
-    /// Mede o caminho quente de parsing de uma linha fixed-width, com e sem StringPool.
-    /// Parse_NoPool é o baseline; a coluna Ratio acusa regressões relativas.
+    /// Measures the hot path of parsing a single fixed-width line, with and without a StringPool.
+    /// Parse_NoPool is the baseline; the Ratio column flags relative regressions.
     /// </summary>
     [Config(typeof(RegressionConfig))]
     public class ParserBenchmarks

@@ -5,13 +5,13 @@ using FixedWidthParser.Parsers;
 namespace FixedWidthParser.Readers
 {
     /// <summary>
-    /// Versão assíncrona de <see cref="FixedWidthRecordEnumerable{TModel}"/>: lê de um
-    /// <see cref="TextReader"/> via <c>await foreach</c>, também <b>sem alocar uma string por
-    /// linha</b> (buffer do <see cref="ArrayPool{T}"/> + fatias <see cref="ReadOnlySpan{T}"/>).
-    /// O enumerador é uma classe (e não struct), pois um método <c>async</c> captura o
-    /// <c>this</c> por valor — um enumerador struct perderia o estado entre chamadas. A
-    /// varredura por spans fica num passo síncrono; apenas o reabastecimento do buffer é
-    /// aguardado, usando <see cref="Memory{T}"/> (que pode atravessar o <c>await</c>).
+    /// Asynchronous version of <see cref="FixedWidthRecordEnumerable{TModel}"/>: reads from a
+    /// <see cref="TextReader"/> via <c>await foreach</c>, also <b>without allocating a string per
+    /// line</b> (<see cref="ArrayPool{T}"/> buffer + <see cref="ReadOnlySpan{T}"/> slices).
+    /// The enumerator is a class (not a struct) because an <c>async</c> method captures
+    /// <c>this</c> by value — a struct enumerator would lose its state between calls. The span
+    /// scanning happens in a synchronous step; only the buffer refill is awaited, using
+    /// <see cref="Memory{T}"/> (which can cross the <c>await</c>).
     /// </summary>
     public sealed class FixedWidthAsyncRecordEnumerable<TModel> : IAsyncEnumerable<TModel> where TModel : new()
     {
@@ -59,9 +59,9 @@ namespace FixedWidthParser.Readers
             private readonly CancellationToken _cancellationToken;
             private TextReader? _reader;
             private char[] _buffer;
-            private int _start;    // início dos dados ainda não consumidos
-            private int _end;      // fim dos dados válidos no buffer
-            private int _scanFrom; // posição a partir da qual ainda não procuramos '\n'
+            private int _start;    // start of the data not yet consumed
+            private int _end;      // end of the valid data in the buffer
+            private int _scanFrom; // position from which we have not yet searched for '\n'
             private bool _eof;
             private int _lineNumber;
             private TModel _current;
@@ -94,7 +94,7 @@ namespace FixedWidthParser.Readers
                 {
                     _cancellationToken.ThrowIfCancellationRequested();
 
-                    // Passo síncrono: spans confinados aqui, nunca vivos durante o await.
+                    // Synchronous step: spans are confined here, never alive across the await.
                     var result = TryReadFromBuffer();
                     if (result == ReadResult.Record) return true;
                     if (result == ReadResult.End) return false;
@@ -129,7 +129,7 @@ namespace FixedWidthParser.Readers
                                 Parse(line);
                                 return ReadResult.Record;
                             }
-                            continue; // pula linhas vazias
+                            continue; // skip empty lines
                         }
                         _scanFrom = _end;
                     }
@@ -162,7 +162,7 @@ namespace FixedWidthParser.Readers
                 if (!_parser.TryParse(line, _formatProvider, _stringPool, out _current))
                 {
                     throw new FormatException(
-                        $"Linha {_lineNumber} não pôde ser convertida em {typeof(TModel).Name}: \"{line.ToString()}\".");
+                        $"Line {_lineNumber} could not be parsed into {typeof(TModel).Name}: \"{line.ToString()}\".");
                 }
             }
 

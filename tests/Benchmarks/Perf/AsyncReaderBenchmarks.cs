@@ -9,9 +9,9 @@ using FixedWidthParser.Writers;
 namespace Benchmarks.Perf
 {
     /// <summary>
-    /// Leitura assíncrona: compara o await foreach span-based (FixedWidthReader.ReadAsync) com o
-    /// baseline ingênuo ReadLineAsync()+TryParse. Fonte em memória (StringReader, cujo ReadAsync
-    /// completa de forma síncrona) para isolar o overhead da máquina de estados async + buffering.
+    /// Asynchronous reading: compares the span-based await foreach (FixedWidthReader.ReadAsync)
+    /// with the naive baseline ReadLineAsync()+TryParse. In-memory source (StringReader, whose
+    /// ReadAsync completes synchronously) to isolate the async state-machine overhead + buffering.
     /// </summary>
     [Config(typeof(RegressionConfig))]
     public class AsyncReaderBenchmarks
@@ -39,7 +39,7 @@ namespace Benchmarks.Perf
             _text = Encoding.UTF8.GetString(ms.ToArray());
         }
 
-        /// <summary>ReadLineAsync() aloca uma string por linha; depois TryParse. Baseline.</summary>
+        /// <summary>ReadLineAsync() allocates a string per line; then TryParse. Baseline.</summary>
         [Benchmark(Baseline = true)]
         public async Task<int> Naive_ReadLineAsync()
         {
@@ -53,7 +53,7 @@ namespace Benchmarks.Perf
             return sum;
         }
 
-        /// <summary>await foreach span-based: fatia cada linha do buffer, sem string por linha.</summary>
+        /// <summary>Span-based await foreach: slices each line from the buffer, no string per line.</summary>
         [Benchmark]
         public async Task<int> SpanReader_ReadAsync()
         {
@@ -63,7 +63,7 @@ namespace Benchmarks.Perf
             return sum;
         }
 
-        /// <summary>await foreach span-based + StringPool: também interna as colunas string.</summary>
+        /// <summary>Span-based await foreach + StringPool: also interns the string columns.</summary>
         [Benchmark]
         public async Task<int> SpanReader_ReadAsync_Pooled()
         {

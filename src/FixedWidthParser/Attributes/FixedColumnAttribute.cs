@@ -1,20 +1,20 @@
 namespace FixedWidthParser.Attributes
 {
-    /// <summary>Alinhamento do conteúdo dentro da coluna na escrita.</summary>
+    /// <summary>Alignment of the content within the column when writing.</summary>
     public enum Alignment
     {
         Left,
         Right
     }
 
-    /// <summary>O que fazer quando o valor formatado não cabe na largura da coluna.</summary>
+    /// <summary>What to do when the formatted value does not fit the column width.</summary>
     public enum OverflowBehavior
     {
-        /// <summary>Resolve por tipo: string trunca, demais (numéricos etc.) lançam.</summary>
+        /// <summary>Resolved per type: string truncates, others (numeric, etc.) throw.</summary>
         Default,
-        /// <summary>Mantém os caracteres do lado do alinhamento e descarta o excedente.</summary>
+        /// <summary>Keeps the characters on the alignment side and discards the excess.</summary>
         Truncate,
-        /// <summary>Lança <see cref="System.InvalidOperationException"/> (evita perda silenciosa).</summary>
+        /// <summary>Throws <see cref="System.InvalidOperationException"/> (avoids silent data loss).</summary>
         Throw
     }
 
@@ -24,16 +24,16 @@ namespace FixedWidthParser.Attributes
         public int Start { get; } = start;
         public int Length { get; } = length;
 
-        /// <summary>Alinhamento na escrita. Padrão: <see cref="Alignment.Left"/>.</summary>
+        /// <summary>Alignment when writing. Default: <see cref="Alignment.Left"/>.</summary>
         public Alignment Alignment { get; set; } = Alignment.Left;
 
-        /// <summary>Caractere de preenchimento na escrita (ex.: '0' para zero-padding). Padrão: espaço.</summary>
+        /// <summary>Padding character when writing (e.g. '0' for zero-padding). Default: space.</summary>
         public char Padding { get; set; } = ' ';
 
-        /// <summary>Format string repassada ao <see cref="ISpanFormattable"/> (ex.: "F2", "N0"). Ignorada para string.</summary>
+        /// <summary>Format string passed to <see cref="ISpanFormattable"/> (e.g. "F2", "N0"). Ignored for string.</summary>
         public string? Format { get; set; }
 
-        /// <summary>Política de overflow na escrita. Padrão: <see cref="OverflowBehavior.Default"/>.</summary>
+        /// <summary>Overflow policy when writing. Default: <see cref="OverflowBehavior.Default"/>.</summary>
         public OverflowBehavior Overflow { get; set; } = OverflowBehavior.Default;
     }
 }

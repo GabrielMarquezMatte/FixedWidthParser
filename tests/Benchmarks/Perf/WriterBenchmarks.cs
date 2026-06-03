@@ -5,8 +5,8 @@ using FixedWidthParser.Writers;
 namespace Benchmarks.Perf
 {
     /// <summary>
-    /// Mede o caminho quente de escrita fixed-width. Escreve em Stream.Null para isolar
-    /// formatação + encoding do custo de I/O em disco. WriteMany_NewStream é o baseline.
+    /// Measures the hot path of fixed-width writing. Writes to Stream.Null to isolate formatting +
+    /// encoding from the cost of disk I/O. WriteMany_NewStream is the baseline.
     /// </summary>
     [Config(typeof(RegressionConfig))]
     public class WriterBenchmarks
@@ -38,21 +38,21 @@ namespace Benchmarks.Perf
         [GlobalCleanup]
         public void Cleanup() => _sink.Dispose();
 
-        /// <summary>Cria/descarta um StreamWriter por chamada (sobre a Stream). Baseline.</summary>
+        /// <summary>Creates/disposes a StreamWriter per call (over the Stream). Baseline.</summary>
         [Benchmark(Baseline = true)]
         public void WriteMany_NewStream()
         {
             _writer.WriteMany(Stream.Null, _models, Culture);
         }
 
-        /// <summary>Reaproveita um StreamWriter já existente (overload novo). Deve eliminar a alocação fixa.</summary>
+        /// <summary>Reuses an existing StreamWriter (new overload). Should eliminate the fixed allocation.</summary>
         [Benchmark]
         public void WriteMany_ReuseWriter()
         {
             _writer.WriteMany(_sink, _models, Culture);
         }
 
-        /// <summary>Reuso de writer + ReadOnlySpan: sem StreamWriter por chamada e sem enumerador. Deve ser zero-alloc.</summary>
+        /// <summary>Writer reuse + ReadOnlySpan: no StreamWriter per call and no enumerator. Should be zero-alloc.</summary>
         [Benchmark]
         public void WriteMany_ReuseWriterSpan()
         {
@@ -60,8 +60,8 @@ namespace Benchmarks.Perf
         }
 
         /// <summary>
-        /// Async criando um StreamWriter por chamada (overload de Stream). Mistura o custo do
-        /// StreamWriter novo com o overhead da máquina de estados async — comparável ao NewStream.
+        /// Async creating a StreamWriter per call (Stream overload). Mixes the cost of the new
+        /// StreamWriter with the async state-machine overhead — comparable to NewStream.
         /// </summary>
         [Benchmark]
         public Task WriteMany_AsyncNewStream()
@@ -70,8 +70,8 @@ namespace Benchmarks.Perf
         }
 
         /// <summary>
-        /// Async reaproveitando o StreamWriter (overload de StreamWriter). Isola o overhead puro
-        /// da assincronia: comparado a WriteMany_ReuseWriter, a diferença é só o async.
+        /// Async reusing the StreamWriter (StreamWriter overload). Isolates the pure async
+        /// overhead: compared to WriteMany_ReuseWriter, the difference is only the async.
         /// </summary>
         [Benchmark]
         public Task WriteMany_AsyncReuseWriter()

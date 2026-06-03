@@ -9,9 +9,9 @@ using FixedWidthParser.Writers;
 namespace Benchmarks.Perf
 {
     /// <summary>
-    /// Leitura síncrona: compara o caminho span-based (FixedWidthReader, sem string por linha)
-    /// com o baseline ingênuo ReadLine()+TryParse (uma string alocada por linha). A fonte é uma
-    /// string em memória (StringReader) para isolar parsing+buffering do custo de I/O em disco.
+    /// Synchronous reading: compares the span-based path (FixedWidthReader, no string per line)
+    /// with the naive baseline ReadLine()+TryParse (one string allocated per line). The source is
+    /// an in-memory string (StringReader) to isolate parsing+buffering from the cost of disk I/O.
     /// </summary>
     [Config(typeof(RegressionConfig))]
     public class ReaderBenchmarks
@@ -39,7 +39,7 @@ namespace Benchmarks.Perf
             _text = Encoding.UTF8.GetString(ms.ToArray());
         }
 
-        /// <summary>ReadLine() aloca uma string por linha; depois TryParse sobre ela. Baseline.</summary>
+        /// <summary>ReadLine() allocates a string per line; then TryParse over it. Baseline.</summary>
         [Benchmark(Baseline = true)]
         public int Naive_ReadLine()
         {
@@ -53,7 +53,7 @@ namespace Benchmarks.Perf
             return sum;
         }
 
-        /// <summary>Leitura span-based: fatia cada linha do buffer, sem string por linha.</summary>
+        /// <summary>Span-based reading: slices each line from the buffer, no string per line.</summary>
         [Benchmark]
         public int SpanReader_Read()
         {
@@ -63,7 +63,7 @@ namespace Benchmarks.Perf
             return sum;
         }
 
-        /// <summary>Span-based + StringPool: também interna as colunas string (tende a zero-alloc).</summary>
+        /// <summary>Span-based + StringPool: also interns the string columns (tends to zero-alloc).</summary>
         [Benchmark]
         public int SpanReader_Read_Pooled()
         {

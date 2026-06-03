@@ -1,9 +1,9 @@
 namespace FixedWidthParser.Attributes
 {
     /// <summary>
-    /// Valida o layout de colunas de um modelo na construção do parser/writer: rejeita
-    /// <c>Start</c> negativo, <c>Length</c> não positivo e colunas sobrepostas — falhando cedo
-    /// e com mensagem clara, em vez de produzir erros obscuros por linha em tempo de execução.
+    /// Validates a model's column layout when the parser/writer is built: rejects negative
+    /// <c>Start</c>, non-positive <c>Length</c> and overlapping columns — failing early and with a
+    /// clear message, instead of producing obscure per-line errors at runtime.
     /// </summary>
     public static class ColumnLayoutValidator
     {
@@ -14,12 +14,12 @@ namespace FixedWidthParser.Attributes
                 if (column.Start < 0)
                 {
                     throw new InvalidOperationException(
-                        $"Coluna \"{column.Name}\" em {modelType.Name} tem Start negativo ({column.Start}).");
+                        $"Column \"{column.Name}\" in {modelType.Name} has a negative Start ({column.Start}).");
                 }
                 if (column.Length < 1)
                 {
                     throw new InvalidOperationException(
-                        $"Coluna \"{column.Name}\" em {modelType.Name} tem Length inválido ({column.Length}); deve ser >= 1.");
+                        $"Column \"{column.Name}\" in {modelType.Name} has an invalid Length ({column.Length}); it must be >= 1.");
                 }
             }
 
@@ -28,7 +28,7 @@ namespace FixedWidthParser.Attributes
                 return;
             }
 
-            // Detecta sobreposição ordenando por início e acompanhando o maior fim visto.
+            // Detect overlap by sorting on start and tracking the farthest end seen so far.
             columns.Sort(static (a, b) => a.Start != b.Start ? a.Start.CompareTo(b.Start) : a.Length.CompareTo(b.Length));
             var farthest = columns[0];
             int maxEnd = farthest.Start + farthest.Length;
@@ -38,8 +38,8 @@ namespace FixedWidthParser.Attributes
                 if (current.Start < maxEnd)
                 {
                     throw new InvalidOperationException(
-                        $"Colunas sobrepostas em {modelType.Name}: \"{farthest.Name}\" [{farthest.Start}, {farthest.Start + farthest.Length}) " +
-                        $"e \"{current.Name}\" [{current.Start}, {current.Start + current.Length}).");
+                        $"Overlapping columns in {modelType.Name}: \"{farthest.Name}\" [{farthest.Start}, {farthest.Start + farthest.Length}) " +
+                        $"and \"{current.Name}\" [{current.Start}, {current.Start + current.Length}).");
                 }
                 int end = current.Start + current.Length;
                 if (end > maxEnd)
