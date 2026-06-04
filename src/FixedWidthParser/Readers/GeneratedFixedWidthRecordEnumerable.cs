@@ -1,35 +1,28 @@
-using System.Buffers;
 using System.Collections;
 using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Parsers;
 
 namespace FixedWidthParser.Readers
 {
     /// <summary>
-    /// A lazily-read sequence of models from a <see cref="TextReader"/>, <b>without allocating a
-    /// string per line</b>: lines are read in blocks into a character buffer rented from the
-    /// <see cref="ArrayPool{T}"/> and sliced as <see cref="ReadOnlySpan{T}"/> straight into the
-    /// parser. Exposes a <see langword="struct"/> enumerator for allocation-free iteration in
-    /// <c>foreach</c>, and implements <see cref="IEnumerable{T}"/> for LINQ interop.
+    /// A lazily-read sequence that parses each record through the model's source-generated
+    /// <see cref="IFixedWidthModel{TSelf}.TryParse"/> method, avoiding reflection and delegates.
     /// </summary>
-    public sealed class FixedWidthRecordEnumerable<TModel> : IEnumerable<TModel> where TModel : new()
+    public sealed class GeneratedFixedWidthRecordEnumerable<TModel> : IEnumerable<TModel>
+        where TModel : IFixedWidthModel<TModel>
     {
-        private readonly FixedWidthParser<TModel> _parser;
         private readonly Func<TextReader> _readerFactory;
         private readonly bool _ownsReader;
         private readonly IFormatProvider? _formatProvider;
         private readonly StringPool? _stringPool;
         private readonly int _bufferSize;
 
-        internal FixedWidthRecordEnumerable(
-            FixedWidthParser<TModel> parser,
+        internal GeneratedFixedWidthRecordEnumerable(
             Func<TextReader> readerFactory,
             bool ownsReader,
             IFormatProvider? formatProvider,
             StringPool? stringPool,
             int bufferSize)
         {
-            _parser = parser;
             _readerFactory = readerFactory;
             _ownsReader = ownsReader;
             _formatProvider = formatProvider;
@@ -39,14 +32,13 @@ namespace FixedWidthParser.Readers
 
         /// <summary>Struct enumerator: <c>foreach</c> iteration without heap allocation.</summary>
         public Enumerator GetEnumerator()
-            => new(_parser, _readerFactory(), _ownsReader, _formatProvider, _stringPool, _bufferSize);
+            => new(_readerFactory(), _ownsReader, _formatProvider, _stringPool, _bufferSize);
 
         IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator() => GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
         public struct Enumerator : IEnumerator<TModel>
         {
-            private readonly FixedWidthParser<TModel> _parser;
             private readonly bool _ownsReader;
             private readonly IFormatProvider? _formatProvider;
             private readonly StringPool? _stringPool;
@@ -55,14 +47,12 @@ namespace FixedWidthParser.Readers
             private TModel _current;
 
             internal Enumerator(
-                FixedWidthParser<TModel> parser,
                 TextReader reader,
                 bool ownsReader,
                 IFormatProvider? formatProvider,
                 StringPool? stringPool,
                 int bufferSize)
             {
-                _parser = parser;
                 _reader = reader;
                 _ownsReader = ownsReader;
                 _formatProvider = formatProvider;
@@ -97,7 +87,7 @@ namespace FixedWidthParser.Readers
 
             private void Parse(ReadOnlySpan<char> line)
             {
-                if (!_parser.TryParse(line, _formatProvider, _stringPool, out _current))
+                if (!TModel.TryParse(line, _formatProvider, _stringPool, out _current))
                 {
                     throw new FormatException(
                         $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{line.ToString()}\".");

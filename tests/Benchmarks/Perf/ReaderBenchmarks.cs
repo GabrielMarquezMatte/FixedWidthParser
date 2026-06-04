@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using BenchmarkDotNet.Attributes;
 using CommunityToolkit.HighPerformance.Buffers;
+using FixedWidthParser;
 using FixedWidthParser.Parsers;
 using FixedWidthParser.Readers;
 using FixedWidthParser.Writers;
@@ -70,6 +71,27 @@ namespace Benchmarks.Perf
             using var reader = new StringReader(_text);
             int sum = 0;
             foreach (var model in _pooledReader.Read(reader)) sum += model.Age;
+            return sum;
+        }
+
+        /// <summary>Source-generated reader: same scanner, static generated TryParse, no reflection.</summary>
+        [Benchmark]
+        public int GeneratedReader_Read()
+        {
+            using var reader = new StringReader(_text);
+            int sum = 0;
+            foreach (var model in FixedWidth.Read<GenSampleModel>(reader, formatProvider: Culture)) sum += model.Age;
+            return sum;
+        }
+
+        /// <summary>Source-generated reader + StringPool: static TryParse plus interned string columns.</summary>
+        [Benchmark]
+        public int GeneratedReader_Read_Pooled()
+        {
+            using var reader = new StringReader(_text);
+            var pool = new StringPool();
+            int sum = 0;
+            foreach (var model in FixedWidth.Read<GenSampleModel>(reader, formatProvider: Culture, stringPool: pool)) sum += model.Age;
             return sum;
         }
     }

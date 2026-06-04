@@ -1,36 +1,27 @@
-using System.Buffers;
 using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Parsers;
 
 namespace FixedWidthParser.Readers
 {
     /// <summary>
-    /// Asynchronous version of <see cref="FixedWidthRecordEnumerable{TModel}"/>: reads from a
-    /// <see cref="TextReader"/> via <c>await foreach</c>, also <b>without allocating a string per
-    /// line</b> (<see cref="ArrayPool{T}"/> buffer + <see cref="ReadOnlySpan{T}"/> slices).
-    /// The enumerator is a class (not a struct) because an <c>async</c> method captures
-    /// <c>this</c> by value — a struct enumerator would lose its state between calls. The span
-    /// scanning happens in a synchronous step; only the buffer refill is awaited, using
-    /// <see cref="Memory{T}"/> (which can cross the <c>await</c>).
+    /// Asynchronous source-generated read path: scans buffered lines and parses them through
+    /// <see cref="IFixedWidthModel{TSelf}.TryParse"/> without reflection or delegates.
     /// </summary>
-    public sealed class FixedWidthAsyncRecordEnumerable<TModel> : IAsyncEnumerable<TModel> where TModel : new()
+    public sealed class GeneratedFixedWidthAsyncRecordEnumerable<TModel> : IAsyncEnumerable<TModel>
+        where TModel : IFixedWidthModel<TModel>
     {
-        private readonly FixedWidthParser<TModel> _parser;
         private readonly Func<TextReader> _readerFactory;
         private readonly bool _ownsReader;
         private readonly IFormatProvider? _formatProvider;
         private readonly StringPool? _stringPool;
         private readonly int _bufferSize;
 
-        internal FixedWidthAsyncRecordEnumerable(
-            FixedWidthParser<TModel> parser,
+        internal GeneratedFixedWidthAsyncRecordEnumerable(
             Func<TextReader> readerFactory,
             bool ownsReader,
             IFormatProvider? formatProvider,
             StringPool? stringPool,
             int bufferSize)
         {
-            _parser = parser;
             _readerFactory = readerFactory;
             _ownsReader = ownsReader;
             _formatProvider = formatProvider;
@@ -40,7 +31,7 @@ namespace FixedWidthParser.Readers
 
         public AsyncEnumerator GetAsyncEnumerator(CancellationToken cancellationToken = default)
         {
-            return new(_parser, _readerFactory(), _ownsReader, _formatProvider, _stringPool, _bufferSize, cancellationToken);
+            return new(_readerFactory(), _ownsReader, _formatProvider, _stringPool, _bufferSize, cancellationToken);
         }
 
         IAsyncEnumerator<TModel> IAsyncEnumerable<TModel>.GetAsyncEnumerator(CancellationToken cancellationToken)
@@ -50,7 +41,6 @@ namespace FixedWidthParser.Readers
 
         public sealed class AsyncEnumerator : IAsyncEnumerator<TModel>
         {
-            private readonly FixedWidthParser<TModel> _parser;
             private readonly bool _ownsReader;
             private readonly IFormatProvider? _formatProvider;
             private readonly StringPool? _stringPool;
@@ -60,7 +50,6 @@ namespace FixedWidthParser.Readers
             private TModel _current;
 
             internal AsyncEnumerator(
-                FixedWidthParser<TModel> parser,
                 TextReader reader,
                 bool ownsReader,
                 IFormatProvider? formatProvider,
@@ -68,7 +57,6 @@ namespace FixedWidthParser.Readers
                 int bufferSize,
                 CancellationToken cancellationToken)
             {
-                _parser = parser;
                 _reader = reader;
                 _ownsReader = ownsReader;
                 _formatProvider = formatProvider;
@@ -88,10 +76,9 @@ namespace FixedWidthParser.Readers
                 {
                     _cancellationToken.ThrowIfCancellationRequested();
 
-                    // Synchronous step: spans are confined here, never alive across the await.
-                    var result = TryReadFromBuffer();
-                    if (result == LineStatus.Line) return true;
-                    if (result == LineStatus.End) return false;
+                    var status = TryReadFromBuffer();
+                    if (status == LineStatus.Line) return true;
+                    if (status == LineStatus.End) return false;
 
                     PrepareRefill();
                     int read = await reader
@@ -122,7 +109,7 @@ namespace FixedWidthParser.Readers
 
             private void Parse(ReadOnlySpan<char> line)
             {
-                if (!_parser.TryParse(line, _formatProvider, _stringPool, out _current))
+                if (!TModel.TryParse(line, _formatProvider, _stringPool, out _current))
                 {
                     throw new FormatException(
                         $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{line.ToString()}\".");
