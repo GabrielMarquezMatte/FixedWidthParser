@@ -14,7 +14,7 @@ namespace FixedWidthParser.Attributes
         Default,
         /// <summary>Keeps the characters on the alignment side and discards the excess.</summary>
         Truncate,
-        /// <summary>Throws <see cref="System.InvalidOperationException"/> (avoids silent data loss).</summary>
+        /// <summary>Throws <see cref="InvalidOperationException"/> (avoids silent data loss).</summary>
         Throw
     }
 

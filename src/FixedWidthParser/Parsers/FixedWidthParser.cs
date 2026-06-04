@@ -11,7 +11,7 @@ namespace FixedWidthParser.Parsers
     public sealed class FixedWidthParser<TModel> where TModel : new(), allows ref struct
     {
         private static readonly Func<TModel> _modelFactory;
-        private static readonly IColumnProcessor<TModel>[] _processors;
+        private static readonly ColumnParser<TModel>[] _processors;
         private static readonly ExceptionDispatchInfo? _buildError;
 
         // The build is static (once per type). Any layout/configuration error is captured and
@@ -44,11 +44,11 @@ namespace FixedWidthParser.Parsers
             var lambda = Expression.Lambda<Func<TModel>>(Expression.New(ctor));
             return lambda.Compile();
         }
-        private static IColumnProcessor<TModel>[] BuildProcessors()
+        private static ColumnParser<TModel>[] BuildProcessors()
         {
             var properties = typeof(TModel).GetProperties();
             var fields = typeof(TModel).GetFields();
-            List<IColumnProcessor<TModel>> processors = new(properties.Length + fields.Length);
+            List<ColumnParser<TModel>> processors = new(properties.Length + fields.Length);
             List<(int Start, int Length, string Name)> columns = new(properties.Length + fields.Length);
 
             foreach (var prop in properties) Add(prop);
@@ -62,11 +62,11 @@ namespace FixedWidthParser.Parsers
                 var attribute = member.GetCustomAttribute<FixedColumnAttribute>();
                 if (attribute is null) return;
                 columns.Add((attribute.Start, attribute.Length, member.Name));
-                processors.Add(CreateColumnProcessor(member, attribute));
+                processors.Add(CreateColumnParser(member, attribute));
             }
         }
 
-        private static IColumnProcessor<TModel> CreateColumnProcessor(MemberInfo member, FixedColumnAttribute attribute)
+        private static ColumnParser<TModel> CreateColumnParser(MemberInfo member, FixedColumnAttribute attribute)
         {
             var targetExpr = Expression.Parameter(typeof(TModel).MakeByRefType(), "model");
             var (memberType, memberExpr) = member switch
@@ -79,14 +79,7 @@ namespace FixedWidthParser.Parsers
             var assignExpr = Expression.Assign(memberExpr, valueExpr);
             var actionType = typeof(RefAction<,>).MakeGenericType(typeof(TModel), memberType);
             var setter = Expression.Lambda(actionType, assignExpr, targetExpr, valueExpr).Compile();
-            var processorType = memberType switch
-            {
-                Type t when t == typeof(string) => typeof(StringColumnProcessor<>).MakeGenericType(typeof(TModel)),
-                Type t when t == typeof(double) => typeof(DoubleColumnProcessor<>).MakeGenericType(typeof(TModel)),
-                Type t when t == typeof(float) => typeof(FloatColumnProcessor<>).MakeGenericType(typeof(TModel)),
-                _ => typeof(ColumnProcessor<,>).MakeGenericType(typeof(TModel), memberType)
-            };
-            return (IColumnProcessor<TModel>)Activator.CreateInstance(processorType, attribute.Start, attribute.Length, setter)!;
+            return ColumnParserFactory.Create<TModel>(attribute.Start, attribute.Length, memberType, setter);
         }
 
         public bool TryParse(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
@@ -94,7 +87,7 @@ namespace FixedWidthParser.Parsers
             model = _modelFactory();
             foreach (ref readonly var processor in _processors.AsSpan())
             {
-                if (!processor.TryProcess(ref model, formatProvider, line, stringPool))
+                if (!processor(line, formatProvider, stringPool, ref model))
                 {
                     return false;
                 }

@@ -123,7 +123,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 3)] public string Code { get; init; }
     }
 
-    /// <summary>Model with a decimal column (goes through the generic, culture-aware ColumnProcessor).</summary>
+    /// <summary>Model with a decimal column (goes through the ISpanParsable fallback value parser).</summary>
     public readonly record struct DecimalModel
     {
         public DecimalModel() => Amount = 0m;
