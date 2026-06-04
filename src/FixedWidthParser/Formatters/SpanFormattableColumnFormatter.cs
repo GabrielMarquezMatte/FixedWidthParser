@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
 
 namespace FixedWidthParser.Formatters
 {
@@ -6,13 +7,15 @@ namespace FixedWidthParser.Formatters
         int start, int length, ColumnFormatOptions options, string columnName, RefGetter<TModel, TProperty> getter)
         : IColumnFormatter<TModel> where TProperty : ISpanFormattable
     {
+        [SkipLocalsInit]
         public void Format(in TModel model, Span<char> buffer, IFormatProvider? formatProvider)
         {
             var slice = buffer.Slice(start, length);
             var value = getter(in model);
 
             // Format into a temporary buffer, then place it in the column with alignment/padding.
-            Span<char> stack = stackalloc char[256];
+            // Covers typical numeric/date formats; longer output falls back to the ArrayPool loop.
+            Span<char> stack = stackalloc char[64];
             if (value.TryFormat(stack, out int written, options.Format, formatProvider))
             {
                 options.WriteInto(stack[..written], slice, columnName);

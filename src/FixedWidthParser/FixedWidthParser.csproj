@@ -5,6 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
+    <!-- Enables [SkipLocalsInit] on the write hot path (no actual unsafe code is used). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
     <!-- Ship XML docs (members without a doc comment do not warn). -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
