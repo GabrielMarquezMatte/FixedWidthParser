@@ -51,12 +51,7 @@ namespace FixedWidthParser.Readers
             private readonly IFormatProvider? _formatProvider;
             private readonly StringPool? _stringPool;
             private TextReader? _reader;
-            private char[] _buffer;
-            private int _start;    // start of the data not yet consumed
-            private int _end;      // end of the valid data in the buffer
-            private int _scanFrom; // position from which we have not yet searched for '\n'
-            private bool _eof;
-            private int _lineNumber;
+            private LineBufferState _lines;
             private TModel _current;
 
             internal Enumerator(
@@ -72,12 +67,8 @@ namespace FixedWidthParser.Readers
                 _ownsReader = ownsReader;
                 _formatProvider = formatProvider;
                 _stringPool = stringPool;
-                _buffer = ArrayPool<char>.Shared.Rent(bufferSize);
-                _start = 0;
-                _end = 0;
-                _scanFrom = 0;
-                _eof = false;
-                _lineNumber = 0;
+                _lines = default;
+                _lines.Rent(bufferSize);
                 _current = default!;
             }
 
@@ -89,45 +80,14 @@ namespace FixedWidthParser.Readers
                 var reader = _reader ?? throw new ObjectDisposedException(nameof(Enumerator));
                 while (true)
                 {
-                    if (_scanFrom < _end)
+                    var status = _lines.TryGetLine(out var line);
+                    if (status == LineStatus.Line)
                     {
-                        int rel = _buffer.AsSpan(_scanFrom, _end - _scanFrom).IndexOf('\n');
-                        if (rel >= 0)
-                        {
-                            int nlIndex = _scanFrom + rel;
-                            int contentEnd = nlIndex;
-                            if (contentEnd > _start && _buffer[contentEnd - 1] == '\r') contentEnd--;
-                            var line = _buffer.AsSpan(_start, contentEnd - _start);
-                            _start = nlIndex + 1;
-                            _scanFrom = _start;
-                            _lineNumber++;
-                            if (!line.IsEmpty)
-                            {
-                                Parse(line);
-                                return true;
-                            }
-                            continue; // skip empty lines
-                        }
-                        _scanFrom = _end; // no '\n' in what has been read so far
+                        Parse(line);
+                        return true;
                     }
-
-                    if (_eof)
+                    if (status == LineStatus.End)
                     {
-                        // Last line without a trailing newline.
-                        if (_start < _end)
-                        {
-                            int contentEnd = _end;
-                            if (contentEnd > _start && _buffer[contentEnd - 1] == '\r') contentEnd--;
-                            var line = _buffer.AsSpan(_start, contentEnd - _start);
-                            _start = _end;
-                            _scanFrom = _end;
-                            _lineNumber++;
-                            if (!line.IsEmpty)
-                            {
-                                Parse(line);
-                                return true;
-                            }
-                        }
                         return false;
                     }
 
@@ -140,41 +100,21 @@ namespace FixedWidthParser.Readers
                 if (!_parser.TryParse(line, _formatProvider, _stringPool, out _current))
                 {
                     throw new FormatException(
-                        $"Line {_lineNumber} could not be parsed into {typeof(TModel).Name}: \"{line.ToString()}\".");
+                        $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{line.ToString()}\".");
                 }
             }
 
             private void Refill(TextReader reader)
             {
-                // Compact the unconsumed data to the start of the buffer.
-                if (_start > 0)
-                {
-                    int len = _end - _start;
-                    if (len > 0) Array.Copy(_buffer, _start, _buffer, 0, len);
-                    _end = len;
-                    _scanFrom -= _start;
-                    _start = 0;
-                }
-                // Buffer full with a single partial line: double the capacity.
-                if (_end == _buffer.Length)
-                {
-                    var bigger = ArrayPool<char>.Shared.Rent(_buffer.Length * 2);
-                    Array.Copy(_buffer, 0, bigger, 0, _end);
-                    ArrayPool<char>.Shared.Return(_buffer);
-                    _buffer = bigger;
-                }
-                int read = reader.Read(_buffer, _end, _buffer.Length - _end);
-                if (read == 0) _eof = true;
-                else _end += read;
+                _lines.Compact();
+                _lines.GrowIfFull();
+                int read = reader.Read(_lines.Buffer, _lines.End, _lines.Buffer.Length - _lines.End);
+                _lines.Advance(read);
             }
 
             public void Dispose()
             {
-                if (_buffer is not null)
-                {
-                    ArrayPool<char>.Shared.Return(_buffer);
-                    _buffer = null!;
-                }
+                _lines.Return();
                 if (_ownsReader) _reader?.Dispose();
                 _reader = null;
             }
