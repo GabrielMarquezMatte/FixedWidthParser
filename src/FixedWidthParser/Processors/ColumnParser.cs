@@ -4,12 +4,13 @@ using CommunityToolkit.HighPerformance.Buffers;
 namespace FixedWidthParser.Processors
 {
     /// <summary>
-    /// Parses a single column out of a full fixed-width line and assigns it to the model.
-    /// Replaces the old <c>IColumnProcessor</c> abstraction: instead of a class per column type,
-    /// the parser holds one delegate per column. Returns <see langword="false"/> to reject the line.
+    /// Parses the already-sliced text of a single column and assigns it to the model. The parser
+    /// slices each column out of the line (honoring start/length) and hands the resulting span here,
+    /// so this delegate never deals with offsets. Replaces the old <c>IColumnProcessor</c>
+    /// abstraction: one delegate per column. Returns <see langword="false"/> to reject the line.
     /// </summary>
     public delegate bool ColumnParser<TModel>(
-        ReadOnlySpan<char> line,
+        ReadOnlySpan<char> column,
         IFormatProvider? formatProvider,
         StringPool? stringPool,
         ref TModel model) where TModel : allows ref struct;
