@@ -2,30 +2,21 @@ using CommunityToolkit.HighPerformance.Buffers;
 
 namespace FixedWidthParser.Processors
 {
-    public sealed class ColumnProcessor<TModel, TProperty> : IColumnProcessor<TModel> where TProperty : ISpanParsable<TProperty> where TModel : allows ref struct
+    public sealed class ColumnProcessor<TModel, TProperty>(int start, int length, RefAction<TModel, TProperty> setter) : IColumnProcessor<TModel> where TProperty : ISpanParsable<TProperty> where TModel : allows ref struct
     {
-        private readonly int _start;
-        private readonly int _length;
-        private readonly RefAction<TModel, TProperty> _setter;
-        public ColumnProcessor(int start, int length, RefAction<TModel, TProperty> setter)
-        {
-            _start = start;
-            _length = length;
-            _setter = setter;
-        }
         public bool TryProcess(ref TModel model, IFormatProvider? formatProvider, ReadOnlySpan<char> value, StringPool? stringPool)
         {
-            if (_start >= value.Length)
+            if (start >= value.Length)
             {
                 return false;
             }
-            var length = Math.Min(_length, value.Length - _start);
-            var slice = value.Slice(_start, length).TrimEnd(' ');
+            var sliceLength = Math.Min(length, value.Length - start);
+            var slice = value.Slice(start, sliceLength).TrimEnd(' ');
             if (!TProperty.TryParse(slice, formatProvider, out var parsedValue))
             {
                 return false;
             }
-            _setter(ref model, parsedValue);
+            setter(ref model, parsedValue);
             return true;
         }
     }

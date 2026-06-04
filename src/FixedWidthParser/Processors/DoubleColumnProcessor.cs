@@ -3,27 +3,22 @@ using csFastFloat;
 
 namespace FixedWidthParser.Processors
 {
-    public sealed class DoubleColumnProcessor<TModel> : IColumnProcessor<TModel> where TModel : allows ref struct
+    public sealed class DoubleColumnProcessor<TModel>(int start, int length, RefAction<TModel, double> setter) : IColumnProcessor<TModel> where TModel : allows ref struct
     {
-        private readonly int _start;
-        private readonly int _length;
-        private readonly RefAction<TModel, double> _setter;
-        public DoubleColumnProcessor(int start, int length, RefAction<TModel, double> setter)
-        {
-            _start = start;
-            _length = length;
-            _setter = setter;
-        }
         public bool TryProcess(ref TModel model, IFormatProvider? formatProvider, ReadOnlySpan<char> value, StringPool? stringPool)
         {
-            var length = Math.Min(_length, value.Length - _start);
-            var slice = value.Slice(_start, length);
+            if (start >= value.Length)
+            {
+                return false;
+            }
+            var sliceLength = Math.Min(length, value.Length - start);
+            var slice = value.Slice(start, sliceLength);
             var decimalSeparator = CultureHelpers.GetDecimalSeparator(formatProvider);
             if (!FastDoubleParser.TryParseDouble(slice, out var parsedValue, decimal_separator: decimalSeparator))
             {
                 return false;
             }
-            _setter(ref model, parsedValue);
+            setter(ref model, parsedValue);
             return true;
         }
     }
