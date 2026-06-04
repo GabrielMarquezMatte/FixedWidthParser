@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Formatters;
 
@@ -14,40 +13,24 @@ namespace FixedWidthParser.Writers
 
         public FixedWidthWriter()
         {
-            var properties = typeof(TModel).GetProperties();
-            var fields = typeof(TModel).GetFields();
-            List<IColumnFormatter<TModel>> formatters = new(properties.Length + fields.Length);
-            List<(int Start, int Length, string Name)> columns = new(properties.Length + fields.Length);
+            var formatters = new List<IColumnFormatter<TModel>>();
             int maxLen = 0;
 
-            foreach (var prop in properties) AddFormatter(prop);
-            foreach (var field in fields) AddFormatter(field);
+            ModelColumns.ForEachColumn(typeof(TModel), (member, attribute) =>
+            {
+                maxLen = Math.Max(maxLen, attribute.Start + attribute.Length);
+                formatters.Add(CreateFormatter(member, attribute));
+            });
 
-            ColumnLayoutValidator.Validate(CollectionsMarshal.AsSpan(columns), typeof(TModel));
             _formatters = formatters.ToArray();
             _lineLength = maxLen;
-
-            void AddFormatter(MemberInfo member)
-            {
-                var attribute = member.GetCustomAttribute<FixedColumnAttribute>();
-                if (attribute is null) return;
-                maxLen = Math.Max(maxLen, attribute.Start + attribute.Length);
-                columns.Add((attribute.Start, attribute.Length, member.Name));
-                formatters.Add(CreateFormatter(member, attribute));
-            }
         }
 
         private static IColumnFormatter<TModel> CreateFormatter(MemberInfo member, FixedColumnAttribute attribute)
         {
-            var targetExpr = Expression.Parameter(typeof(TModel).MakeByRefType(), "model");
-            var (memberType, memberExpr) = member switch
-            {
-                PropertyInfo p => (p.PropertyType, Expression.Property(targetExpr, p)),
-                FieldInfo f => (f.FieldType, Expression.Field(targetExpr, f)),
-                _ => throw new ArgumentException($"Unsupported member: {member.GetType().Name}", nameof(member))
-            };
+            var (memberType, model, access) = ModelColumns.MemberAccess(typeof(TModel), member);
             var delegateType = typeof(RefGetter<,>).MakeGenericType(typeof(TModel), memberType);
-            var getter = Expression.Lambda(delegateType, memberExpr, targetExpr).Compile();
+            var getter = Expression.Lambda(delegateType, access, model).Compile();
             bool isString = memberType == typeof(string);
             // Resolve Default overflow per type: string truncates, numeric throws.
             var overflow = attribute.Overflow == OverflowBehavior.Default

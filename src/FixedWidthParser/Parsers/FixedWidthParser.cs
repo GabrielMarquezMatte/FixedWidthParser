@@ -4,7 +4,6 @@ using System.Runtime.ExceptionServices;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Processors;
 using CommunityToolkit.HighPerformance.Buffers;
-using System.Runtime.InteropServices;
 
 namespace FixedWidthParser.Parsers
 {
@@ -46,39 +45,18 @@ namespace FixedWidthParser.Parsers
         }
         private static (int Start, int Length, ColumnParser<TModel> Parse)[] BuildProcessors()
         {
-            var properties = typeof(TModel).GetProperties();
-            var fields = typeof(TModel).GetFields();
-            List<(int Start, int Length, ColumnParser<TModel> Parse)> processors = new(properties.Length + fields.Length);
-            List<(int Start, int Length, string Name)> columns = new(properties.Length + fields.Length);
-
-            foreach (var prop in properties) Add(prop);
-            foreach (var field in fields) Add(field);
-
-            ColumnLayoutValidator.Validate(CollectionsMarshal.AsSpan(columns), typeof(TModel));
+            var processors = new List<(int Start, int Length, ColumnParser<TModel> Parse)>();
+            ModelColumns.ForEachColumn(typeof(TModel), (member, attribute) =>
+                processors.Add((attribute.Start, attribute.Length, CreateColumnParser(member))));
             return processors.ToArray();
-
-            void Add(MemberInfo member)
-            {
-                var attribute = member.GetCustomAttribute<FixedColumnAttribute>();
-                if (attribute is null) return;
-                columns.Add((attribute.Start, attribute.Length, member.Name));
-                processors.Add((attribute.Start, attribute.Length, CreateColumnParser(member)));
-            }
         }
 
         private static ColumnParser<TModel> CreateColumnParser(MemberInfo member)
         {
-            var targetExpr = Expression.Parameter(typeof(TModel).MakeByRefType(), "model");
-            var (memberType, memberExpr) = member switch
-            {
-                PropertyInfo p => (p.PropertyType, Expression.Property(targetExpr, p)),
-                FieldInfo f => (f.FieldType, Expression.Field(targetExpr, f)),
-                _ => throw new ArgumentException($"Unsupported member: {member.GetType().Name}", nameof(member))
-            };
-            var valueExpr = Expression.Parameter(memberType, "value");
-            var assignExpr = Expression.Assign(memberExpr, valueExpr);
+            var (memberType, model, access) = ModelColumns.MemberAccess(typeof(TModel), member);
+            var value = Expression.Parameter(memberType, "value");
             var actionType = typeof(RefAction<,>).MakeGenericType(typeof(TModel), memberType);
-            var setter = Expression.Lambda(actionType, assignExpr, targetExpr, valueExpr).Compile();
+            var setter = Expression.Lambda(actionType, Expression.Assign(access, value), model, value).Compile();
             return ColumnParserFactory.Create<TModel>(memberType, setter);
         }
 
