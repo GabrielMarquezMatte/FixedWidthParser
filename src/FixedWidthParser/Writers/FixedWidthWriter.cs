@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Formatters;
 
@@ -96,6 +97,7 @@ namespace FixedWidthParser.Writers
                 ArrayPool<char>.Shared.Return(lineBuffer);
             }
         }
+        [SkipLocalsInit]
         public void Write(StreamWriter writer, in TModel model, IFormatProvider? formatProvider)
         {
             Span<char> lineBuffer = _lineLength <= 1024 ? stackalloc char[_lineLength] : new char[_lineLength];
@@ -125,6 +127,7 @@ namespace FixedWidthParser.Writers
         /// Writes a collection of models reusing an existing StreamWriter
         /// (avoids allocating/disposing a StreamWriter per call).
         /// </summary>
+        [SkipLocalsInit]
         public void WriteMany(StreamWriter writer, IEnumerable<TModel> models, IFormatProvider? formatProvider = null)
         {
             Span<char> lineBuffer = _lineLength <= 1024 ? stackalloc char[_lineLength] : new char[_lineLength];
@@ -149,6 +152,7 @@ namespace FixedWidthParser.Writers
         /// Writes a contiguous collection of models reusing an existing StreamWriter, without
         /// allocating an enumerator (iterates by ref readonly, avoiding a copy of each struct).
         /// </summary>
+        [SkipLocalsInit]
         public void WriteMany(StreamWriter writer, ReadOnlySpan<TModel> models, IFormatProvider? formatProvider = null)
         {
             Span<char> lineBuffer = _lineLength <= 1024 ? stackalloc char[_lineLength] : new char[_lineLength];
