@@ -28,6 +28,13 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 8)] public float Value { get; init; }
     }
 
+    /// <summary>Trailing string column — mirrors <see cref="TrailingStringModel"/>.</summary>
+    public readonly partial record struct GenTrailingStringModel : IFixedWidthModel<GenTrailingStringModel>
+    {
+        [FixedColumn(0, 5)] public int Id { get; init; }
+        [FixedColumn(5, 10)] public string Note { get; init; }
+    }
+
     /// <summary>Decimal column (ISpanParsable path) — mirrors <see cref="DecimalModel"/>.</summary>
     public readonly partial record struct GenDecimalModel : IFixedWidthModel<GenDecimalModel>
     {

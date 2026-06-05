@@ -22,7 +22,7 @@ namespace FixedWidthParser.Tests
         {
             var parser = new FixedWidthParser<DecimalModel>();
 
-            bool ok = parser.TryParse("1234,56", DeDe, null, out var model);
+            bool ok = parser.TryParse("1234,56     ", DeDe, null, out var model);
 
             Assert.True(ok);
             Assert.Equal(1234.56m, model.Amount);
@@ -33,7 +33,7 @@ namespace FixedWidthParser.Tests
         {
             var parser = new FixedWidthParser<DecimalModel>();
 
-            bool ok = parser.TryParse("1234.56", CultureInfo.InvariantCulture, null, out var model);
+            bool ok = parser.TryParse("1234.56     ", CultureInfo.InvariantCulture, null, out var model);
 
             Assert.True(ok);
             Assert.Equal(1234.56m, model.Amount);

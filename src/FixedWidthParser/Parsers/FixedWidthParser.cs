@@ -11,6 +11,7 @@ namespace FixedWidthParser.Parsers
     {
         private static readonly Func<TModel> _modelFactory;
         private static readonly (int Start, int Length, ColumnParser<TModel> Parse)[] _processors;
+        private static readonly int _requiredLineLength;
         private static readonly ExceptionDispatchInfo? _buildError;
 
         // The build is static (once per type). Any layout/configuration error is captured and
@@ -22,11 +23,13 @@ namespace FixedWidthParser.Parsers
             {
                 _modelFactory = BuildModelFactory();
                 _processors = BuildProcessors();
+                _requiredLineLength = ComputeRequiredLineLength(_processors);
             }
             catch (Exception ex)
             {
                 _modelFactory = null!;
                 _processors = [];
+                _requiredLineLength = 0;
                 _buildError = ExceptionDispatchInfo.Capture(ex);
             }
         }
@@ -51,6 +54,20 @@ namespace FixedWidthParser.Parsers
             return processors.ToArray();
         }
 
+        private static int ComputeRequiredLineLength((int Start, int Length, ColumnParser<TModel> Parse)[] processors)
+        {
+            int required = 0;
+            foreach (var processor in processors)
+            {
+                int end = processor.Start + processor.Length;
+                if (end > required)
+                {
+                    required = end;
+                }
+            }
+            return required;
+        }
+
         private static ColumnParser<TModel> CreateColumnParser(MemberInfo member)
         {
             var (memberType, model, access) = ModelColumns.MemberAccess(typeof(TModel), member);
@@ -62,12 +79,16 @@ namespace FixedWidthParser.Parsers
 
         public bool TryParse(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
         {
+            if (line.Length < _requiredLineLength)
+            {
+                model = default!;
+                return false;
+            }
+
             model = _modelFactory();
             foreach (ref readonly var processor in _processors.AsSpan())
             {
-                var column = processor.Start >= line.Length
-                    ? default
-                    : line.Slice(processor.Start, Math.Min(processor.Length, line.Length - processor.Start));
+                var column = line.Slice(processor.Start, processor.Length);
                 if (!processor.Parse(column, formatProvider, stringPool, ref model))
                 {
                     return false;

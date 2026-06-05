@@ -78,6 +78,31 @@ namespace FixedWidthParser.Tests
             }
         }
 
+        [Fact]
+        public void TrailingString_ShortLineGeneratedMatchesReflection()
+        {
+            var reflection = new FixedWidthParser<TrailingStringModel>();
+            bool okR = reflection.TryParse("42", Inv, null, out _);
+            bool okG = FixedWidth.TryParse<GenTrailingStringModel>("42", Inv, null, out _);
+
+            Assert.False(okR);
+            Assert.False(okG);
+        }
+
+        [Fact]
+        public void TrailingString_FullLineGeneratedMatchesReflection()
+        {
+            const string line = "42   short     ";
+            var reflection = new FixedWidthParser<TrailingStringModel>();
+            bool okR = reflection.TryParse(line, Inv, null, out var r);
+            bool okG = FixedWidth.TryParse<GenTrailingStringModel>(line, Inv, null, out var g);
+
+            Assert.True(okR);
+            Assert.Equal(okR, okG);
+            Assert.Equal(r.Id, g.Id);
+            Assert.Equal(r.Note, g.Note);
+        }
+
         [Theory]
         [InlineData("123.45      ")]
         [InlineData("-0.01       ")]

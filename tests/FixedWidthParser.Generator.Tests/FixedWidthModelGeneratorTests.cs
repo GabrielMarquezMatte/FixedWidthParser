@@ -22,6 +22,11 @@ namespace FixedWidthParser.Generator.Tests
             Assert.Empty(result.GeneratorDiagnostics);
             var generated = Assert.Single(result.GeneratedSources);
             Assert.Contains("public static bool TryParse", generated);
+            Assert.Contains("if (line.Length < 8) { model = default!; return false; }", generated);
+            Assert.Contains("FixedWidthRuntime.String(line.Slice(0, 5), stringPool)", generated);
+            Assert.Contains("FixedWidthRuntime.TryParse<int>(line.Slice(5, 3), formatProvider", generated);
+            Assert.DoesNotContain("global::System.Math.Min", generated);
+            Assert.DoesNotContain("FixedWidthRuntime.Column", generated);
             Assert.Contains("Code = __v0", generated);
             Assert.Contains("Quantity = __v1", generated);
         }

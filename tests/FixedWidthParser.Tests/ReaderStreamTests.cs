@@ -37,7 +37,7 @@ namespace FixedWidthParser.Tests
         {
             // 'Á' (0xC1) is a single byte in Latin1 but invalid as standalone UTF-8.
             var reader = new FixedWidthReader<CodeModel>();
-            using var stream = new MemoryStream(Encoding.Latin1.GetBytes("Áb\n"));
+            using var stream = new MemoryStream(Encoding.Latin1.GetBytes("Áb \n"));
 
             var codes = reader.Read(stream, Encoding.Latin1).Select(m => m.Code).ToList();
 
@@ -93,7 +93,7 @@ namespace FixedWidthParser.Tests
         public async Task ReadAsync_Stream_CustomEncoding_IsHonored()
         {
             var reader = new FixedWidthReader<CodeModel>();
-            using var stream = new MemoryStream(Encoding.Latin1.GetBytes("Áb\n"));
+            using var stream = new MemoryStream(Encoding.Latin1.GetBytes("Áb \n"));
 
             var codes = await reader.ReadAsync(stream, Encoding.Latin1).Select(m => m.Code).ToListAsync();
 
