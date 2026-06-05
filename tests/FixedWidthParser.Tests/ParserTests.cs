@@ -52,16 +52,14 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
-        public void TryParse_ShortLine_StringColumnMissing_DefaultsToEmpty()
+        public void TryParse_ShortLine_StringColumnMissing_ReturnsFalse()
         {
             var parser = new FixedWidthParser<TrailingStringModel>();
 
-            // The line only covers Id; the string column (start 5) falls outside and becomes empty.
             bool ok = parser.TryParse("42", Inv, null, out var model);
 
-            Assert.True(ok);
-            Assert.Equal(42, model.Id);
-            Assert.Equal(string.Empty, model.Note);
+            Assert.False(ok);
+            Assert.Equal(default, model);
         }
 
         [Fact]

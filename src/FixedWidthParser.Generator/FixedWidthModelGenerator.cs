@@ -272,10 +272,46 @@ namespace FixedWidthParser.Generator
             sb.Append(body).AppendLine("{");
 
             string stmt = body + "    ";
+            if (columns.Length > 0)
+            {
+                int maxEnd = 0;
+                for (int i = 0; i < columns.Length; i++)
+                {
+                    int end = columns[i].Start + columns[i].Length;
+                    if (end > maxEnd)
+                    {
+                        maxEnd = end;
+                    }
+                }
+
+                sb.Append(stmt).Append("if (line.Length < ").Append(maxEnd).AppendLine(") { model = default!; return false; }");
+                AppendParseAndReturn(sb, stmt, model, static c => "line.Slice(" + c.Start + ", " + c.Length + ")");
+            }
+            else
+            {
+                AppendParseAndReturn(sb, stmt, model, static _ => "default");
+            }
+
+            sb.Append(body).AppendLine("}");
+            sb.Append(indent).AppendLine("}");
+            if (model.Namespace is not null)
+            {
+                sb.AppendLine("}");
+            }
+            return sb.ToString();
+        }
+
+        private static void AppendParseAndReturn(
+            StringBuilder sb,
+            string stmt,
+            ModelInfo model,
+            Func<ColumnInfo, string> columnExpression)
+        {
+            var columns = model.Columns.AsImmutableArray();
             for (int i = 0; i < columns.Length; i++)
             {
                 var c = columns[i];
-                string col = "global::FixedWidthParser.FixedWidthRuntime.Column(line, " + c.Start + ", " + c.Length + ")";
+                string col = columnExpression(c);
                 switch (c.Kind)
                 {
                     case ColumnKind.String:
@@ -305,14 +341,6 @@ namespace FixedWidthParser.Generator
             }
             sb.Append(stmt).AppendLine("};");
             sb.Append(stmt).AppendLine("return true;");
-
-            sb.Append(body).AppendLine("}");
-            sb.Append(indent).AppendLine("}");
-            if (model.Namespace is not null)
-            {
-                sb.AppendLine("}");
-            }
-            return sb.ToString();
         }
 
         private enum ColumnKind { String, Double, Float, SpanParsable, Unsupported }

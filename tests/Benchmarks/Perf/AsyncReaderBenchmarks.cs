@@ -21,6 +21,7 @@ namespace Benchmarks.Perf
         private readonly FixedWidthParser<SampleModel> _parser = new();
         private readonly FixedWidthReader<SampleModel> _reader = new(CultureInfo.InvariantCulture);
         private readonly FixedWidthReader<SampleModel> _pooledReader = new(CultureInfo.InvariantCulture, new StringPool());
+        private readonly StringPool _generatedStringPool = new();
         private string _text = string.Empty;
 
         [Params(100, 1000)]
@@ -89,9 +90,8 @@ namespace Benchmarks.Perf
         public async Task<int> GeneratedReader_ReadAsync_Pooled()
         {
             using var reader = new StringReader(_text);
-            var pool = new StringPool();
             int sum = 0;
-            await foreach (var model in FixedWidth.ReadAsync<GenSampleModel>(reader, formatProvider: Culture, stringPool: pool)) sum += model.Age;
+            await foreach (var model in FixedWidth.ReadAsync<GenSampleModel>(reader, formatProvider: Culture, stringPool: _generatedStringPool)) sum += model.Age;
             return sum;
         }
     }
