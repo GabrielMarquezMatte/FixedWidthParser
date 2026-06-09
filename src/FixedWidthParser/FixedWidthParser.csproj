@@ -15,7 +15,8 @@
 
   <!-- NuGet package metadata -->
   <PropertyGroup>
-    <PackageId>FixedWidthParser</PackageId>
+    <!-- The bare "FixedWidthParser" id is squatted on nuget.org; assembly/namespace stay FixedWidthParser. -->
+    <PackageId>FixedWidthParser.NET</PackageId>
     <Version>1.0.0</Version>
     <Authors>Gabriel Matte</Authors>
     <Title>FixedWidthParser</Title>

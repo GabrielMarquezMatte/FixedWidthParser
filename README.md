@@ -21,13 +21,13 @@ Dependencies: [CommunityToolkit.HighPerformance](https://www.nuget.org/packages/
 ## Installation
 
 ```bash
-dotnet add package FixedWidthParser
+dotnet add package FixedWidthParser.NET
 ```
 
 Or as a `<PackageReference>`:
 
 ```xml
-<PackageReference Include="FixedWidthParser" Version="1.0.0" />
+<PackageReference Include="FixedWidthParser.NET" Version="1.0.0" />
 ```
 
 The package ships the Roslyn source generator bundled as an analyzer, so models that implement
