@@ -16,19 +16,25 @@ namespace FixedWidthParser.Generator.Tests
                 {
                     [FixedColumn(0, 5)] public string Code { get; init; }
                     [FixedColumn(5, 3)] public int Quantity { get; init; }
+                    [FixedColumn(8, 5)] public double Price { get; init; }
+                    [FixedColumn(13, 5)] public float Discount { get; init; }
                 }
                 """);
 
             Assert.Empty(result.GeneratorDiagnostics);
             var generated = Assert.Single(result.GeneratedSources);
             Assert.Contains("public static bool TryParse", generated);
-            Assert.Contains("if (line.Length < 8) { model = default!; return false; }", generated);
+            Assert.Contains("if (line.Length < 18) { model = default!; return false; }", generated);
             Assert.Contains("FixedWidthRuntime.String(line.Slice(0, 5), stringPool)", generated);
             Assert.Contains("FixedWidthRuntime.TryParse<int>(line.Slice(5, 3), formatProvider", generated);
+            Assert.Contains("FixedWidthRuntime.TryDouble(line.Slice(8, 5), formatProvider", generated);
+            Assert.Contains("FixedWidthRuntime.TryFloat(line.Slice(13, 5), formatProvider", generated);
             Assert.DoesNotContain("global::System.Math.Min", generated);
             Assert.DoesNotContain("FixedWidthRuntime.Column", generated);
             Assert.Contains("Code = __v0", generated);
             Assert.Contains("Quantity = __v1", generated);
+            Assert.Contains("Price = __v2", generated);
+            Assert.Contains("Discount = __v3", generated);
         }
 
         [Theory]
@@ -106,6 +112,75 @@ namespace FixedWidthParser.Generator.Tests
 
             Assert.Empty(result.GeneratorDiagnostics);
             Assert.Single(result.GeneratedSources);
+        }
+
+        [Fact]
+        public void ValidModel_RefStruct_GeneratesRefPartialStruct()
+        {
+            var result = Run("""
+                public ref partial struct RefStructModel : IFixedWidthModel<RefStructModel>
+                {
+                    [FixedColumn(0, 5)] public string Code { get; set; }
+                    [FixedColumn(5, 3)] public int Quantity { get; set; }
+                }
+                """);
+
+            Assert.Empty(result.GeneratorDiagnostics);
+            var generated = Assert.Single(result.GeneratedSources);
+            Assert.Contains("ref partial struct RefStructModel", generated);
+            Assert.Contains("public static bool TryParse", generated);
+        }
+
+        [Fact]
+        public void ValidModel_ReadonlyRefRecordStruct_GeneratesReadonlyRefPartialRecordStruct()
+        {
+            var result = Run("""
+                public readonly partial record struct ReadonlyRefRecordStructModel : IFixedWidthModel<ReadonlyRefRecordStructModel>
+                {
+                    [FixedColumn(0, 5)] public string Code { get; init; }
+                    [FixedColumn(5, 3)] public int Quantity { get; init; }
+                }
+                """);
+
+            Assert.Empty(result.GeneratorDiagnostics);
+            var generated = Assert.Single(result.GeneratedSources);
+            Assert.Contains("readonly partial record struct ReadonlyRefRecordStructModel", generated);
+            Assert.Contains("public static bool TryParse", generated);
+        }
+
+        [Fact]
+        public void ValidModel_Class_GeneratesPartialClass()
+        {
+            var result = Run("""
+                public partial class ClassModel : IFixedWidthModel<ClassModel>
+                {
+                    [FixedColumn(0, 5)] public string Code { get; set; }
+                    [FixedColumn(5, 3)] public int Quantity { get; set; }
+                }
+                """);
+
+            Assert.Empty(result.GeneratorDiagnostics);
+            var generated = Assert.Single(result.GeneratedSources);
+            Assert.Contains("partial class ClassModel", generated);
+            Assert.DoesNotContain("partial struct", generated);
+            Assert.Contains("public static bool TryParse", generated);
+        }
+
+        [Fact]
+        public void ValidModel_RecordClass_GeneratesPartialRecordClass()
+        {
+            var result = Run("""
+                public partial record RecordClassModel : IFixedWidthModel<RecordClassModel>
+                {
+                    [FixedColumn(0, 5)] public string Code { get; init; }
+                    [FixedColumn(5, 3)] public int Quantity { get; init; }
+                }
+                """);
+
+            Assert.Empty(result.GeneratorDiagnostics);
+            var generated = Assert.Single(result.GeneratedSources);
+            Assert.Contains("partial record class RecordClassModel", generated);
+            Assert.Contains("public static bool TryParse", generated);
         }
 
         private static GeneratorRunResult Run(string modelSource)

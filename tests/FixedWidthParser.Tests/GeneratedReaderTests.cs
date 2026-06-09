@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Readers;
 using static FixedWidthParser.Tests.TestHelpers;
@@ -10,6 +11,116 @@ namespace FixedWidthParser.Tests
         private const string TwoPeople =
             "John Doe  30   60000.00  \n" +
             "Jane      28   55000.00  ";
+
+        private static MemoryStream Utf8(string text) => new(Encoding.UTF8.GetBytes(text));
+
+        // ----------------------------- Stream overloads – sync -----------------------------
+
+        [Fact]
+        public void Read_Stream_ParsesAll()
+        {
+            using var stream = Utf8(TwoPeople);
+
+            var people = FixedWidth.Read<GenPersonModel>(stream, formatProvider: Inv).ToList();
+
+            Assert.Equal(2, people.Count);
+            Assert.Equal("John Doe", people[0].Name);
+            Assert.Equal("Jane", people[1].Name);
+            Assert.Equal(55000.00, people[1].Salary, 2);
+        }
+
+        [Fact]
+        public void Read_Stream_CustomEncoding_IsHonored()
+        {
+            using var stream = new MemoryStream(Encoding.Latin1.GetBytes("Áb \nCDé\n"));
+
+            var codes = FixedWidth.Read<GenCodeModel>(stream, encoding: Encoding.Latin1)
+                .Select(m => m.Code)
+                .ToList();
+
+            Assert.Equal(["Áb", "CDé"], codes);
+        }
+
+        [Fact]
+        public void Read_Stream_LeaveOpenTrue_KeepsStreamOpen()
+        {
+            using var stream = Utf8("ABC\nDEF\n");
+
+            _ = FixedWidth.Read<GenCodeModel>(stream, leaveOpen: true).ToList();
+
+            Assert.True(stream.CanRead);
+        }
+
+        [Fact]
+        public void Read_Stream_LeaveOpenFalse_DisposesStream()
+        {
+            var stream = Utf8("ABC\nDEF\n");
+
+            _ = FixedWidth.Read<GenCodeModel>(stream).ToList(); // default leaveOpen: false
+
+            Assert.False(stream.CanRead);
+        }
+
+        [Fact]
+        public void Read_Stream_NullStream_Throws()
+        {
+            Assert.Throws<ArgumentNullException>(() => FixedWidth.Read<GenCodeModel>((Stream)null!));
+        }
+
+        // ----------------------------- Stream overloads – async -----------------------------
+
+        [Fact]
+        public async Task ReadAsync_Stream_ParsesAll()
+        {
+            using var stream = Utf8(TwoPeople);
+
+            var people = await FixedWidth.ReadAsync<GenPersonModel>(stream, formatProvider: Inv).ToListAsync();
+
+            Assert.Equal(2, people.Count);
+            Assert.Equal("John Doe", people[0].Name);
+            Assert.Equal("Jane", people[1].Name);
+            Assert.Equal(55000.00, people[1].Salary, 2);
+        }
+
+        [Fact]
+        public async Task ReadAsync_Stream_CustomEncoding_IsHonored()
+        {
+            using var stream = new MemoryStream(Encoding.Latin1.GetBytes("Áb \nCDé\n"));
+
+            var codes = await FixedWidth.ReadAsync<GenCodeModel>(stream, encoding: Encoding.Latin1)
+                .Select(m => m.Code)
+                .ToListAsync();
+
+            Assert.Equal(["Áb", "CDé"], codes);
+        }
+
+        [Fact]
+        public async Task ReadAsync_Stream_LeaveOpenTrue_KeepsStreamOpen()
+        {
+            using var stream = Utf8("ABC\nDEF\n");
+
+            _ = await FixedWidth.ReadAsync<GenCodeModel>(stream, leaveOpen: true).ToListAsync();
+
+            Assert.True(stream.CanRead);
+        }
+
+        [Fact]
+        public async Task ReadAsync_Stream_LeaveOpenFalse_DisposesStream()
+        {
+            var stream = Utf8("ABC\nDEF\n");
+
+            _ = await FixedWidth.ReadAsync<GenCodeModel>(stream).ToListAsync(); // default leaveOpen: false
+
+            Assert.False(stream.CanRead);
+        }
+
+        [Fact]
+        public void ReadAsync_Stream_NullStream_Throws()
+        {
+            Assert.Throws<ArgumentNullException>(() => FixedWidth.ReadAsync<GenCodeModel>((Stream)null!));
+        }
+
+        // ----------------------------- TextReader overloads -----------------------------
 
         [Fact]
         public void Read_MultipleLines_MatchesReflectionReader()
