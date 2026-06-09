@@ -9,8 +9,9 @@ namespace FixedWidthParser.Parsers
 {
     public sealed class FixedWidthParser<TModel> where TModel : new(), allows ref struct
     {
+        private readonly record struct ColumnParserInfo(int Start, int Length, ColumnParser<TModel> Parse);
         private static readonly Func<TModel> _modelFactory;
-        private static readonly (int Start, int Length, ColumnParser<TModel> Parse)[] _processors;
+        private static readonly ColumnParserInfo[] _processors;
         private static readonly int _requiredLineLength;
         private static readonly ExceptionDispatchInfo? _buildError;
 
@@ -47,15 +48,15 @@ namespace FixedWidthParser.Parsers
             var lambda = Expression.Lambda<Func<TModel>>(Expression.New(ctor));
             return lambda.Compile();
         }
-        private static (int Start, int Length, ColumnParser<TModel> Parse)[] BuildProcessors()
+        private static ColumnParserInfo[] BuildProcessors()
         {
-            var processors = new List<(int Start, int Length, ColumnParser<TModel> Parse)>();
+            var processors = new List<ColumnParserInfo>();
             ModelColumns.ForEachColumn(typeof(TModel), (member, attribute) =>
-                processors.Add((attribute.Start, attribute.Length, CreateColumnParser(member))));
+                processors.Add(new(attribute.Start, attribute.Length, CreateColumnParser(member))));
             return processors.ToArray();
         }
 
-        private static int ComputeRequiredLineLength(ReadOnlySpan<(int Start, int Length, ColumnParser<TModel> Parse)> processors)
+        private static int ComputeRequiredLineLength(ReadOnlySpan<ColumnParserInfo> processors)
         {
             int required = 0;
             foreach (var (Start, Length, _) in processors)
