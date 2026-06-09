@@ -26,7 +26,7 @@
     <PackageProjectUrl>https://github.com/GabrielMarquezMatte/FixedWidthParser</PackageProjectUrl>
     <RepositoryUrl>https://github.com/GabrielMarquezMatte/FixedWidthParser</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageReleaseNotes>Initial release.</PackageReleaseNotes>
+    <PackageReleaseNotes>See the changelog: https://github.com/GabrielMarquezMatte/FixedWidthParser/blob/master/CHANGELOG.md</PackageReleaseNotes>
     <Copyright>Copyright (c) Gabriel Matte</Copyright>
   </PropertyGroup>
 
