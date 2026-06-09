@@ -23,12 +23,21 @@
     <PackageTags>fixed-width;flat-file;parser;writer;parsing;serialization;performance;span;low-allocation</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/GabrielMarquezMatte/FixedWidthParser</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/GabrielMarquezMatte/FixedWidthParser</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReleaseNotes>Initial release.</PackageReleaseNotes>
+    <Copyright>Copyright (c) Gabriel Matte</Copyright>
+  </PropertyGroup>
 
+  <PropertyGroup>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <DebugType>portable</DebugType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <ItemGroup>
@@ -39,5 +48,21 @@
     <PackageReference Include="CommunityToolkit.HighPerformance" Version="8.4.2" />
     <PackageReference Include="csFastFloat" Version="4.1.5" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FixedWidthParser.Generator\FixedWidthParser.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <PropertyGroup>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_AddGeneratorToPackage</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <Target Name="_AddGeneratorToPackage" DependsOnTargets="ResolveReferences">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="@(Analyzer)"
+                              Condition="'%(Analyzer.Filename)' == 'FixedWidthParser.Generator'"
+                              PackagePath="analyzers/dotnet/cs/%(Analyzer.Filename)%(Analyzer.Extension)" />
+    </ItemGroup>
+  </Target>
 
 </Project>
