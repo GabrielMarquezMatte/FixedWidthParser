@@ -23,7 +23,7 @@ namespace FixedWidthParser.Formatters
             }
 
             // Rare: the formatted text exceeds the stack buffer; grow via ArrayPool.
-            for (int size = 512; ; size *= 2)
+            for (int size = 512; size < int.MaxValue; size *= 2)
             {
                 char[] rented = ArrayPool<char>.Shared.Rent(size);
                 try

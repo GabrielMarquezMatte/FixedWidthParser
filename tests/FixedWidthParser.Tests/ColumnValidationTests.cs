@@ -13,28 +13,28 @@ namespace FixedWidthParser.Tests
         public void Parser_OverlappingColumns_ThrowsOnConstruction()
         {
             var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthParser<OverlapReadModel>());
-            Assert.Contains("Overlapping", ex.Message);
+            Assert.Contains("Overlapping", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]
         public void Writer_OverlappingColumns_ThrowsOnConstruction()
         {
             var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthWriter<OverlapWriteModel>());
-            Assert.Contains("Overlapping", ex.Message);
+            Assert.Contains("Overlapping", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]
         public void Parser_NegativeStart_Throws()
         {
             var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthParser<NegativeStartModel>());
-            Assert.Contains("Start", ex.Message);
+            Assert.Contains("Start", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]
         public void Writer_ZeroLength_Throws()
         {
             var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthWriter<ZeroLengthModel>());
-            Assert.Contains("Length", ex.Message);
+            Assert.Contains("Length", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]

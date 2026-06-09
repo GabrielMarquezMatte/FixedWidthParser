@@ -74,7 +74,7 @@ namespace FixedWidthParser.Tests
             var ex = Assert.Throws<FormatException>(
                 () => reader.Read(new StringReader(text)).ToList());
 
-            Assert.Contains("Line 2", ex.Message);
+            Assert.Contains("Line 2", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -128,7 +128,7 @@ namespace FixedWidthParser.Tests
         public async Task ReadAsync_MultipleLines_ParsesAll()
         {
             var reader = new FixedWidthReader<PersonModel>(Inv);
-            var people = await reader.ReadAsync(new StringReader(TwoPeople)).ToListAsync();
+            var people = await reader.ReadAsync(new StringReader(TwoPeople)).ToListAsync().ConfigureAwait(true);
             Assert.Equal(2, people.Count);
             Assert.Equal("John Doe", people[0].Name);
             Assert.Equal(30, people[0].Age);
@@ -140,7 +140,7 @@ namespace FixedWidthParser.Tests
         public async Task ReadAsync_LineLongerThanBuffer_StillParses()
         {
             var reader = new FixedWidthReader<PersonModel>(Inv, bufferSize: 4);
-            var people = await reader.ReadAsync(new StringReader(TwoPeople)).ToListAsync();
+            var people = await reader.ReadAsync(new StringReader(TwoPeople)).ToListAsync().ConfigureAwait(true);
             Assert.Equal(2, people.Count);
             Assert.Equal("John Doe", people[0].Name);
             Assert.Equal(55000.00, people[1].Salary, 2);
@@ -154,10 +154,10 @@ namespace FixedWidthParser.Tests
 
             var ex = await Assert.ThrowsAsync<FormatException>(async () =>
             {
-                await foreach (var _ in reader.ReadAsync(new StringReader(text))) { }
-            });
+                await foreach (var _ in reader.ReadAsync(new StringReader(text)).ConfigureAwait(false)) { }
+            }).ConfigureAwait(true);
 
-            Assert.Contains("Line 2", ex.Message);
+            Assert.Contains("Line 2", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -165,12 +165,12 @@ namespace FixedWidthParser.Tests
         {
             var reader = new FixedWidthReader<CodeModel>();
             using var cts = new CancellationTokenSource();
-            cts.Cancel();
+            await cts.CancelAsync().ConfigureAwait(true);
 
             await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             {
-                await foreach (var _ in reader.ReadAsync(new StringReader("ABC\nDEF\n")).WithCancellation(cts.Token)) { }
-            });
+                await foreach (var _ in reader.ReadAsync(new StringReader("ABC\nDEF\n")).WithCancellation(cts.Token).ConfigureAwait(false)) { }
+            }).ConfigureAwait(true);
         }
 
         [Fact]
@@ -179,9 +179,9 @@ namespace FixedWidthParser.Tests
             string path = Path.GetTempFileName();
             try
             {
-                File.WriteAllText(path, "ABC\nDEF\nGHI\n");
+                await File.WriteAllTextAsync(path, "ABC\nDEF\nGHI\n").ConfigureAwait(true);
                 var reader = new FixedWidthReader<CodeModel>();
-                var asyncCodes = await reader.ReadFileAsync(path).Select(m => m.Code).ToListAsync();
+                var asyncCodes = await reader.ReadFileAsync(path).Select(m => m.Code).ToListAsync().ConfigureAwait(true);
                 var syncCodes = reader.ReadFile(path).Select(m => m.Code).ToList();
 
                 Assert.Equal(["ABC", "DEF", "GHI"], asyncCodes);

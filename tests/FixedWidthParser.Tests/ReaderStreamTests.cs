@@ -80,9 +80,9 @@ namespace FixedWidthParser.Tests
         public async Task ReadAsync_Stream_ParsesAll()
         {
             var reader = new FixedWidthReader<PersonModel>(Inv);
-            using var stream = Utf8(TwoPeople);
+            await using var stream = Utf8(TwoPeople);
 
-            var people = await reader.ReadAsync(stream).ToListAsync();
+            var people = await reader.ReadAsync(stream).ToListAsync().ConfigureAwait(true);
 
             Assert.Equal(2, people.Count);
             Assert.Equal("John Doe", people[0].Name);
@@ -93,9 +93,9 @@ namespace FixedWidthParser.Tests
         public async Task ReadAsync_Stream_CustomEncoding_IsHonored()
         {
             var reader = new FixedWidthReader<CodeModel>();
-            using var stream = new MemoryStream(Encoding.Latin1.GetBytes("Áb \n"));
+            await using MemoryStream stream = new(Encoding.Latin1.GetBytes("Áb \n"));
 
-            var codes = await reader.ReadAsync(stream, Encoding.Latin1).Select(m => m.Code).ToListAsync();
+            var codes = await reader.ReadAsync(stream, Encoding.Latin1).Select(m => m.Code).ToListAsync().ConfigureAwait(true);
 
             Assert.Equal(["Áb"], codes);
         }
@@ -104,9 +104,9 @@ namespace FixedWidthParser.Tests
         public async Task ReadAsync_Stream_LeaveOpenTrue_KeepsStreamOpen()
         {
             var reader = new FixedWidthReader<CodeModel>();
-            using var stream = Utf8("ABC\nDEF\n");
+            await using var stream = Utf8("ABC\nDEF\n");
 
-            _ = await reader.ReadAsync(stream, leaveOpen: true).ToListAsync();
+            _ = await reader.ReadAsync(stream, leaveOpen: true).ToListAsync().ConfigureAwait(true);
 
             Assert.True(stream.CanRead);
         }
@@ -117,7 +117,7 @@ namespace FixedWidthParser.Tests
             var reader = new FixedWidthReader<CodeModel>();
             var stream = Utf8("ABC\nDEF\n");
 
-            _ = await reader.ReadAsync(stream).ToListAsync();
+            _ = await reader.ReadAsync(stream).ToListAsync().ConfigureAwait(true);
 
             Assert.False(stream.CanRead);
         }

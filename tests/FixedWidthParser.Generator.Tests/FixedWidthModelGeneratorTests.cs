@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Generator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -23,18 +22,18 @@ namespace FixedWidthParser.Generator.Tests
 
             Assert.Empty(result.GeneratorDiagnostics);
             var generated = Assert.Single(result.GeneratedSources);
-            Assert.Contains("public static bool TryParse", generated);
-            Assert.Contains("if (line.Length < 18) { model = default!; return false; }", generated);
-            Assert.Contains("FixedWidthRuntime.String(line.Slice(0, 5), stringPool)", generated);
-            Assert.Contains("FixedWidthRuntime.TryParse<int>(line.Slice(5, 3), formatProvider", generated);
-            Assert.Contains("FixedWidthRuntime.TryDouble(line.Slice(8, 5), formatProvider", generated);
-            Assert.Contains("FixedWidthRuntime.TryFloat(line.Slice(13, 5), formatProvider", generated);
-            Assert.DoesNotContain("global::System.Math.Min", generated);
-            Assert.DoesNotContain("FixedWidthRuntime.Column", generated);
-            Assert.Contains("Code = __v0", generated);
-            Assert.Contains("Quantity = __v1", generated);
-            Assert.Contains("Price = __v2", generated);
-            Assert.Contains("Discount = __v3", generated);
+            Assert.Contains("public static bool TryParse", generated, StringComparison.Ordinal);
+            Assert.Contains("if (line.Length < 18) { model = default!; return false; }", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.String(line.Slice(0, 5), stringPool)", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.TryParse<int>(line.Slice(5, 3), formatProvider", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.TryDouble(line.Slice(8, 5), formatProvider", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.TryFloat(line.Slice(13, 5), formatProvider", generated, StringComparison.Ordinal);
+            Assert.DoesNotContain("global::System.Math.Min", generated, StringComparison.Ordinal);
+            Assert.DoesNotContain("FixedWidthRuntime.Column", generated, StringComparison.Ordinal);
+            Assert.Contains("Code = __v0", generated, StringComparison.Ordinal);
+            Assert.Contains("Quantity = __v1", generated, StringComparison.Ordinal);
+            Assert.Contains("Price = __v2", generated, StringComparison.Ordinal);
+            Assert.Contains("Discount = __v3", generated, StringComparison.Ordinal);
         }
 
         [Theory]
@@ -82,7 +81,7 @@ namespace FixedWidthParser.Generator.Tests
         {
             var result = Run(modelSource);
 
-            Assert.Contains(result.GeneratorDiagnostics, d => d.Id == diagnosticId);
+            Assert.Contains(result.GeneratorDiagnostics, d => string.Equals(d.Id, diagnosticId, StringComparison.Ordinal));
             Assert.Empty(result.GeneratedSources);
         }
 
@@ -127,8 +126,8 @@ namespace FixedWidthParser.Generator.Tests
 
             Assert.Empty(result.GeneratorDiagnostics);
             var generated = Assert.Single(result.GeneratedSources);
-            Assert.Contains("ref partial struct RefStructModel", generated);
-            Assert.Contains("public static bool TryParse", generated);
+            Assert.Contains("ref partial struct RefStructModel", generated, StringComparison.Ordinal);
+            Assert.Contains("public static bool TryParse", generated, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -144,8 +143,8 @@ namespace FixedWidthParser.Generator.Tests
 
             Assert.Empty(result.GeneratorDiagnostics);
             var generated = Assert.Single(result.GeneratedSources);
-            Assert.Contains("readonly partial record struct ReadonlyRefRecordStructModel", generated);
-            Assert.Contains("public static bool TryParse", generated);
+            Assert.Contains("readonly partial record struct ReadonlyRefRecordStructModel", generated, StringComparison.Ordinal);
+            Assert.Contains("public static bool TryParse", generated, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -161,9 +160,9 @@ namespace FixedWidthParser.Generator.Tests
 
             Assert.Empty(result.GeneratorDiagnostics);
             var generated = Assert.Single(result.GeneratedSources);
-            Assert.Contains("partial class ClassModel", generated);
-            Assert.DoesNotContain("partial struct", generated);
-            Assert.Contains("public static bool TryParse", generated);
+            Assert.Contains("partial class ClassModel", generated, StringComparison.Ordinal);
+            Assert.DoesNotContain("partial struct", generated, StringComparison.Ordinal);
+            Assert.Contains("public static bool TryParse", generated, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -179,8 +178,8 @@ namespace FixedWidthParser.Generator.Tests
 
             Assert.Empty(result.GeneratorDiagnostics);
             var generated = Assert.Single(result.GeneratedSources);
-            Assert.Contains("partial record class RecordClassModel", generated);
-            Assert.Contains("public static bool TryParse", generated);
+            Assert.Contains("partial record class RecordClassModel", generated, StringComparison.Ordinal);
+            Assert.Contains("public static bool TryParse", generated, StringComparison.Ordinal);
         }
 
         private static GeneratorRunResult Run(string modelSource)

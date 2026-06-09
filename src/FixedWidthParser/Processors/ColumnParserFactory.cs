@@ -18,6 +18,10 @@ namespace FixedWidthParser.Processors
         private static readonly MethodInfo BuildGenericMethod =
             typeof(ColumnParserFactory).GetMethod(nameof(BuildGeneric), BindingFlags.NonPublic | BindingFlags.Static)!;
 
+        /// <summary>
+        /// Creates a <see cref="ColumnParser{TModel}"/> for the given member type and setter. The setter is a compiled expression assigning the parsed value to the member. The value parser is resolved from 
+        /// <see cref="ColumnParserRegistry"/> or, when absent, from the <see cref="ISpanParsable{TSelf}"/> fallback.
+        /// </summary>
         /// <remarks><paramref name="setter"/> must be a <c>RefAction&lt;TModel, valueType&gt;</c> assigning the parsed value to the member.</remarks>
         public static ColumnParser<TModel> Create<TModel>(Type valueType, Delegate setter)
             where TModel : allows ref struct
@@ -39,7 +43,7 @@ namespace FixedWidthParser.Processors
             RefAction<TModel, TValue> setter, ColumnValueParser<TValue> valueParser)
             where TModel : allows ref struct
         {
-            return (column, formatProvider, stringPool, ref model) =>
+            return (column, formatProvider, _, ref model) =>
             {
                 if (!valueParser(column, formatProvider, out var value))
                 {
@@ -53,7 +57,7 @@ namespace FixedWidthParser.Processors
         private static ColumnParser<TModel> BuildString<TModel>(RefAction<TModel, string> setter)
             where TModel : allows ref struct
         {
-            return (column, formatProvider, stringPool, ref model) =>
+            return (column, _, stringPool, ref model) =>
             {
                 var slice = column.TrimEnd(' ');
                 setter(ref model, stringPool is null ? slice.ToString() : stringPool.GetOrAdd(slice));

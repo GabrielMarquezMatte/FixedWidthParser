@@ -115,7 +115,9 @@ namespace FixedWidthParser.Readers
             public void Dispose()
             {
                 _lines.Return();
+#pragma warning disable IDISP007 // Don't dispose injected
                 if (_ownsReader) _reader?.Dispose();
+#pragma warning restore IDISP007 // Don't dispose injected
                 _reader = null;
             }
 

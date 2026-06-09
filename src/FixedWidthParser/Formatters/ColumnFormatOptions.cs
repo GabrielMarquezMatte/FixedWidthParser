@@ -8,13 +8,8 @@ namespace FixedWidthParser.Formatters
     /// <see cref="OverflowBehavior.Throw"/>). Centralizes placing the content into the line slice,
     /// shared by all formatters.
     /// </summary>
-    public readonly struct ColumnFormatOptions(Alignment alignment, char padding, string? format, OverflowBehavior overflow)
+    public readonly record struct ColumnFormatOptions(Alignment Alignment, char Padding, string? Format, OverflowBehavior Overflow)
     {
-        public Alignment Alignment { get; } = alignment;
-        public char Padding { get; } = padding;
-        public string? Format { get; } = format;
-        public OverflowBehavior Overflow { get; } = overflow;
-
         /// <summary>
         /// Writes <paramref name="content"/> into the column slice <paramref name="slice"/>,
         /// applying alignment, padding and overflow.

@@ -24,6 +24,7 @@ namespace FixedWidthParser.Parsers
                 _modelFactory = BuildModelFactory();
                 _processors = BuildProcessors();
                 _requiredLineLength = ComputeRequiredLineLength(_processors);
+                _buildError = null;
             }
             catch (Exception ex)
             {
@@ -54,12 +55,12 @@ namespace FixedWidthParser.Parsers
             return processors.ToArray();
         }
 
-        private static int ComputeRequiredLineLength((int Start, int Length, ColumnParser<TModel> Parse)[] processors)
+        private static int ComputeRequiredLineLength(ReadOnlySpan<(int Start, int Length, ColumnParser<TModel> Parse)> processors)
         {
             int required = 0;
-            foreach (var processor in processors)
+            foreach (var (Start, Length, _) in processors)
             {
-                int end = processor.Start + processor.Length;
+                int end = Start + Length;
                 if (end > required)
                 {
                     required = end;
