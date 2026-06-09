@@ -9,12 +9,13 @@ namespace Benchmarks.Perf
     /// encoding from the cost of disk I/O. WriteMany_NewStream is the baseline.
     /// </summary>
     [Config(typeof(RegressionConfig))]
-    public class WriterBenchmarks
+    public class WriterBenchmarks : IDisposable
     {
         private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
         private readonly FixedWidthWriter<SampleModel> _writer = new();
         private StreamWriter _sink = null!;
         private SampleModel[] _models = [];
+        private bool _disposed;
 
         [Params(1, 100, 1000)]
         public int Count { get; set; }
@@ -22,6 +23,7 @@ namespace Benchmarks.Perf
         [GlobalSetup]
         public void Setup()
         {
+            _sink?.Dispose();
             _sink = new StreamWriter(Stream.Null);
             _models = new SampleModel[Count];
             for (int i = 0; i < Count; i++)
@@ -77,6 +79,17 @@ namespace Benchmarks.Perf
         public Task WriteMany_AsyncReuseWriter()
         {
             return _writer.WriteManyAsync(_sink, _models, Culture);
+        }
+
+        public virtual void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+            _disposed = true;
+            _sink.Dispose();
+            GC.SuppressFinalize(this);
         }
     }
 }

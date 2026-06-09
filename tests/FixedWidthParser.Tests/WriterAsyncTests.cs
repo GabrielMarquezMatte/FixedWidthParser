@@ -26,11 +26,11 @@ namespace FixedWidthParser.Tests
 
             string sync = WriteMany(writer, (IEnumerable<PersonModel>)models);
 
-            using var ms = new MemoryStream();
-            await writer.WriteManyAsync(ms, models, Inv);
-            string async = Encoding.UTF8.GetString(ms.ToArray());
+            await using var ms = new MemoryStream();
+            await writer.WriteManyAsync(ms, models, Inv).ConfigureAwait(true);
+            string asyncResult = Encoding.UTF8.GetString(ms.ToArray());
 
-            Assert.Equal(sync, async);
+            Assert.Equal(sync, asyncResult);
         }
 
         [Fact]
@@ -41,14 +41,14 @@ namespace FixedWidthParser.Tests
 
             string sync = WriteMany(writer, (IEnumerable<PersonModel>)models);
 
-            using var ms = new MemoryStream();
+            await using var ms = new MemoryStream();
             await using (var sw = new StreamWriter(ms, leaveOpen: true))
             {
-                await writer.WriteManyAsync(sw, models, Inv);
+                await writer.WriteManyAsync(sw, models, Inv).ConfigureAwait(true);
             }
-            string async = Encoding.UTF8.GetString(ms.ToArray());
+            string asyncResult = Encoding.UTF8.GetString(ms.ToArray());
 
-            Assert.Equal(sync, async);
+            Assert.Equal(sync, asyncResult);
         }
 
         [Fact]
@@ -58,8 +58,8 @@ namespace FixedWidthParser.Tests
             var reader = new FixedWidthReader<PersonModel>(Inv);
             var models = SampleModels();
 
-            using var ms = new MemoryStream();
-            await writer.WriteManyAsync(ms, models, Inv);
+            await using var ms = new MemoryStream();
+            await writer.WriteManyAsync(ms, models, Inv).ConfigureAwait(true);
 
             // The Stream overload uses leaveOpen: true, so the stream stays usable.
             Assert.True(ms.CanRead);
@@ -77,8 +77,8 @@ namespace FixedWidthParser.Tests
         {
             var writer = new FixedWidthWriter<PersonModel>();
 
-            using var ms = new MemoryStream();
-            await writer.WriteManyAsync(ms, [], Inv);
+            await using var ms = new MemoryStream();
+            await writer.WriteManyAsync(ms, [], Inv).ConfigureAwait(true);
 
             Assert.Equal(0, ms.Length);
         }
@@ -88,10 +88,10 @@ namespace FixedWidthParser.Tests
         {
             var writer = new FixedWidthWriter<PersonModel>();
 
-            using var ms = new MemoryStream();
+            await using var ms = new MemoryStream();
             await using (var sw = new StreamWriter(ms, leaveOpen: true))
             {
-                await writer.WriteManyAsync(sw, Array.Empty<PersonModel>(), Inv);
+                await writer.WriteManyAsync(sw, [], Inv).ConfigureAwait(true);
             }
 
             Assert.Equal(0, ms.Length);

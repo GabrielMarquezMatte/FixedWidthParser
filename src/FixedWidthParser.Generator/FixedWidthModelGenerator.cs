@@ -144,6 +144,8 @@ namespace FixedWidthParser.Generator
                     return (ColumnKind.Double, "double");
                 case SpecialType.System_Single:
                     return (ColumnKind.Float, "float");
+                default:
+                    break;
             }
 
             string fqn = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -208,9 +210,8 @@ namespace FixedWidthParser.Generator
 
                 var farthest = sorted[0];
                 int maxEnd = farthest.Start + farthest.Length;
-                for (int i = 1; i < sorted.Length; i++)
+                foreach(ref readonly var current in sorted.AsSpan(1))
                 {
-                    var current = sorted[i];
                     if (current.Start < maxEnd)
                     {
                         spc.ReportDiagnostic(Diagnostic.Create(
@@ -275,9 +276,9 @@ namespace FixedWidthParser.Generator
             if (columns.Length > 0)
             {
                 int maxEnd = 0;
-                for (int i = 0; i < columns.Length; i++)
+                foreach (var v in columns)
                 {
-                    int end = columns[i].Start + columns[i].Length;
+                    int end = v.Start + v.Length;
                     if (end > maxEnd)
                     {
                         maxEnd = end;
@@ -330,6 +331,9 @@ namespace FixedWidthParser.Generator
                         sb.Append(stmt).Append("if (!global::FixedWidthParser.FixedWidthRuntime.TryParse<").Append(c.TypeFqn).Append(">(").Append(col)
                           .Append(", formatProvider, out ").Append(c.TypeFqn).Append(" __v").Append(i).AppendLine(")) { model = default!; return false; }");
                         break;
+                    default:
+                        // Should not happen, already filtered in Emit with a diagnostic.
+                        break;
                 }
             }
 
@@ -363,8 +367,13 @@ namespace FixedWidthParser.Generator
             }
 
             public bool Equals(ColumnInfo other)
-                => Start == other.Start && Length == other.Length && Kind == other.Kind
-                   && Name == other.Name && TypeFqn == other.TypeFqn;
+            {
+                return Start == other.Start
+                       && Length == other.Length
+                       && Kind == other.Kind
+                       && string.Equals(Name, other.Name, StringComparison.Ordinal)
+                       && string.Equals(TypeFqn, other.TypeFqn, StringComparison.Ordinal);
+            }
 
             public override bool Equals(object? obj) => obj is ColumnInfo other && Equals(other);
 
@@ -373,11 +382,11 @@ namespace FixedWidthParser.Generator
                 unchecked
                 {
                     int hash = 17;
-                    hash = hash * 31 + Name.GetHashCode();
+                    hash = hash * 31 + StringComparer.Ordinal.GetHashCode(Name);
                     hash = hash * 31 + Start;
                     hash = hash * 31 + Length;
                     hash = hash * 31 + (int)Kind;
-                    hash = hash * 31 + TypeFqn.GetHashCode();
+                    hash = hash * 31 + StringComparer.Ordinal.GetHashCode(TypeFqn);
                     return hash;
                 }
             }

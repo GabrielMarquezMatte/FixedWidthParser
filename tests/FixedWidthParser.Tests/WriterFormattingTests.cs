@@ -57,7 +57,7 @@ namespace FixedWidthParser.Tests
             var ex = Assert.Throws<InvalidOperationException>(
                 () => WriteOne(writer, new NarrowModel { Value = 12345 }));
 
-            Assert.Contains("Value", ex.Message);
+            Assert.Contains("Value", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]

@@ -18,8 +18,8 @@ namespace FixedWidthParser.Tests
 
         public static async Task<string> WriteOneAsync<T>(FixedWidthWriter<T> writer, T model)
         {
-            using var ms = new MemoryStream();
-            await writer.WriteAsync(ms, model, Inv);
+            await using var ms = new MemoryStream();
+            await writer.WriteAsync(ms, model, Inv).ConfigureAwait(false);
             return Decode(ms).TrimEnd('\r', '\n');
         }
 

@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Readers;
@@ -72,9 +71,9 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_Stream_ParsesAll()
         {
-            using var stream = Utf8(TwoPeople);
+            await using var stream = Utf8(TwoPeople);
 
-            var people = await FixedWidth.ReadAsync<GenPersonModel>(stream, formatProvider: Inv).ToListAsync();
+            var people = await FixedWidth.ReadAsync<GenPersonModel>(stream, formatProvider: Inv).ToListAsync().ConfigureAwait(true);
 
             Assert.Equal(2, people.Count);
             Assert.Equal("John Doe", people[0].Name);
@@ -85,11 +84,11 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_Stream_CustomEncoding_IsHonored()
         {
-            using var stream = new MemoryStream(Encoding.Latin1.GetBytes("Áb \nCDé\n"));
+            await using var stream = new MemoryStream(Encoding.Latin1.GetBytes("Áb \nCDé\n"));
 
             var codes = await FixedWidth.ReadAsync<GenCodeModel>(stream, encoding: Encoding.Latin1)
                 .Select(m => m.Code)
-                .ToListAsync();
+                .ToListAsync().ConfigureAwait(true);
 
             Assert.Equal(["Áb", "CDé"], codes);
         }
@@ -97,9 +96,9 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_Stream_LeaveOpenTrue_KeepsStreamOpen()
         {
-            using var stream = Utf8("ABC\nDEF\n");
+            await using var stream = Utf8("ABC\nDEF\n");
 
-            _ = await FixedWidth.ReadAsync<GenCodeModel>(stream, leaveOpen: true).ToListAsync();
+            _ = await FixedWidth.ReadAsync<GenCodeModel>(stream, leaveOpen: true).ToListAsync().ConfigureAwait(true);
 
             Assert.True(stream.CanRead);
         }
@@ -109,7 +108,7 @@ namespace FixedWidthParser.Tests
         {
             var stream = Utf8("ABC\nDEF\n");
 
-            _ = await FixedWidth.ReadAsync<GenCodeModel>(stream).ToListAsync(); // default leaveOpen: false
+            _ = await FixedWidth.ReadAsync<GenCodeModel>(stream).ToListAsync().ConfigureAwait(true); // default leaveOpen: false
 
             Assert.False(stream.CanRead);
         }
@@ -191,8 +190,8 @@ namespace FixedWidthParser.Tests
             var actual = Assert.Throws<FormatException>(
                 () => FixedWidth.Read<GenPersonModel>(new StringReader(text), formatProvider: Inv).ToList());
 
-            Assert.Contains("Line 2", expected.Message);
-            Assert.Contains("Line 2", actual.Message);
+            Assert.Contains("Line 2", expected.Message, StringComparison.Ordinal);
+            Assert.Contains("Line 2", actual.Message, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -243,10 +242,10 @@ namespace FixedWidthParser.Tests
         public async Task ReadAsync_MultipleLines_MatchesReflectionReader()
         {
             var reflection = new FixedWidthReader<PersonModel>(Inv);
-            var expected = await reflection.ReadAsync(new StringReader(TwoPeople)).ToListAsync();
+            var expected = await reflection.ReadAsync(new StringReader(TwoPeople)).ToListAsync().ConfigureAwait(true);
             var actual = await FixedWidth.ReadAsync<GenPersonModel>(
                 new StringReader(TwoPeople),
-                formatProvider: Inv).ToListAsync();
+                formatProvider: Inv).ToListAsync().ConfigureAwait(true);
 
             Assert.Equal(expected.Count, actual.Count);
             Assert.Equal(expected[0].Name, actual[0].Name);
@@ -259,11 +258,11 @@ namespace FixedWidthParser.Tests
         public async Task ReadAsync_LineLongerThanBuffer_MatchesReflectionReader()
         {
             var reflection = new FixedWidthReader<PersonModel>(Inv, bufferSize: 4);
-            var expected = await reflection.ReadAsync(new StringReader(TwoPeople)).ToListAsync();
+            var expected = await reflection.ReadAsync(new StringReader(TwoPeople)).ToListAsync().ConfigureAwait(true);
             var actual = await FixedWidth.ReadAsync<GenPersonModel>(
                 new StringReader(TwoPeople),
                 formatProvider: Inv,
-                bufferSize: 4).ToListAsync();
+                bufferSize: 4).ToListAsync().ConfigureAwait(true);
 
             Assert.Equal(expected[0].Name, actual[0].Name);
             Assert.Equal(expected[1].Salary, actual[1].Salary, 2);
@@ -277,15 +276,17 @@ namespace FixedWidthParser.Tests
 
             var expected = await Assert.ThrowsAsync<FormatException>(async () =>
             {
-                await foreach (var _ in reflection.ReadAsync(new StringReader(text))) { }
-            });
+                using StringReader reader = new(text);
+                await foreach (var _ in reflection.ReadAsync(reader).ConfigureAwait(false)) { }
+            }).ConfigureAwait(true);
             var actual = await Assert.ThrowsAsync<FormatException>(async () =>
             {
-                await foreach (var _ in FixedWidth.ReadAsync<GenPersonModel>(new StringReader(text), formatProvider: Inv)) { }
-            });
+                using StringReader reader = new(text);
+                await foreach (var _ in FixedWidth.ReadAsync<GenPersonModel>(reader, formatProvider: Inv).ConfigureAwait(false)) { }
+            }).ConfigureAwait(true);
 
-            Assert.Contains("Line 2", expected.Message);
-            Assert.Contains("Line 2", actual.Message);
+            Assert.Contains("Line 2", expected.Message, StringComparison.Ordinal);
+            Assert.Contains("Line 2", actual.Message, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -294,9 +295,9 @@ namespace FixedWidthParser.Tests
             string path = Path.GetTempFileName();
             try
             {
-                File.WriteAllText(path, "ABC\nDEF\nGHI\n");
+                await File.WriteAllTextAsync(path, "ABC\nDEF\nGHI\n").ConfigureAwait(true);
 
-                var asyncCodes = await FixedWidth.ReadFileAsync<GenCodeModel>(path).Select(m => m.Code).ToListAsync();
+                var asyncCodes = await FixedWidth.ReadFileAsync<GenCodeModel>(path).Select(m => m.Code).ToListAsync().ConfigureAwait(true);
                 var syncCodes = FixedWidth.ReadFile<GenCodeModel>(path).Select(m => m.Code).ToList();
 
                 Assert.Equal(["ABC", "DEF", "GHI"], asyncCodes);

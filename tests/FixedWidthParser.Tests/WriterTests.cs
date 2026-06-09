@@ -71,10 +71,12 @@ namespace FixedWidthParser.Tests
             var writer = new FixedWidthWriter<PersonModel>();
             var model = new PersonModel { Name = "Alice", Age = 25, Salary = 100 };
 
+#pragma warning disable S6966 // Awaitable method should be used
             string sync = WriteOne(writer, model);
-            string async = await WriteOneAsync(writer, model);
+#pragma warning restore S6966 // Awaitable method should be used
+            string asyncResult = await WriteOneAsync(writer, model).ConfigureAwait(true);
 
-            Assert.Equal(sync, async);
+            Assert.Equal(sync, asyncResult);
         }
     }
 }

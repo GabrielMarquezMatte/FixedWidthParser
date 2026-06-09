@@ -26,7 +26,20 @@ namespace FixedWidthParser.Writers
             _formatters = formatters.ToArray();
             _lineLength = maxLen;
         }
+        private static OverflowBehavior DetermineOverflowBehavior(FixedColumnAttribute attribute, bool isString)
+        {
+            if (attribute.Overflow != OverflowBehavior.Default)
+            {
+                return attribute.Overflow;
+            }
 
+            if (isString)
+            {
+                return OverflowBehavior.Truncate;
+            }
+
+            return OverflowBehavior.Throw;
+        }
         private static IColumnFormatter<TModel> CreateFormatter(MemberInfo member, FixedColumnAttribute attribute)
         {
             var (memberType, model, access) = ModelColumns.MemberAccess(typeof(TModel), member);
@@ -34,9 +47,8 @@ namespace FixedWidthParser.Writers
             var getter = Expression.Lambda(delegateType, access, model).Compile();
             bool isString = memberType == typeof(string);
             // Resolve Default overflow per type: string truncates, numeric throws.
-            var overflow = attribute.Overflow == OverflowBehavior.Default
-                ? (isString ? OverflowBehavior.Truncate : OverflowBehavior.Throw)
-                : attribute.Overflow;
+            var overflow = DetermineOverflowBehavior(attribute, isString);
+
             var options = new ColumnFormatOptions(attribute.Alignment, attribute.Padding, attribute.Format, overflow);
             var formatterType = isString
                 ? typeof(StringColumnFormatter<>).MakeGenericType(typeof(TModel))
@@ -64,7 +76,7 @@ namespace FixedWidthParser.Writers
             try
             {
                 FormatLine(in model, lineBuffer.AsSpan(0, _lineLength), formatProvider);
-                await writer.WriteLineAsync(lineBuffer.AsMemory(0, _lineLength), cancellationToken);
+                await writer.WriteLineAsync(lineBuffer.AsMemory(0, _lineLength), cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -73,13 +85,19 @@ namespace FixedWidthParser.Writers
         }
         public async Task WriteAsync(Stream stream, TModel model, IFormatProvider? formatProvider = null, CancellationToken cancellationToken = default)
         {
-            using StreamWriter writer = new(stream, leaveOpen: true);
-            await WriteAsync(writer, model, formatProvider, cancellationToken);
+            StreamWriter writer = new(stream, leaveOpen: true);
+            await using (writer.ConfigureAwait(false))
+            {
+                await WriteAsync(writer, model, formatProvider, cancellationToken).ConfigureAwait(false);
+            }
         }
         public async Task WriteManyAsync(Stream stream, IEnumerable<TModel> models, IFormatProvider? formatProvider = null, CancellationToken cancellationToken = default)
         {
-            using StreamWriter writer = new(stream, leaveOpen: true);
-            await WriteManyAsync(writer, models, formatProvider, cancellationToken);
+            StreamWriter writer = new(stream, leaveOpen: true);
+            await using (writer.ConfigureAwait(false))
+            {
+                await WriteManyAsync(writer, models, formatProvider, cancellationToken).ConfigureAwait(false);
+            }
         }
         public async Task WriteManyAsync(StreamWriter writer, IEnumerable<TModel> models, IFormatProvider? formatProvider = null, CancellationToken cancellationToken = default)
         {
@@ -89,7 +107,7 @@ namespace FixedWidthParser.Writers
                 foreach (var model in models)
                 {
                     FormatLine(in model, lineBuffer.AsSpan(0, _lineLength), formatProvider);
-                    await writer.WriteLineAsync(lineBuffer.AsMemory(0, _lineLength), cancellationToken);
+                    await writer.WriteLineAsync(lineBuffer.AsMemory(0, _lineLength), cancellationToken).ConfigureAwait(false);
                 }
             }
             finally

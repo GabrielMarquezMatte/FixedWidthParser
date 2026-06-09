@@ -38,7 +38,9 @@ namespace FixedWidthParser.Readers
             _bufferSize = bufferSize;
         }
 
+#pragma warning disable HLQ006 // GetEnumerator() or GetAsyncEnumerator() should return a value type
         public AsyncEnumerator GetAsyncEnumerator(CancellationToken cancellationToken = default)
+#pragma warning restore HLQ006 // GetEnumerator() or GetAsyncEnumerator() should return a value type
         {
             return new(_parser, _readerFactory(), _ownsReader, _formatProvider, _stringPool, _bufferSize, cancellationToken);
         }
@@ -48,7 +50,9 @@ namespace FixedWidthParser.Readers
             return GetAsyncEnumerator(cancellationToken);
         }
 
+#pragma warning disable CA1034 // Nested types should not be visible
         public sealed class AsyncEnumerator : IAsyncEnumerator<TModel>
+#pragma warning restore CA1034 // Nested types should not be visible
         {
             private readonly FixedWidthParser<TModel> _parser;
             private readonly bool _ownsReader;
@@ -103,21 +107,17 @@ namespace FixedWidthParser.Readers
 
             private LineStatus TryReadFromBuffer()
             {
-                while (true)
+                var status = _lines.TryGetLine(out var line);
+                if (status == LineStatus.Line)
                 {
-                    var status = _lines.TryGetLine(out var line);
-                    if (status == LineStatus.Line)
-                    {
-                        Parse(line);
-                        return LineStatus.Line;
-                    }
-                    if (status == LineStatus.End)
-                    {
-                        return LineStatus.End;
-                    }
-
-                    return LineStatus.NeedData;
+                    Parse(line);
+                    return LineStatus.Line;
                 }
+                if (status == LineStatus.End)
+                {
+                    return LineStatus.End;
+                }
+                return LineStatus.NeedData;
             }
 
             private void Parse(ReadOnlySpan<char> line)
@@ -138,7 +138,9 @@ namespace FixedWidthParser.Readers
             public ValueTask DisposeAsync()
             {
                 _lines.Return();
+#pragma warning disable IDISP007 // Don't dispose injected
                 if (_ownsReader) _reader?.Dispose();
+#pragma warning restore IDISP007 // Don't dispose injected
                 _reader = null;
                 return ValueTask.CompletedTask;
             }
