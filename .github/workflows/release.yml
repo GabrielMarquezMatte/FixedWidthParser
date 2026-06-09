@@ -43,10 +43,12 @@ jobs:
         run: dotnet test FixedWidthParser.slnx --configuration Release --no-build
 
       - name: Pack
+        # No --no-build: the analyzer ProjectReference (the generator) would otherwise trip
+        # NETSDK1085 (NoBuild=true but Build invoked). The prior build step makes this incremental.
         run: >-
           dotnet pack src/FixedWidthParser/FixedWidthParser.csproj
           --configuration Release
-          --no-build
+          --no-restore
           -p:Version=${{ steps.version.outputs.value }}
           --output ./artifacts
 
