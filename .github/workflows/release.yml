@@ -1,13 +1,17 @@
 name: Release
 
 # Publica no NuGet ao empurrar uma tag de versão (ex.: v1.0.0 -> versão 1.0.0).
-# Requer o secret de repositório NUGET_API_KEY (chave de push do nuget.org).
+# Usa Trusted Publishing (OIDC): nenhuma API key fica armazenada como secret — o GitHub
+# troca um token OIDC de curta duração por uma chave temporária via NuGet/login.
+# Pré-requisitos no nuget.org: uma policy de Trusted Publishing apontando para este repo +
+# workflow, e a variável de repositório NUGET_USER com o usuário do nuget.org.
 on:
   push:
     tags: [ 'v*' ]
 
 permissions:
   contents: read
+  id-token: write  # necessário para o OIDC do Trusted Publishing
 
 jobs:
   publish:
@@ -46,10 +50,16 @@ jobs:
           -p:Version=${{ steps.version.outputs.value }}
           --output ./artifacts
 
+      - name: NuGet login (Trusted Publishing / OIDC)
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: ${{ vars.NUGET_USER }}
+
       - name: Push to NuGet
         run: >-
           dotnet nuget push "./artifacts/*.nupkg"
-          --api-key "${{ secrets.NUGET_API_KEY }}"
+          --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}"
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate
 
