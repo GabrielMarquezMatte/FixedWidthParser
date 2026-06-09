@@ -118,9 +118,25 @@ namespace FixedWidthParser.Writers
         [SkipLocalsInit]
         public void Write(StreamWriter writer, in TModel model, IFormatProvider? formatProvider)
         {
-            Span<char> lineBuffer = _lineLength <= 1024 ? stackalloc char[_lineLength] : new char[_lineLength];
-            FormatLine(in model, lineBuffer, formatProvider);
-            writer.WriteLine(lineBuffer);
+            if (_lineLength <= 1024)
+            {
+                Span<char> lineBuffer = stackalloc char[_lineLength];
+                FormatLine(in model, lineBuffer, formatProvider);
+                writer.WriteLine(lineBuffer);
+                return;
+            }
+
+            var rented = ArrayPool<char>.Shared.Rent(_lineLength);
+            try
+            {
+                var lineBuffer = rented.AsSpan(0, _lineLength);
+                FormatLine(in model, lineBuffer, formatProvider);
+                writer.WriteLine(lineBuffer);
+            }
+            finally
+            {
+                ArrayPool<char>.Shared.Return(rented);
+            }
         }
 
         /// <summary>
@@ -148,11 +164,30 @@ namespace FixedWidthParser.Writers
         [SkipLocalsInit]
         public void WriteMany(StreamWriter writer, IEnumerable<TModel> models, IFormatProvider? formatProvider = null)
         {
-            Span<char> lineBuffer = _lineLength <= 1024 ? stackalloc char[_lineLength] : new char[_lineLength];
-            foreach (var model in models)
+            if (_lineLength <= 1024)
             {
-                FormatLine(in model, lineBuffer, formatProvider);
-                writer.WriteLine(lineBuffer);
+                Span<char> lineBuffer = stackalloc char[_lineLength];
+                foreach (var model in models)
+                {
+                    FormatLine(in model, lineBuffer, formatProvider);
+                    writer.WriteLine(lineBuffer);
+                }
+                return;
+            }
+
+            var rented = ArrayPool<char>.Shared.Rent(_lineLength);
+            try
+            {
+                var lineBuffer = rented.AsSpan(0, _lineLength);
+                foreach (var model in models)
+                {
+                    FormatLine(in model, lineBuffer, formatProvider);
+                    writer.WriteLine(lineBuffer);
+                }
+            }
+            finally
+            {
+                ArrayPool<char>.Shared.Return(rented);
             }
         }
 
@@ -173,11 +208,30 @@ namespace FixedWidthParser.Writers
         [SkipLocalsInit]
         public void WriteMany(StreamWriter writer, ReadOnlySpan<TModel> models, IFormatProvider? formatProvider = null)
         {
-            Span<char> lineBuffer = _lineLength <= 1024 ? stackalloc char[_lineLength] : new char[_lineLength];
-            foreach (ref readonly var model in models)
+            if (_lineLength <= 1024)
             {
-                FormatLine(in model, lineBuffer, formatProvider);
-                writer.WriteLine(lineBuffer);
+                Span<char> lineBuffer = stackalloc char[_lineLength];
+                foreach (ref readonly var model in models)
+                {
+                    FormatLine(in model, lineBuffer, formatProvider);
+                    writer.WriteLine(lineBuffer);
+                }
+                return;
+            }
+
+            var rented = ArrayPool<char>.Shared.Rent(_lineLength);
+            try
+            {
+                var lineBuffer = rented.AsSpan(0, _lineLength);
+                foreach (ref readonly var model in models)
+                {
+                    FormatLine(in model, lineBuffer, formatProvider);
+                    writer.WriteLine(lineBuffer);
+                }
+            }
+            finally
+            {
+                ArrayPool<char>.Shared.Return(rented);
             }
         }
     }
