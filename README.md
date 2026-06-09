@@ -18,6 +18,22 @@ A high-performance, low-allocation library for **parsing and writing fixed-width
 
 Dependencies: [CommunityToolkit.HighPerformance](https://www.nuget.org/packages/CommunityToolkit.HighPerformance) (`StringPool`) and [csFastFloat](https://www.nuget.org/packages/csFastFloat) (fast `double`/`float` parsing).
 
+## Installation
+
+```bash
+dotnet add package FixedWidthParser
+```
+
+Or as a `<PackageReference>`:
+
+```xml
+<PackageReference Include="FixedWidthParser" Version="1.0.0" />
+```
+
+The package ships the Roslyn source generator bundled as an analyzer, so models that implement
+`IFixedWidthModel<TSelf>` get a reflection-free `TryParse` generated automatically — no extra
+package or setup required.
+
 ## Defining a model
 
 ```csharp
