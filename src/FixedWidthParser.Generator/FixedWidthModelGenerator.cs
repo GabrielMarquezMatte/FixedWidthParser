@@ -57,11 +57,11 @@ namespace FixedWidthParser.Generator
 
             context.RegisterSourceOutput(models, static (spc, model) => Emit(spc, model!));
         }
-
         private static ModelInfo? Extract(GeneratorSyntaxContext ctx, System.Threading.CancellationToken ct)
         {
             var declaration = (TypeDeclarationSyntax)ctx.Node;
-            if (ctx.SemanticModel.GetDeclaredSymbol(declaration, ct) is not INamedTypeSymbol symbol)
+            var symbol = ctx.SemanticModel.GetDeclaredSymbol(declaration, ct);
+            if (symbol is null)
             {
                 return null;
             }

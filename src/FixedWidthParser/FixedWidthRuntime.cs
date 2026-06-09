@@ -14,13 +14,6 @@ namespace FixedWidthParser
     /// </summary>
     public static class FixedWidthRuntime
     {
-        /// <summary>Slices a column out of the line, clamped to what's present (empty when the column starts past the line end).</summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ReadOnlySpan<char> Column(ReadOnlySpan<char> line, int start, int length)
-            => start >= line.Length
-                ? default
-                : line.Slice(start, Math.Min(length, line.Length - start));
-
         /// <summary>Materializes a string column: trims trailing spaces and interns via the pool when supplied.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static string String(ReadOnlySpan<char> column, StringPool? stringPool)
