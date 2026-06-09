@@ -44,15 +44,14 @@ namespace FixedWidthParser.Readers
         IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator() => GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
+        /// <summary>
+        /// Allocation-free <see langword="struct"/> enumerator. Forwards to the shared
+        /// <see cref="RecordEnumeratorCore{TModel, TParser}"/>, specialized with the reflection-based
+        /// <see cref="ReflectionLineParser{TModel}"/> strategy (devirtualized parse, no extra heap).
+        /// </summary>
         public struct Enumerator : IEnumerator<TModel>
         {
-            private readonly FixedWidthParser<TModel> _parser;
-            private readonly bool _ownsReader;
-            private readonly IFormatProvider? _formatProvider;
-            private readonly StringPool? _stringPool;
-            private TextReader? _reader;
-            private LineBufferState _lines;
-            private TModel _current;
+            private RecordEnumeratorCore<TModel, ReflectionLineParser<TModel>> _core;
 
             internal Enumerator(
                 FixedWidthParser<TModel> parser,
@@ -61,67 +60,14 @@ namespace FixedWidthParser.Readers
                 IFormatProvider? formatProvider,
                 StringPool? stringPool,
                 int bufferSize)
-            {
-                _parser = parser;
-                _reader = reader;
-                _ownsReader = ownsReader;
-                _formatProvider = formatProvider;
-                _stringPool = stringPool;
-                _lines = default;
-                _lines.Rent(bufferSize);
-                _current = default!;
-            }
+                => _core = new(new ReflectionLineParser<TModel>(parser), reader, ownsReader, formatProvider, stringPool, bufferSize);
 
-            public readonly TModel Current => _current;
-            readonly object IEnumerator.Current => _current!;
+            public readonly TModel Current => _core.Current;
+            readonly object IEnumerator.Current => _core.Current!;
 
-            public bool MoveNext()
-            {
-                var reader = _reader ?? throw new ObjectDisposedException(nameof(Enumerator));
-                while (true)
-                {
-                    var status = _lines.TryGetLine(out var line);
-                    if (status == LineStatus.Line)
-                    {
-                        Parse(line);
-                        return true;
-                    }
-                    if (status == LineStatus.End)
-                    {
-                        return false;
-                    }
-
-                    Refill(reader);
-                }
-            }
-
-            private void Parse(ReadOnlySpan<char> line)
-            {
-                if (!_parser.TryParse(line, _formatProvider, _stringPool, out _current))
-                {
-                    throw new FormatException(
-                        $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{line.ToString()}\".");
-                }
-            }
-
-            private void Refill(TextReader reader)
-            {
-                _lines.Compact();
-                _lines.GrowIfFull();
-                int read = reader.Read(_lines.Buffer, _lines.End, _lines.Buffer.Length - _lines.End);
-                _lines.Advance(read);
-            }
-
-            public void Dispose()
-            {
-                _lines.Return();
-#pragma warning disable IDISP007 // Don't dispose injected
-                if (_ownsReader) _reader?.Dispose();
-#pragma warning restore IDISP007 // Don't dispose injected
-                _reader = null;
-            }
-
-            public readonly void Reset() => throw new NotSupportedException("Reading is single-pass.");
+            public bool MoveNext() => _core.MoveNext();
+            public void Dispose() => _core.Dispose();
+            public readonly void Reset() => _core.Reset();
         }
     }
 }
