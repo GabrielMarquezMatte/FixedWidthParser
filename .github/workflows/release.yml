@@ -1,0 +1,74 @@
+name: Release
+
+# Publica no NuGet ao empurrar uma tag de versão (ex.: v1.0.0 -> versão 1.0.0).
+# Usa Trusted Publishing (OIDC): nenhuma API key fica armazenada como secret — o GitHub
+# troca um token OIDC de curta duração por uma chave temporária via NuGet/login.
+# Pré-requisitos no nuget.org: uma policy de Trusted Publishing apontando para este repo +
+# workflow, e a variável de repositório NUGET_USER com o usuário do nuget.org.
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: read
+  id-token: write  # necessário para o OIDC do Trusted Publishing
+
+jobs:
+  publish:
+    name: Pack & Publish to NuGet
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # histórico completo para o SourceLink
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Derive version from tag
+        id: version
+        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore
+        run: dotnet restore FixedWidthParser.slnx
+
+      - name: Build (Release)
+        run: dotnet build FixedWidthParser.slnx --configuration Release --no-restore -p:Version=${{ steps.version.outputs.value }}
+
+      - name: Test (Release)
+        run: dotnet test FixedWidthParser.slnx --configuration Release --no-build
+
+      - name: Pack
+        # No --no-build: the analyzer ProjectReference (the generator) would otherwise trip
+        # NETSDK1085 (NoBuild=true but Build invoked). The prior build step makes this incremental.
+        run: >-
+          dotnet pack src/FixedWidthParser/FixedWidthParser.csproj
+          --configuration Release
+          --no-restore
+          -p:Version=${{ steps.version.outputs.value }}
+          --output ./artifacts
+
+      - name: NuGet login (Trusted Publishing / OIDC)
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: Push to NuGet
+        run: >-
+          dotnet nuget push "./artifacts/*.nupkg"
+          --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
+
+      - name: Upload package artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: ./artifacts/*
+          if-no-files-found: warn

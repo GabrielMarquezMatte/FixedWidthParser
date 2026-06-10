@@ -8,6 +8,8 @@
     <IsRoslynComponent>true</IsRoslynComponent>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <IncludeBuildOutput>false</IncludeBuildOutput>
+    <!-- Shipped bundled inside the FixedWidthParser package as an analyzer, not as its own package. -->
+    <IsPackable>false</IsPackable>
     <!-- Release tracking is for shipped analyzers; not needed for this in-repo generator. -->
     <NoWarn>$(NoWarn);RS2008</NoWarn>
   </PropertyGroup>
