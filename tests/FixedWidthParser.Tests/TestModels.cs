@@ -230,4 +230,22 @@ namespace FixedWidthParser.Tests
 
         [FixedColumn(0, 4, Alignment = Alignment.Right, Overflow = OverflowBehavior.Truncate)] public string Code { get; init; }
     }
+
+    /// <summary>
+    /// Line longer than 1024 chars, so the writer takes its <see cref="System.Buffers.ArrayPool{T}"/>
+    /// path instead of the <c>stackalloc</c> fast path.
+    /// </summary>
+    public readonly record struct WideLineModel
+    {
+        public const int LineLength = 1208;
+
+        public WideLineModel()
+        {
+            Name = string.Empty;
+            Number = 0;
+        }
+
+        [FixedColumn(0, 1200)] public string Name { get; init; }
+        [FixedColumn(1200, 8)] public int Number { get; init; }
+    }
 }

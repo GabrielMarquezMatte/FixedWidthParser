@@ -78,5 +78,58 @@ namespace FixedWidthParser.Tests
 
             Assert.Equal(sync, asyncResult);
         }
+
+        // ----------------------- Lines longer than 1024 (ArrayPool path) -----------------------
+
+        [Fact]
+        public void Write_LineLongerThan1024_UsesArrayPoolPath()
+        {
+            var writer = new FixedWidthWriter<WideLineModel>();
+
+            string line = WriteOne(writer, new WideLineModel { Name = "Wide", Number = 42 });
+
+            Assert.Equal(WideLineModel.LineLength, line.Length);
+            Assert.Equal("Wide", line[..1200].TrimEnd());
+            Assert.Equal("42", line[1200..1208].TrimEnd());
+        }
+
+        [Fact]
+        public void WriteMany_Span_LineLongerThan1024_UsesArrayPoolPath()
+        {
+            var writer = new FixedWidthWriter<WideLineModel>();
+            var models = new[]
+            {
+                new WideLineModel { Name = "Alice", Number = 1 },
+                new WideLineModel { Name = "Bob",   Number = 2 },
+            };
+
+            string output = WriteMany(writer, models.AsSpan());
+
+            var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                              .Select(l => l.TrimEnd('\r'))
+                              .ToArray();
+            Assert.Equal(2, lines.Length);
+            Assert.All(lines, l => Assert.Equal(WideLineModel.LineLength, l.Length));
+            Assert.Equal("Alice", lines[0][..1200].TrimEnd());
+            Assert.Equal("1", lines[0][1200..1208].TrimEnd());
+            Assert.Equal("Bob", lines[1][..1200].TrimEnd());
+            Assert.Equal("2", lines[1][1200..1208].TrimEnd());
+        }
+
+        [Fact]
+        public void WriteMany_SpanAndEnumerable_LineLongerThan1024_ProduceSameOutput()
+        {
+            var writer = new FixedWidthWriter<WideLineModel>();
+            var models = new[]
+            {
+                new WideLineModel { Name = "Alice", Number = 1 },
+                new WideLineModel { Name = "Bob",   Number = 2 },
+            };
+
+            string spanOutput = WriteMany(writer, models.AsSpan());
+            string enumerableOutput = WriteMany(writer, (IEnumerable<WideLineModel>)models);
+
+            Assert.Equal(enumerableOutput, spanOutput);
+        }
     }
 }
