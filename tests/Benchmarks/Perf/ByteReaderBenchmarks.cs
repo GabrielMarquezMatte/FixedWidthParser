@@ -48,9 +48,9 @@ namespace Benchmarks.Perf
 
             var text = Encoding.UTF8.GetString(ms.ToArray());
             _charLines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            for (int i = 0; i < _charLines.Length; i++)
+            foreach (ref var v in _charLines.AsSpan())
             {
-                _charLines[i] = _charLines[i].TrimEnd('\r');
+                v = v.TrimEnd('\r');
             }
             _byteLines = new byte[_charLines.Length][];
             for (int i = 0; i < _charLines.Length; i++)
