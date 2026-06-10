@@ -48,7 +48,7 @@ namespace FixedWidthParser.Readers
         {
             ArgumentNullException.ThrowIfNull(stream);
             return new Utf8FixedWidthRecordEnumerable<TModel>(
-                _parser, () => stream, ownsStream: !leaveOpen, _formatProvider, _stringPool, _bufferSize);
+                _parser, stream, ownsStream: !leaveOpen, _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>Reads from a file as raw bytes. Re-enumerable: each iteration opens the file again.</summary>
@@ -56,9 +56,7 @@ namespace FixedWidthParser.Readers
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
             return new Utf8FixedWidthRecordEnumerable<TModel>(
-                _parser,
-                () => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, _bufferSize),
-                ownsStream: true, _formatProvider, _stringPool, _bufferSize);
+                _parser, path, _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>
@@ -69,7 +67,7 @@ namespace FixedWidthParser.Readers
         {
             ArgumentNullException.ThrowIfNull(stream);
             return new Utf8FixedWidthAsyncRecordEnumerable<TModel>(
-                _parser, () => stream, ownsStream: !leaveOpen, _formatProvider, _stringPool, _bufferSize);
+                _parser, stream, ownsStream: !leaveOpen, _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>
@@ -80,9 +78,7 @@ namespace FixedWidthParser.Readers
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
             return new Utf8FixedWidthAsyncRecordEnumerable<TModel>(
-                _parser,
-                () => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, _bufferSize, useAsync: true),
-                ownsStream: true, _formatProvider, _stringPool, _bufferSize);
+                _parser, path, _formatProvider, _stringPool, _bufferSize);
         }
     }
 }

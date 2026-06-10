@@ -29,7 +29,7 @@ namespace FixedWidthParser.Readers
         {
             ArgumentNullException.ThrowIfNull(reader);
             return new FixedWidthRecordEnumerable<TModel>(
-                _parser, () => reader, ownsReader: false, _formatProvider, _stringPool, _bufferSize);
+                _parser, TextReaderSource.FromReader(reader), _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>
@@ -41,9 +41,7 @@ namespace FixedWidthParser.Readers
             ArgumentNullException.ThrowIfNull(stream);
             var enc = encoding ?? Encoding.UTF8;
             return new FixedWidthRecordEnumerable<TModel>(
-                _parser,
-                () => new StreamReader(stream, enc, detectEncodingFromByteOrderMarks: true, bufferSize: _bufferSize, leaveOpen: leaveOpen),
-                ownsReader: true, _formatProvider, _stringPool, _bufferSize);
+                _parser, TextReaderSource.FromStream(stream, enc, leaveOpen), _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>Reads from a file. Re-enumerable: each iteration opens the file again.</summary>
@@ -52,9 +50,7 @@ namespace FixedWidthParser.Readers
             ArgumentException.ThrowIfNullOrEmpty(path);
             var enc = encoding ?? Encoding.UTF8;
             return new FixedWidthRecordEnumerable<TModel>(
-                _parser,
-                () => new StreamReader(path, enc, detectEncodingFromByteOrderMarks: true),
-                ownsReader: true, _formatProvider, _stringPool, _bufferSize);
+                _parser, TextReaderSource.FromFile(path, enc, useAsync: false), _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>Reads from an existing <see cref="TextReader"/> via await foreach (does not dispose it).</summary>
@@ -62,7 +58,7 @@ namespace FixedWidthParser.Readers
         {
             ArgumentNullException.ThrowIfNull(reader);
             return new FixedWidthAsyncRecordEnumerable<TModel>(
-                _parser, () => reader, ownsReader: false, _formatProvider, _stringPool, _bufferSize);
+                _parser, TextReaderSource.FromReader(reader), _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>
@@ -74,9 +70,7 @@ namespace FixedWidthParser.Readers
             ArgumentNullException.ThrowIfNull(stream);
             var enc = encoding ?? Encoding.UTF8;
             return new FixedWidthAsyncRecordEnumerable<TModel>(
-                _parser,
-                () => new StreamReader(stream, enc, detectEncodingFromByteOrderMarks: true, bufferSize: _bufferSize, leaveOpen: leaveOpen),
-                ownsReader: true, _formatProvider, _stringPool, _bufferSize);
+                _parser, TextReaderSource.FromStream(stream, enc, leaveOpen), _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>
@@ -88,11 +82,7 @@ namespace FixedWidthParser.Readers
             ArgumentException.ThrowIfNullOrEmpty(path);
             var enc = encoding ?? Encoding.UTF8;
             return new FixedWidthAsyncRecordEnumerable<TModel>(
-                _parser,
-                () => new StreamReader(
-                    new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, _bufferSize, useAsync: true),
-                    enc, detectEncodingFromByteOrderMarks: true, bufferSize: _bufferSize),
-                ownsReader: true, _formatProvider, _stringPool, _bufferSize);
+                _parser, TextReaderSource.FromFile(path, enc, useAsync: true), _formatProvider, _stringPool, _bufferSize);
         }
     }
 }
