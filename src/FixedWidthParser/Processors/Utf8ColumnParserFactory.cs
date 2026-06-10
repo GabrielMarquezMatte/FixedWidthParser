@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
+using CommunityToolkit.HighPerformance.Buffers;
 
 namespace FixedWidthParser.Processors
 {
@@ -48,7 +49,7 @@ namespace FixedWidthParser.Processors
             RefAction<TModel, TValue> setter, Utf8ColumnValueParser<TValue> valueParser)
             where TModel : allows ref struct
         {
-            return (column, formatProvider, ref model) =>
+            return (column, formatProvider, _, ref model) =>
             {
                 if (!valueParser(column, formatProvider, out var value))
                 {
@@ -62,10 +63,10 @@ namespace FixedWidthParser.Processors
         private static Utf8ColumnParser<TModel> BuildString<TModel>(RefAction<TModel, string> setter)
             where TModel : allows ref struct
         {
-            return (column, _, ref model) =>
+            return (column, _, stringPool, ref model) =>
             {
                 var slice = column.TrimEnd((byte)' ');
-                setter(ref model, Encoding.UTF8.GetString(slice));
+                setter(ref model, stringPool is null ? Encoding.UTF8.GetString(slice) : stringPool.GetOrAdd(slice, Encoding.UTF8));
                 return true;
             };
         }

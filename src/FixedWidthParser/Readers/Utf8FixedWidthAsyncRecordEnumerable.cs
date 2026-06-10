@@ -1,3 +1,4 @@
+using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Parsers;
 
 namespace FixedWidthParser.Readers
@@ -14,6 +15,7 @@ namespace FixedWidthParser.Readers
         private readonly Func<Stream> _streamFactory;
         private readonly bool _ownsStream;
         private readonly IFormatProvider? _formatProvider;
+        private readonly StringPool? _stringPool;
         private readonly int _bufferSize;
 
         internal Utf8FixedWidthAsyncRecordEnumerable(
@@ -21,12 +23,14 @@ namespace FixedWidthParser.Readers
             Func<Stream> streamFactory,
             bool ownsStream,
             IFormatProvider? formatProvider,
+            StringPool? stringPool,
             int bufferSize)
         {
             _parser = parser;
             _streamFactory = streamFactory;
             _ownsStream = ownsStream;
             _formatProvider = formatProvider;
+            _stringPool = stringPool;
             _bufferSize = bufferSize;
         }
 
@@ -34,7 +38,7 @@ namespace FixedWidthParser.Readers
         public Utf8AsyncRecordEnumeratorCore<TModel> GetAsyncEnumerator(CancellationToken cancellationToken = default)
 #pragma warning restore HLQ006 // GetEnumerator() or GetAsyncEnumerator() should return a value type
         {
-            return new(_parser, _streamFactory(), _ownsStream, _formatProvider, _bufferSize, cancellationToken);
+            return new(_parser, _streamFactory(), _ownsStream, _formatProvider, _stringPool, _bufferSize, cancellationToken);
         }
 
         IAsyncEnumerator<TModel> IAsyncEnumerable<TModel>.GetAsyncEnumerator(CancellationToken cancellationToken)

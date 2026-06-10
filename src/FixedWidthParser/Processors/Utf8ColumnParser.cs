@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using CommunityToolkit.HighPerformance.Buffers;
 
 namespace FixedWidthParser.Processors
 {
@@ -9,14 +10,15 @@ namespace FixedWidthParser.Processors
     /// the resulting span here, so this delegate never deals with offsets. Returns
     /// <see langword="false"/> to reject the line.
     /// <para>
-    /// Unlike the <c>char</c> path there is no <see cref="CommunityToolkit.HighPerformance.Buffers.StringPool"/>
-    /// parameter: the byte reader does not pool string columns (a UTF-8 string column must be decoded
-    /// before it can be interned, which would defeat the point of staying on bytes).
+    /// A <see cref="StringPool"/> may be supplied to intern string columns: they are decoded via
+    /// <see cref="StringPool.GetOrAdd(ReadOnlySpan{byte}, System.Text.Encoding)"/> (UTF-8), so a
+    /// repeated value is decoded once and the same <see cref="string"/> instance is reused.
     /// </para>
     /// </summary>
     public delegate bool Utf8ColumnParser<TModel>(
         ReadOnlySpan<byte> column,
         IFormatProvider? formatProvider,
+        StringPool? stringPool,
         ref TModel model) where TModel : allows ref struct;
 
     /// <summary>
