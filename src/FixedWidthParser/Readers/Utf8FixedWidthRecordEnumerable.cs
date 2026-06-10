@@ -1,4 +1,5 @@
 using System.Collections;
+using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Parsers;
 
 namespace FixedWidthParser.Readers
@@ -16,6 +17,7 @@ namespace FixedWidthParser.Readers
         private readonly Func<Stream> _streamFactory;
         private readonly bool _ownsStream;
         private readonly IFormatProvider? _formatProvider;
+        private readonly StringPool? _stringPool;
         private readonly int _bufferSize;
 
         internal Utf8FixedWidthRecordEnumerable(
@@ -23,18 +25,20 @@ namespace FixedWidthParser.Readers
             Func<Stream> streamFactory,
             bool ownsStream,
             IFormatProvider? formatProvider,
+            StringPool? stringPool,
             int bufferSize)
         {
             _parser = parser;
             _streamFactory = streamFactory;
             _ownsStream = ownsStream;
             _formatProvider = formatProvider;
+            _stringPool = stringPool;
             _bufferSize = bufferSize;
         }
 
         /// <summary>Struct enumerator: <c>foreach</c> iteration without heap allocation.</summary>
         public Enumerator GetEnumerator()
-            => new(_parser, _streamFactory(), _ownsStream, _formatProvider, _bufferSize);
+            => new(_parser, _streamFactory(), _ownsStream, _formatProvider, _stringPool, _bufferSize);
 
         IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator() => GetEnumerator();
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
@@ -49,8 +53,9 @@ namespace FixedWidthParser.Readers
                 Stream stream,
                 bool ownsStream,
                 IFormatProvider? formatProvider,
+                StringPool? stringPool,
                 int bufferSize)
-                => _core = new(parser, stream, ownsStream, formatProvider, bufferSize);
+                => _core = new(parser, stream, ownsStream, formatProvider, stringPool, bufferSize);
 
             public readonly TModel Current => _core.Current;
             readonly object IEnumerator.Current => _core.Current!;

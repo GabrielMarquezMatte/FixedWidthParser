@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Text;
+using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Parsers;
 
 namespace FixedWidthParser.Readers
@@ -17,6 +18,7 @@ namespace FixedWidthParser.Readers
         private readonly Utf8FixedWidthParser<TModel> _parser;
         private readonly bool _ownsStream;
         private readonly IFormatProvider? _formatProvider;
+        private readonly StringPool? _stringPool;
         private Stream? _stream;
         private Utf8LineBufferState _lines;
         private TModel _current;
@@ -26,12 +28,14 @@ namespace FixedWidthParser.Readers
             Stream stream,
             bool ownsStream,
             IFormatProvider? formatProvider,
+            StringPool? stringPool,
             int bufferSize)
         {
             _parser = parser;
             _stream = stream;
             _ownsStream = ownsStream;
             _formatProvider = formatProvider;
+            _stringPool = stringPool;
             _lines = default;
             _lines.Rent(bufferSize);
             _current = default!;
@@ -62,7 +66,7 @@ namespace FixedWidthParser.Readers
 
         private void Parse(ReadOnlySpan<byte> line)
         {
-            if (!_parser.TryParse(line, _formatProvider, out _current))
+            if (!_parser.TryParse(line, _formatProvider, _stringPool, out _current))
             {
                 throw new FormatException(
                     $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{Encoding.UTF8.GetString(line)}\".");

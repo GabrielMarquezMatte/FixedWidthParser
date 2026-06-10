@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Parsers;
 using FixedWidthParser.Processors;
@@ -25,7 +26,7 @@ namespace FixedWidthParser.Tests
         {
             var parser = new Utf8FixedWidthParser<PersonModel>();
 
-            bool ok = parser.TryParse("John Doe  30   60000.00  "u8, Inv, out var model);
+            bool ok = parser.TryParse("John Doe  30   60000.00  "u8, Inv, null, out var model);
 
             Assert.True(ok);
             Assert.Equal("John Doe", model.Name);
@@ -38,7 +39,7 @@ namespace FixedWidthParser.Tests
         {
             var parser = new Utf8FixedWidthParser<CodeModel>();
 
-            bool ok = parser.TryParse("ABC"u8, null, out var model);
+            bool ok = parser.TryParse("ABC"u8, null, null, out var model);
 
             Assert.True(ok);
             Assert.Equal("ABC", model.Code);
@@ -49,7 +50,7 @@ namespace FixedWidthParser.Tests
         {
             var parser = new Utf8FixedWidthParser<DecimalModel>();
 
-            bool ok = parser.TryParse("1234.56     "u8, Inv, out var model);
+            bool ok = parser.TryParse("1234.56     "u8, Inv, null, out var model);
 
             Assert.True(ok);
             Assert.Equal(1234.56m, model.Amount);
@@ -60,7 +61,7 @@ namespace FixedWidthParser.Tests
         {
             var parser = new Utf8FixedWidthParser<MeasurementModel>();
 
-            bool ok = parser.TryParse("3.14    "u8, Inv, out var model);
+            bool ok = parser.TryParse("3.14    "u8, Inv, null, out var model);
 
             Assert.True(ok);
             Assert.Equal(3.14f, model.Value, 2);
@@ -71,7 +72,7 @@ namespace FixedWidthParser.Tests
         {
             var parser = new Utf8FixedWidthParser<ProductModel>();
 
-            bool ok = parser.TryParse("ABCDE0042"u8, Inv, out var model);
+            bool ok = parser.TryParse("ABCDE0042"u8, Inv, null, out var model);
 
             Assert.True(ok);
             Assert.Equal("ABCDE", model.Code);
@@ -83,7 +84,7 @@ namespace FixedWidthParser.Tests
         {
             var parser = new Utf8FixedWidthParser<RefPersonModel>();
 
-            bool ok = parser.TryParse("John Doe  30   60000.00  "u8, Inv, out var model);
+            bool ok = parser.TryParse("John Doe  30   60000.00  "u8, Inv, null, out var model);
 
             Assert.True(ok);
             Assert.Equal("John Doe", model.Name);
@@ -99,7 +100,7 @@ namespace FixedWidthParser.Tests
             var parser = new Utf8FixedWidthParser<PersonModel>();
 
             // Layout requires 25 bytes; supply fewer.
-            bool ok = parser.TryParse("John Doe  30"u8, Inv, out _);
+            bool ok = parser.TryParse("John Doe  30"u8, Inv, null, out _);
 
             Assert.False(ok);
         }
@@ -110,7 +111,7 @@ namespace FixedWidthParser.Tests
             var parser = new Utf8FixedWidthParser<PersonModel>();
 
             // "XX" in the Age column [10,5) is not an integer.
-            bool ok = parser.TryParse("John Doe  XX   60000.00  "u8, Inv, out _);
+            bool ok = parser.TryParse("John Doe  XX   60000.00  "u8, Inv, null, out _);
 
             Assert.False(ok);
         }
@@ -122,7 +123,7 @@ namespace FixedWidthParser.Tests
         {
             var parser = new Utf8FixedWidthParser<PersonModel>();
 
-            bool ok = parser.TryParse("Bob       30   1234,50   "u8, DeDe, out var model);
+            bool ok = parser.TryParse("Bob       30   1234,50   "u8, DeDe, null, out var model);
 
             Assert.True(ok);
             Assert.Equal(1234.50, model.Salary, 2);
@@ -133,7 +134,7 @@ namespace FixedWidthParser.Tests
         {
             var parser = new Utf8FixedWidthParser<PersonModel>();
 
-            bool ok = parser.TryParse("Bob       30   1234.50   "u8, null, out var model);
+            bool ok = parser.TryParse("Bob       30   1234.50   "u8, null, null, out var model);
 
             Assert.True(ok);
             Assert.Equal(1234.50, model.Salary, 2);
@@ -144,7 +145,7 @@ namespace FixedWidthParser.Tests
         {
             var parser = new Utf8FixedWidthParser<DecimalModel>();
 
-            bool ok = parser.TryParse("1234,56     "u8, DeDe, out var model);
+            bool ok = parser.TryParse("1234,56     "u8, DeDe, null, out var model);
 
             Assert.True(ok);
             Assert.Equal(1234.56m, model.Amount);
@@ -155,7 +156,7 @@ namespace FixedWidthParser.Tests
         {
             var parser = new Utf8FixedWidthParser<MeasurementModel>();
 
-            bool ok = parser.TryParse("3,14    "u8, DeDe, out var model);
+            bool ok = parser.TryParse("3,14    "u8, DeDe, null, out var model);
 
             Assert.True(ok);
             Assert.Equal(3.14f, model.Value, 2);
@@ -207,13 +208,52 @@ namespace FixedWidthParser.Tests
             var byteParser = new Utf8FixedWidthParser<PersonModel>();
 
             bool charOk = charParser.TryParse(line, Inv, null, out var fromChars);
-            bool byteOk = byteParser.TryParse("John Doe  30   60000.00  "u8, Inv, out var fromBytes);
+            bool byteOk = byteParser.TryParse("John Doe  30   60000.00  "u8, Inv, null, out var fromBytes);
 
             Assert.True(charOk);
             Assert.True(byteOk);
             Assert.Equal(fromChars.Name, fromBytes.Name);
             Assert.Equal(fromChars.Age, fromBytes.Age);
             Assert.Equal(fromChars.Salary, fromBytes.Salary, 2);
+        }
+
+        // ----------------------- StringPool interning -----------------------
+
+        [Fact]
+        public void Parser_WithStringPool_InternsRepeatedValues()
+        {
+            var pool = new StringPool();
+            var parser = new Utf8FixedWidthParser<CodeModel>();
+
+            Assert.True(parser.TryParse("ABC"u8, null, pool, out var first));
+            Assert.True(parser.TryParse("ABC"u8, null, pool, out var second));
+
+            Assert.Equal("ABC", first.Code);
+            Assert.Same(first.Code, second.Code);
+        }
+
+        [Fact]
+        public void Parser_WithStringPool_MatchesNonPooledDecode()
+        {
+            var pool = new StringPool();
+            var parser = new Utf8FixedWidthParser<CodeModel>();
+
+            Assert.True(parser.TryParse("ABC"u8, null, null, out var nonPooled));
+            Assert.True(parser.TryParse("ABC"u8, null, pool, out var pooled));
+
+            Assert.Equal(nonPooled.Code, pooled.Code);
+        }
+
+        [Fact]
+        public void ByteReader_TryParse_WithStringPool_InternsRepeatedValues()
+        {
+            var pool = new StringPool();
+            var reader = new FixedWidthByteReader<CodeModel>(stringPool: pool);
+
+            Assert.True(reader.TryParse("ABC"u8, out var first));
+            Assert.True(reader.TryParse("ABC"u8, out var second));
+
+            Assert.Same(first.Code, second.Code);
         }
 
         // ----------------------- Registry extensibility -----------------------
@@ -249,7 +289,7 @@ namespace FixedWidthParser.Tests
             {
                 var parser = new Utf8FixedWidthParser<TempModel>();
 
-                bool ok = parser.TryParse("  25"u8, Inv, out var model);
+                bool ok = parser.TryParse("  25"u8, Inv, null, out var model);
 
                 Assert.True(ok);
                 Assert.Equal(new Celsius(25), model.Temp);

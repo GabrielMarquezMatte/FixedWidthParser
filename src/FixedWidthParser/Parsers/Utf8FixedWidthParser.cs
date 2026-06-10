@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
+using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Processors;
 
@@ -94,9 +95,10 @@ namespace FixedWidthParser.Parsers
         /// <summary>
         /// Parses a single UTF-8 fixed-width line into <paramref name="model"/>. Returns
         /// <see langword="false"/> when the line is shorter (in bytes) than the configured layout or
-        /// when a non-string column fails to parse.
+        /// when a non-string column fails to parse. When <paramref name="stringPool"/> is supplied,
+        /// string columns are interned through it (decoded as UTF-8).
         /// </summary>
-        public bool TryParse(ReadOnlySpan<byte> line, IFormatProvider? formatProvider, out TModel model)
+        public bool TryParse(ReadOnlySpan<byte> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
         {
             if (line.Length < _requiredLineLength)
             {
@@ -108,7 +110,7 @@ namespace FixedWidthParser.Parsers
             foreach (ref readonly var processor in _processors.AsSpan())
             {
                 var column = line.Slice(processor.Start, processor.Length);
-                if (!processor.Parse(column, formatProvider, ref model))
+                if (!processor.Parse(column, formatProvider, stringPool, ref model))
                 {
                     return false;
                 }

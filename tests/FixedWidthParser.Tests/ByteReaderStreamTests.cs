@@ -1,4 +1,5 @@
 using System.Text;
+using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Readers;
 using static FixedWidthParser.Tests.TestHelpers;
 
@@ -281,6 +282,34 @@ namespace FixedWidthParser.Tests
             {
                 File.Delete(path);
             }
+        }
+
+        // ----------------------------- StringPool -----------------------------
+
+        [Fact]
+        public void Read_Stream_WithStringPool_InternsRepeatedValues()
+        {
+            var pool = new StringPool();
+            var reader = new FixedWidthByteReader<CodeModel>(stringPool: pool);
+            using var stream = Utf8("ABC\nABC\n");
+
+            var codes = reader.Read(stream).ToList();
+
+            Assert.Equal("ABC", codes[0].Code);
+            Assert.Same(codes[0].Code, codes[1].Code);
+        }
+
+        [Fact]
+        public async Task ReadAsync_Stream_WithStringPool_InternsRepeatedValues()
+        {
+            var pool = new StringPool();
+            var reader = new FixedWidthByteReader<CodeModel>(stringPool: pool);
+            await using var stream = Utf8("ABC\nABC\n");
+
+            var codes = await reader.ReadAsync(stream).ToListAsync().ConfigureAwait(true);
+
+            Assert.Equal("ABC", codes[0].Code);
+            Assert.Same(codes[0].Code, codes[1].Code);
         }
 
         // ----------------------------- char/byte parity -----------------------------
