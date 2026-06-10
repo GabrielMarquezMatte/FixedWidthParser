@@ -177,6 +177,17 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 0)] public string Value { get; init; }
     }
 
+    /// <summary>
+    /// Value type WITHOUT an explicitly declared parameterless constructor. It still satisfies the
+    /// <c>new()</c> constraint (all structs do), yet <c>typeof(T).GetConstructor(Type.EmptyTypes)</c>
+    /// returns <see langword="null"/> for such a struct — so the parser's <c>BuildModelFactory</c>
+    /// throws, and the captured error is rethrown from the public constructor.
+    /// </summary>
+    public struct NoParameterlessCtorModel
+    {
+        [FixedColumn(0, 3)] public string Code;
+    }
+
     /// <summary>Adjacent but non-overlapping columns — valid layout (edge case).</summary>
     public readonly record struct AdjacentColumnsModel
     {
