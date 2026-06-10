@@ -1,0 +1,54 @@
+name: CI
+
+# Roda em PRs direcionados à master (o status check que bloqueia o merge) e em
+# pushes na master (mantém o branch padrão verde e registra o check no histórico).
+on:
+  pull_request:
+    branches: [ master ]
+  push:
+    branches: [ master ]
+
+# Cancela runs antigas do mesmo PR/branch quando um novo push chega.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore FixedWidthParser.slnx
+
+      - name: Build (Release)
+        run: dotnet build FixedWidthParser.slnx --configuration Release --no-restore
+
+      - name: Test (Release)
+        run: >-
+          dotnet test FixedWidthParser.slnx
+          --configuration Release
+          --no-build
+          --verbosity normal
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory ./TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: ./TestResults/*.trx
+          if-no-files-found: ignore

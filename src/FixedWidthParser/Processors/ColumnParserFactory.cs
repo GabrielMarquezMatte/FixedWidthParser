@@ -36,8 +36,10 @@ namespace FixedWidthParser.Processors
         }
 
         private static ColumnValueParser<TValue> CreateParsableValueParser<TValue>() where TValue : ISpanParsable<TValue>
-            => static (span, formatProvider, [MaybeNullWhen(false)] out value)
-                => TValue.TryParse(span.TrimEnd(' '), formatProvider, out value);
+        {
+            return static (span, formatProvider, [MaybeNullWhen(false)] out value)
+                        => TValue.TryParse(span.TrimEnd(' '), formatProvider, out value);
+        }
 
         private static ColumnParser<TModel> BuildGeneric<TModel, TValue>(
             RefAction<TModel, TValue> setter, ColumnValueParser<TValue> valueParser)
