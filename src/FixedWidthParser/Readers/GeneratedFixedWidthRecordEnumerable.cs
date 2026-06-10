@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.HighPerformance.Buffers;
 
 namespace FixedWidthParser.Readers
@@ -10,21 +11,18 @@ namespace FixedWidthParser.Readers
     public sealed class GeneratedFixedWidthRecordEnumerable<TModel> : IEnumerable<TModel>
         where TModel : IFixedWidthModel<TModel>
     {
-        private readonly Func<TextReader> _readerFactory;
-        private readonly bool _ownsReader;
+        private readonly TextReaderSource _source;
         private readonly IFormatProvider? _formatProvider;
         private readonly StringPool? _stringPool;
         private readonly int _bufferSize;
 
         internal GeneratedFixedWidthRecordEnumerable(
-            Func<TextReader> readerFactory,
-            bool ownsReader,
+            TextReaderSource source,
             IFormatProvider? formatProvider,
             StringPool? stringPool,
             int bufferSize)
         {
-            _readerFactory = readerFactory;
-            _ownsReader = ownsReader;
+            _source = source;
             _formatProvider = formatProvider;
             _stringPool = stringPool;
             _bufferSize = bufferSize;
@@ -32,9 +30,10 @@ namespace FixedWidthParser.Readers
 
         /// <summary>Struct enumerator: <c>foreach</c> iteration without heap allocation.</summary>
         public Enumerator GetEnumerator()
-            => new(_readerFactory(), _ownsReader, _formatProvider, _stringPool, _bufferSize);
+            => new(_source.Create(_bufferSize), _source.OwnsReader, _formatProvider, _stringPool, _bufferSize);
 
         IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator() => GetEnumerator();
+        [ExcludeFromCodeCoverage]
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
         /// <summary>
@@ -55,10 +54,12 @@ namespace FixedWidthParser.Readers
                 => _core = new(default, reader, ownsReader, formatProvider, stringPool, bufferSize);
 
             public readonly TModel Current => _core.Current;
+            [ExcludeFromCodeCoverage]
             readonly object IEnumerator.Current => _core.Current!;
 
             public bool MoveNext() => _core.MoveNext();
             public void Dispose() => _core.Dispose();
+            [ExcludeFromCodeCoverage]
             public readonly void Reset() => _core.Reset();
         }
     }

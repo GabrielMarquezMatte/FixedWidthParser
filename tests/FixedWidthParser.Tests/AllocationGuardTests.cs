@@ -17,6 +17,48 @@ namespace FixedWidthParser.Tests
     /// </summary>
     public class AllocationGuardTests
     {
+        /// <summary>
+        /// <see cref="FixedWidthByteReader{TModel}.Read(Stream, bool)"/> stores the stream
+        /// directly instead of a <c>Func&lt;Stream&gt;</c>, so a call allocates only the enumerable
+        /// object — no captured-variable display class and no delegate. Measured at 64 B/call; a
+        /// regressed closure would add a delegate (~56 B+) and push it well past the threshold.
+        /// </summary>
+        [Fact]
+        public void ByteReaderRead_AllocatesEnumerableOnly_NoClosure()
+        {
+            var reader = new FixedWidthByteReader<CodeModel>();
+            using var stream = new MemoryStream();
+            _ = reader.Read(stream); // warmup/JIT
+
+            const int n = 10_000;
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < n; i++) _ = reader.Read(stream);
+            double perCall = (GC.GetAllocatedBytesForCurrentThread() - before) / (double)n;
+
+            Assert.True(perCall <= 80, $"Read allocated {perCall} B/call (expected ~64 B: enumerable only, no closure).");
+        }
+
+        /// <summary>
+        /// <see cref="FixedWidthReader{TModel}.Read(TextReader)"/> stores the source in a
+        /// by-value <c>TextReaderSource</c> struct instead of a <c>Func&lt;TextReader&gt;</c>, so a call
+        /// allocates only the enumerable object — no captured-variable display class and no delegate.
+        /// Measured at 88 B/call; a regressed closure would add a delegate (~56 B+) past the threshold.
+        /// </summary>
+        [Fact]
+        public void CharReaderRead_AllocatesEnumerableOnly_NoClosure()
+        {
+            var reader = new FixedWidthReader<CodeModel>();
+            using var tr = new StringReader("");
+            _ = reader.Read(tr); // warmup/JIT
+
+            const int n = 10_000;
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < n; i++) _ = reader.Read(tr);
+            double perCall = (GC.GetAllocatedBytesForCurrentThread() - before) / (double)n;
+
+            Assert.True(perCall <= 104, $"Read allocated {perCall} B/call (expected ~88 B: enumerable only, no closure).");
+        }
+
         private const string Line = "ABC";   // CodeModel/GenCodeModel: [FixedColumn(0, 3)] Code
         private const int Small = 2_000;
         private const int Large = 6_000;
@@ -38,7 +80,7 @@ namespace FixedWidthParser.Tests
             SumReflection(reader, small);
             SumReflection(reader, large);
 
-            long perLine = MarginalPerLine(() => SumReflection(reader, small), () => SumReflection(reader, large));
+            double perLine = MarginalPerLine(() => SumReflection(reader, small), () => SumReflection(reader, large));
             Assert.True(perLine <= 1, $"Reflection pooled reader regressed to {perLine} B/line (expected ~0).");
         }
 
@@ -51,7 +93,7 @@ namespace FixedWidthParser.Tests
             SumGenerated(pool, small);
             SumGenerated(pool, large);
 
-            long perLine = MarginalPerLine(() => SumGenerated(pool, small), () => SumGenerated(pool, large));
+            double perLine = MarginalPerLine(() => SumGenerated(pool, small), () => SumGenerated(pool, large));
             Assert.True(perLine <= 1, $"Generated pooled reader regressed to {perLine} B/line (expected ~0).");
         }
 
@@ -72,7 +114,7 @@ namespace FixedWidthParser.Tests
         }
 
         // Bytes allocated per extra line, isolating per-line cost from fixed per-call overhead.
-        private static long MarginalPerLine(Action readSmall, Action readLarge)
+        private static double MarginalPerLine(Action readSmall, Action readLarge)
         {
             long b1 = GC.GetAllocatedBytesForCurrentThread();
             readSmall();
@@ -82,7 +124,7 @@ namespace FixedWidthParser.Tests
             readLarge();
             long forLarge = GC.GetAllocatedBytesForCurrentThread() - b2;
 
-            return (forLarge - forSmall) / (Large - Small);
+            return (double)(forLarge - forSmall) / (Large - Small);
         }
     }
 }
