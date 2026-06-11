@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using csFastFloat;
 
 namespace FixedWidthParser.Processors
@@ -22,8 +21,8 @@ namespace FixedWidthParser.Processors
     /// </summary>
     public static class Utf8ColumnParserRegistry
     {
-        // Value: a Utf8ColumnValueParser<TValue> boxed as Delegate, keyed by typeof(TValue).
-        private static readonly ConcurrentDictionary<Type, Delegate> _parsers = new();
+        // Value parsers boxed as Delegate, keyed by typeof(TValue). See DelegateRegistry.
+        private static readonly DelegateRegistry _store = new();
 
         static Utf8ColumnParserRegistry()
         {
@@ -36,19 +35,19 @@ namespace FixedWidthParser.Processors
         /// <summary>Registers (or replaces) the UTF-8 value parser used for columns of type <typeparamref name="TValue"/>.</summary>
         public static void Register<TValue>(Utf8ColumnValueParser<TValue> parser)
         {
-            _parsers[typeof(TValue)] = parser;
+            _store.Set(typeof(TValue), parser);
         }
 
         /// <summary>Removes a previously registered parser. Returns <see langword="false"/> if none was registered.</summary>
         public static bool Unregister<TValue>()
         {
-            return _parsers.TryRemove(typeof(TValue), out _);
+            return _store.Remove(typeof(TValue));
         }
 
         /// <summary>Looks up the registered parser for <paramref name="valueType"/>, or <see langword="null"/> if none.</summary>
         internal static Delegate? Get(Type valueType)
         {
-            return _parsers.TryGetValue(valueType, out var parser) ? parser : null;
+            return _store.Get(valueType);
         }
     }
 }

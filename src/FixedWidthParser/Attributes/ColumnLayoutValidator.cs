@@ -1,14 +1,20 @@
 namespace FixedWidthParser.Attributes
 {
     /// <summary>
-    /// Validates a model's column layout when the parser/writer is built: rejects negative
-    /// <c>Start</c>, non-positive <c>Length</c> and overlapping columns — failing early and with a
-    /// clear message, instead of producing obscure per-line errors at runtime.
+    /// Validates a model's column layout when the parser/writer is built: rejects models with no
+    /// columns, negative <c>Start</c>, non-positive <c>Length</c> and overlapping columns — failing
+    /// early and with a clear message, instead of producing obscure per-line errors at runtime.
     /// </summary>
     public static class ColumnLayoutValidator
     {
         public static void Validate(Span<(int Start, int Length, string Name)> columns, Type modelType)
         {
+            if (columns.Length == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Type {modelType.Name} has no [FixedColumn] members; a fixed-width model must define at least one column.");
+            }
+
             foreach (var (Start, Length, Name) in columns)
             {
                 if (Start < 0)
