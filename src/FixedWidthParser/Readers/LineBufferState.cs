@@ -114,17 +114,8 @@ namespace FixedWidthParser.Readers
                     if (rel >= 0)
                     {
                         int nlIndex = ScanFrom + rel;
-                        int contentEnd = nlIndex;
-                        if (contentEnd > Start && Buffer[contentEnd - 1].Equals(TFormat.Cr))
-                        {
-                            contentEnd--;
-                        }
-
-                        line = Buffer.AsSpan(Start, contentEnd - Start);
-                        Start = nlIndex + 1;
-                        ScanFrom = Start;
-                        LineNumber++;
-                        if (!line.IsEmpty)
+                        // Content ends at the '\n' (trimming a preceding '\r'); resume past the '\n'.
+                        if (TrySliceLine(rawEnd: nlIndex, nextStart: nlIndex + 1, out line))
                         {
                             return LineStatus.Line;
                         }
@@ -137,22 +128,10 @@ namespace FixedWidthParser.Readers
 
                 if (Eof)
                 {
-                    if (Start < End)
+                    // Trailing content with no final '\n': the rest of the buffer is the last line.
+                    if (Start < End && TrySliceLine(rawEnd: End, nextStart: End, out line))
                     {
-                        int contentEnd = End;
-                        if (contentEnd > Start && Buffer[contentEnd - 1].Equals(TFormat.Cr))
-                        {
-                            contentEnd--;
-                        }
-
-                        line = Buffer.AsSpan(Start, contentEnd - Start);
-                        Start = End;
-                        ScanFrom = End;
-                        LineNumber++;
-                        if (!line.IsEmpty)
-                        {
-                            return LineStatus.Line;
-                        }
+                        return LineStatus.Line;
                     }
 
                     line = default;
@@ -162,6 +141,27 @@ namespace FixedWidthParser.Readers
                 line = default;
                 return LineStatus.NeedData;
             }
+        }
+
+        /// <summary>
+        /// Slices the line ending at <paramref name="rawEnd"/> (dropping a trailing
+        /// <see cref="ILineFormat{T}.Cr"/>), advances <see cref="Start"/>/<see cref="ScanFrom"/> to
+        /// <paramref name="nextStart"/>, and counts the line. Returns <see langword="false"/> for an
+        /// empty line so the caller skips it while still having consumed it.
+        /// </summary>
+        private bool TrySliceLine(int rawEnd, int nextStart, out ReadOnlySpan<T> line)
+        {
+            int contentEnd = rawEnd;
+            if (contentEnd > Start && Buffer[contentEnd - 1].Equals(TFormat.Cr))
+            {
+                contentEnd--;
+            }
+
+            line = Buffer.AsSpan(Start, contentEnd - Start);
+            Start = nextStart;
+            ScanFrom = nextStart;
+            LineNumber++;
+            return !line.IsEmpty;
         }
 
         internal void Compact()
