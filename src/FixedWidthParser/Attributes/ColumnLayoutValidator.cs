@@ -32,7 +32,7 @@ namespace FixedWidthParser.Attributes
             columns.Sort(static (a, b) => a.Start != b.Start ? a.Start.CompareTo(b.Start) : a.Length.CompareTo(b.Length));
             var farthest = columns[0];
             int maxEnd = farthest.Start + farthest.Length;
-            foreach(ref readonly var current in columns[1..])
+            foreach (ref readonly var current in columns[1..])
             {
                 if (current.Start < maxEnd)
                 {

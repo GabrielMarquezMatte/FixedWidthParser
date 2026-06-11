@@ -22,7 +22,10 @@ namespace Benchmarks.Perf
         public string Line { get; set; } = string.Empty;
 
         [GlobalSetup]
-        public void Setup() => _stringPool = new StringPool();
+        public void Setup()
+        {
+            _stringPool = new StringPool();
+        }
 
         [Benchmark(Baseline = true)]
         public SampleModel Parse_NoPool()

@@ -1,39 +1,40 @@
+using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
 
 namespace FixedWidthParser.Readers
 {
     /// <summary>
-    /// Shared asynchronous enumerator logic for the record readers, specialized by a
-    /// <see langword="struct"/> <typeparamref name="TParser"/> strategy (devirtualized parse). The
-    /// enumerator is a class (not a struct) because an <c>async</c> method captures <c>this</c> by
-    /// value — a struct enumerator would lose its state between calls. The span scanning happens in
-    /// a synchronous step; only the buffer refill is awaited, using <see cref="Memory{T}"/> (which
-    /// can cross the <c>await</c>). The public reader enumerators derive from this to keep their
-    /// concrete return type while sharing one implementation.
+    /// UTF-8 / byte counterpart of <see cref="AsyncRecordEnumeratorCore{TModel, TParser}"/>: reads raw
+    /// bytes from a <see cref="Stream"/> via <c>await foreach</c>, specialized by a
+    /// <see langword="struct"/> <typeparamref name="TParser"/> strategy (devirtualized parse). A class
+    /// (not a struct) because an <c>async</c> method captures <c>this</c> by value, which would lose a
+    /// struct enumerator's state. The span scanning happens in a synchronous step; only the buffer
+    /// refill is awaited, using <see cref="Memory{T}"/> (which can cross the <c>await</c>).
     /// </summary>
-    public sealed class AsyncRecordEnumeratorCore<TModel, TParser> : IAsyncEnumerator<TModel> where TParser : struct, ILineParser<TModel>
+    public sealed class Utf8AsyncRecordEnumeratorCore<TModel, TParser> : IAsyncEnumerator<TModel>
+        where TParser : struct, IUtf8LineParser<TModel>
     {
         private readonly TParser _strategy;
-        private readonly bool _ownsReader;
+        private readonly bool _ownsStream;
         private readonly IFormatProvider? _formatProvider;
         private readonly StringPool? _stringPool;
         private readonly CancellationToken _cancellationToken;
-        private TextReader? _reader;
-        private LineBufferState<char, CharLineFormat> _lines;
+        private Stream? _stream;
+        private LineBufferState<byte, Utf8LineFormat> _lines;
         private TModel _current;
 
-        internal AsyncRecordEnumeratorCore(
+        internal Utf8AsyncRecordEnumeratorCore(
             TParser strategy,
-            TextReader reader,
-            bool ownsReader,
+            Stream stream,
+            bool ownsStream,
             IFormatProvider? formatProvider,
             StringPool? stringPool,
             int bufferSize,
             CancellationToken cancellationToken)
         {
             _strategy = strategy;
-            _reader = reader;
-            _ownsReader = ownsReader;
+            _stream = stream;
+            _ownsStream = ownsStream;
             _formatProvider = formatProvider;
             _stringPool = stringPool;
             _cancellationToken = cancellationToken;
@@ -46,7 +47,7 @@ namespace FixedWidthParser.Readers
 
         public async ValueTask<bool> MoveNextAsync()
         {
-            var reader = _reader ?? throw new ObjectDisposedException(nameof(AsyncRecordEnumeratorCore<,>));
+            var stream = _stream ?? throw new ObjectDisposedException(nameof(Utf8AsyncRecordEnumeratorCore<,>));
             while (true)
             {
                 _cancellationToken.ThrowIfCancellationRequested();
@@ -64,7 +65,7 @@ namespace FixedWidthParser.Readers
                 }
 
                 PrepareRefill();
-                int read = await reader
+                int read = await stream
                     .ReadAsync(_lines.Buffer.AsMemory(_lines.End, _lines.Buffer.Length - _lines.End), _cancellationToken)
                     .ConfigureAwait(false);
                 _lines.Advance(read);
@@ -86,12 +87,12 @@ namespace FixedWidthParser.Readers
             return LineStatus.NeedData;
         }
 
-        private void Parse(ReadOnlySpan<char> line)
+        private void Parse(ReadOnlySpan<byte> line)
         {
             if (!_strategy.TryParse(line, _formatProvider, _stringPool, out _current))
             {
                 throw new FormatException(
-                    $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{line}\".");
+                    $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{Encoding.UTF8.GetString(line)}\".");
             }
         }
 
@@ -105,12 +106,12 @@ namespace FixedWidthParser.Readers
         {
             _lines.Return();
 #pragma warning disable IDISP007 // Don't dispose injected
-            if (_ownsReader)
+            if (_ownsStream)
             {
-                _reader?.Dispose();
+                _stream?.Dispose();
             }
 #pragma warning restore IDISP007 // Don't dispose injected
-            _reader = null;
+            _stream = null;
             return ValueTask.CompletedTask;
         }
     }

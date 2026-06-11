@@ -1,4 +1,3 @@
-using System.Globalization;
 using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Readers;
 using FixedWidthParser.Writers;
@@ -96,7 +95,10 @@ namespace FixedWidthParser.Tests
 
             var reader = new FixedWidthReader<CodeModel>();
             int count = 0;
-            foreach (var _ in reader.Read(new StringReader("ABC\nDEF\n"))) count++;
+            foreach (var _ in reader.Read(new StringReader("ABC\nDEF\n")))
+            {
+                count++;
+            }
 
             Assert.Equal(2, count);
         }

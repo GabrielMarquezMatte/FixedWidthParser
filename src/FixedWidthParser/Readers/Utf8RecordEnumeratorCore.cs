@@ -1,38 +1,40 @@
 using System.Collections;
+using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
 
 namespace FixedWidthParser.Readers
 {
     /// <summary>
-    /// Shared synchronous enumerator logic for the record readers, specialized by a
-    /// <see langword="struct"/> <typeparamref name="TParser"/> strategy so the parse call is
-    /// devirtualized. Reads lines in blocks into an <see cref="System.Buffers.ArrayPool{T}"/>
-    /// buffer and slices them as <see cref="ReadOnlySpan{T}"/> straight into the strategy — no
-    /// string allocated per line. Held by value inside the public reader enumerators, which forward
-    /// to it; being a <see langword="struct"/> keeps <c>foreach</c> allocation-free.
+    /// UTF-8 / byte counterpart of <see cref="RecordEnumeratorCore{TModel, TParser}"/>: reads raw
+    /// bytes from a <see cref="Stream"/> in blocks into an <see cref="System.Buffers.ArrayPool{T}"/>
+    /// buffer and slices each line as <see cref="ReadOnlySpan{T}"/> of <see cref="byte"/> straight into
+    /// a <see langword="struct"/> <typeparamref name="TParser"/> strategy (devirtualized parse) — no
+    /// <see cref="StreamReader"/>, no transcode, no string per line. Held by value inside the public
+    /// reader enumerator (a <see langword="struct"/>), which forwards to it so <c>foreach</c> stays
+    /// allocation-free.
     /// </summary>
-    internal struct RecordEnumeratorCore<TModel, TParser> : IEnumerator<TModel>
-        where TParser : struct, ILineParser<TModel>
+    internal struct Utf8RecordEnumeratorCore<TModel, TParser> : IEnumerator<TModel>
+        where TParser : struct, IUtf8LineParser<TModel>
     {
         private readonly TParser _strategy;
-        private readonly bool _ownsReader;
+        private readonly bool _ownsStream;
         private readonly IFormatProvider? _formatProvider;
         private readonly StringPool? _stringPool;
-        private TextReader? _reader;
-        private LineBufferState<char, CharLineFormat> _lines;
+        private Stream? _stream;
+        private LineBufferState<byte, Utf8LineFormat> _lines;
         private TModel _current;
 
-        internal RecordEnumeratorCore(
+        internal Utf8RecordEnumeratorCore(
             TParser strategy,
-            TextReader reader,
-            bool ownsReader,
+            Stream stream,
+            bool ownsStream,
             IFormatProvider? formatProvider,
             StringPool? stringPool,
             int bufferSize)
         {
             _strategy = strategy;
-            _reader = reader;
-            _ownsReader = ownsReader;
+            _stream = stream;
+            _ownsStream = ownsStream;
             _formatProvider = formatProvider;
             _stringPool = stringPool;
             _lines = default;
@@ -45,7 +47,7 @@ namespace FixedWidthParser.Readers
 
         public bool MoveNext()
         {
-            var reader = _reader ?? throw new ObjectDisposedException(nameof(RecordEnumeratorCore<,>));
+            var stream = _stream ?? throw new ObjectDisposedException(nameof(Utf8RecordEnumeratorCore<,>));
             while (true)
             {
                 var status = _lines.TryGetLine(out var line);
@@ -59,24 +61,24 @@ namespace FixedWidthParser.Readers
                     return false;
                 }
 
-                Refill(reader);
+                Refill(stream);
             }
         }
 
-        private void Parse(ReadOnlySpan<char> line)
+        private void Parse(ReadOnlySpan<byte> line)
         {
             if (!_strategy.TryParse(line, _formatProvider, _stringPool, out _current))
             {
                 throw new FormatException(
-                    $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{line}\".");
+                    $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{Encoding.UTF8.GetString(line)}\".");
             }
         }
 
-        private void Refill(TextReader reader)
+        private void Refill(Stream stream)
         {
             _lines.Compact();
             _lines.GrowIfFull();
-            int read = reader.Read(_lines.Buffer, _lines.End, _lines.Buffer.Length - _lines.End);
+            int read = stream.Read(_lines.Buffer, _lines.End, _lines.Buffer.Length - _lines.End);
             _lines.Advance(read);
         }
 
@@ -84,12 +86,12 @@ namespace FixedWidthParser.Readers
         {
             _lines.Return();
 #pragma warning disable IDISP007 // Don't dispose injected
-            if (_ownsReader)
+            if (_ownsStream)
             {
-                _reader?.Dispose();
+                _stream?.Dispose();
             }
 #pragma warning restore IDISP007 // Don't dispose injected
-            _reader = null;
+            _stream = null;
         }
 
         public readonly void Reset()

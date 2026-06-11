@@ -11,21 +11,18 @@ namespace FixedWidthParser.Readers
     public sealed class GeneratedFixedWidthAsyncRecordEnumerable<TModel> : IAsyncEnumerable<TModel>
         where TModel : IFixedWidthModel<TModel>
     {
-        private readonly Func<TextReader> _readerFactory;
-        private readonly bool _ownsReader;
+        private readonly TextReaderSource _source;
         private readonly IFormatProvider? _formatProvider;
         private readonly StringPool? _stringPool;
         private readonly int _bufferSize;
 
         internal GeneratedFixedWidthAsyncRecordEnumerable(
-            Func<TextReader> readerFactory,
-            bool ownsReader,
+            TextReaderSource source,
             IFormatProvider? formatProvider,
             StringPool? stringPool,
             int bufferSize)
         {
-            _readerFactory = readerFactory;
-            _ownsReader = ownsReader;
+            _source = source;
             _formatProvider = formatProvider;
             _stringPool = stringPool;
             _bufferSize = bufferSize;
@@ -35,7 +32,7 @@ namespace FixedWidthParser.Readers
         public AsyncRecordEnumeratorCore<TModel, GeneratedLineParser<TModel>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
 #pragma warning restore HLQ006 // GetEnumerator() or GetAsyncEnumerator() should return a value type
         {
-            return new(default, _readerFactory(), _ownsReader, _formatProvider, _stringPool, _bufferSize, cancellationToken);
+            return new(default, _source.Create(_bufferSize), _source.OwnsReader, _formatProvider, _stringPool, _bufferSize, cancellationToken);
         }
 
         IAsyncEnumerator<TModel> IAsyncEnumerable<TModel>.GetAsyncEnumerator(CancellationToken cancellationToken)

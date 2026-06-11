@@ -22,14 +22,12 @@ namespace FixedWidthParser.Readers
     /// <summary>
     /// Reflection-based parse strategy: forwards to a runtime <see cref="FixedWidthParser{TModel}"/>.
     /// </summary>
-    public readonly struct ReflectionLineParser<TModel> : ILineParser<TModel> where TModel : new()
+    public readonly struct ReflectionLineParser<TModel>(FixedWidthParser<TModel> parser) : ILineParser<TModel> where TModel : new()
     {
-        private readonly FixedWidthParser<TModel> _parser;
-
-        public ReflectionLineParser(FixedWidthParser<TModel> parser) => _parser = parser;
-
         public bool TryParse(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
-            => _parser.TryParse(line, formatProvider, stringPool, out model);
+        {
+            return parser.TryParse(line, formatProvider, stringPool, out model);
+        }
     }
 
     /// <summary>
@@ -39,7 +37,9 @@ namespace FixedWidthParser.Readers
     public readonly struct GeneratedLineParser<TModel> : ILineParser<TModel> where TModel : IFixedWidthModel<TModel>
     {
         public bool TryParse(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
-            => TModel.TryParse(line, formatProvider, stringPool, out model);
+        {
+            return TModel.TryParse(line, formatProvider, stringPool, out model);
+        }
     }
 #pragma warning restore CA1815 // Override equals and operator equals on value types
 }

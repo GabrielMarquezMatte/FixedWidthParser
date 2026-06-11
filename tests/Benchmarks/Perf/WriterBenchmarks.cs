@@ -38,7 +38,10 @@ namespace Benchmarks.Perf
         }
 
         [GlobalCleanup]
-        public void Cleanup() => _sink.Dispose();
+        public void Cleanup()
+        {
+            _sink.Dispose();
+        }
 
         /// <summary>Creates/disposes a StreamWriter per call (over the Stream). Baseline.</summary>
         [Benchmark(Baseline = true)]

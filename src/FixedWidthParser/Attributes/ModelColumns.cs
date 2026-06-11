@@ -20,16 +20,22 @@ namespace FixedWidthParser.Attributes
         public static void ForEachColumn(Type modelType, Action<MemberInfo, FixedColumnAttribute> visit)
         {
             var columns = new List<(int Start, int Length, string Name)>();
-
-            foreach (var property in modelType.GetProperties()) Visit(property);
-            foreach (var field in modelType.GetFields()) Visit(field);
-
+            foreach (var property in modelType.GetProperties())
+            {
+                Visit(property);
+            }
+            foreach (var field in modelType.GetFields())
+            {
+                Visit(field);
+            }
             ColumnLayoutValidator.Validate(CollectionsMarshal.AsSpan(columns), modelType);
-
             void Visit(MemberInfo member)
             {
                 var attribute = member.GetCustomAttribute<FixedColumnAttribute>();
-                if (attribute is null) return;
+                if (attribute is null)
+                {
+                    return;
+                }
                 columns.Add((attribute.Start, attribute.Length, member.Name));
                 visit(member, attribute);
             }

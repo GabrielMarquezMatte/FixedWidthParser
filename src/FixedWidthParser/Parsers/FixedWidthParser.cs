@@ -1,7 +1,4 @@
-using System.Linq.Expressions;
-using System.Reflection;
 using System.Runtime.ExceptionServices;
-using FixedWidthParser.Attributes;
 using FixedWidthParser.Processors;
 using CommunityToolkit.HighPerformance.Buffers;
 
@@ -9,9 +6,8 @@ namespace FixedWidthParser.Parsers
 {
     public sealed class FixedWidthParser<TModel> where TModel : new(), allows ref struct
     {
-        private readonly record struct ColumnParserInfo(int Start, int Length, ColumnParser<TModel> Parse);
         private static readonly Func<TModel> _modelFactory;
-        private static readonly ColumnParserInfo[] _processors;
+        private static readonly ColumnParserInfo<ColumnParser<TModel>>[] _processors;
         private static readonly int _requiredLineLength;
         private static readonly ExceptionDispatchInfo? _buildError;
 
@@ -22,9 +18,9 @@ namespace FixedWidthParser.Parsers
         {
             try
             {
-                _modelFactory = BuildModelFactory();
-                _processors = BuildProcessors();
-                _requiredLineLength = ComputeRequiredLineLength(_processors);
+                _modelFactory = ParserBuilder.BuildModelFactory<TModel>();
+                _processors = ParserBuilder.BuildProcessors<TModel, ColumnParser<TModel>>(ColumnParserFactory.Create<TModel>);
+                _requiredLineLength = ParserBuilder.ComputeRequiredLineLength(_processors);
                 _buildError = null;
             }
             catch (Exception ex)
@@ -35,50 +31,10 @@ namespace FixedWidthParser.Parsers
                 _buildError = ExceptionDispatchInfo.Capture(ex);
             }
         }
-
-        public FixedWidthParser() => _buildError?.Throw();
-
-        private static Func<TModel> BuildModelFactory()
+        public FixedWidthParser()
         {
-            var ctor = typeof(TModel).GetConstructor(Type.EmptyTypes);
-            if (ctor is null)
-            {
-                throw new InvalidOperationException($"Type {typeof(TModel).FullName} must have a parameterless constructor.");
-            }
-            var lambda = Expression.Lambda<Func<TModel>>(Expression.New(ctor));
-            return lambda.Compile();
+            _buildError?.Throw();
         }
-        private static ColumnParserInfo[] BuildProcessors()
-        {
-            var processors = new List<ColumnParserInfo>();
-            ModelColumns.ForEachColumn(typeof(TModel), (member, attribute) =>
-                processors.Add(new(attribute.Start, attribute.Length, CreateColumnParser(member))));
-            return processors.ToArray();
-        }
-
-        private static int ComputeRequiredLineLength(ReadOnlySpan<ColumnParserInfo> processors)
-        {
-            int required = 0;
-            foreach (var (Start, Length, _) in processors)
-            {
-                int end = Start + Length;
-                if (end > required)
-                {
-                    required = end;
-                }
-            }
-            return required;
-        }
-
-        private static ColumnParser<TModel> CreateColumnParser(MemberInfo member)
-        {
-            var (memberType, model, access) = ModelColumns.MemberAccess(typeof(TModel), member);
-            var value = Expression.Parameter(memberType, "value");
-            var actionType = typeof(RefAction<,>).MakeGenericType(typeof(TModel), memberType);
-            var setter = Expression.Lambda(actionType, Expression.Assign(access, value), model, value).Compile();
-            return ColumnParserFactory.Create<TModel>(memberType, setter);
-        }
-
         public bool TryParse(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
         {
             if (line.Length < _requiredLineLength)

@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Parsers;
 
@@ -15,23 +16,20 @@ namespace FixedWidthParser.Readers
     public sealed class FixedWidthRecordEnumerable<TModel> : IEnumerable<TModel> where TModel : new()
     {
         private readonly FixedWidthParser<TModel> _parser;
-        private readonly Func<TextReader> _readerFactory;
-        private readonly bool _ownsReader;
+        private readonly TextReaderSource _source;
         private readonly IFormatProvider? _formatProvider;
         private readonly StringPool? _stringPool;
         private readonly int _bufferSize;
 
         internal FixedWidthRecordEnumerable(
             FixedWidthParser<TModel> parser,
-            Func<TextReader> readerFactory,
-            bool ownsReader,
+            TextReaderSource source,
             IFormatProvider? formatProvider,
             StringPool? stringPool,
             int bufferSize)
         {
             _parser = parser;
-            _readerFactory = readerFactory;
-            _ownsReader = ownsReader;
+            _source = source;
             _formatProvider = formatProvider;
             _stringPool = stringPool;
             _bufferSize = bufferSize;
@@ -39,10 +37,20 @@ namespace FixedWidthParser.Readers
 
         /// <summary>Struct enumerator: <c>foreach</c> iteration without heap allocation.</summary>
         public Enumerator GetEnumerator()
-            => new(_parser, _readerFactory(), _ownsReader, _formatProvider, _stringPool, _bufferSize);
+        {
+            return new(_parser, _source.Create(_bufferSize), _source.OwnsReader, _formatProvider, _stringPool, _bufferSize);
+        }
 
-        IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator() => GetEnumerator();
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+        IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+
+        [ExcludeFromCodeCoverage]
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
 
         /// <summary>
         /// Allocation-free <see langword="struct"/> enumerator. Forwards to the shared
@@ -60,14 +68,29 @@ namespace FixedWidthParser.Readers
                 IFormatProvider? formatProvider,
                 StringPool? stringPool,
                 int bufferSize)
-                => _core = new(new ReflectionLineParser<TModel>(parser), reader, ownsReader, formatProvider, stringPool, bufferSize);
+            {
+                _core = new(new ReflectionLineParser<TModel>(parser), reader, ownsReader, formatProvider, stringPool, bufferSize);
+            }
 
             public readonly TModel Current => _core.Current;
+            [ExcludeFromCodeCoverage]
             readonly object IEnumerator.Current => _core.Current!;
 
-            public bool MoveNext() => _core.MoveNext();
-            public void Dispose() => _core.Dispose();
-            public readonly void Reset() => _core.Reset();
+            public bool MoveNext()
+            {
+                return _core.MoveNext();
+            }
+
+            public void Dispose()
+            {
+                _core.Dispose();
+            }
+
+            [ExcludeFromCodeCoverage]
+            public readonly void Reset()
+            {
+                _core.Reset();
+            }
         }
     }
 }
