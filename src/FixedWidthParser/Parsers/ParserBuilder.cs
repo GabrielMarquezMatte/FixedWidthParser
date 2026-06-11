@@ -21,14 +21,9 @@ namespace FixedWidthParser.Parsers
     /// </summary>
     internal static class ParserBuilder
     {
-        public static Func<TModel> BuildModelFactory<TModel>() where TModel : allows ref struct
+        public static Func<TModel> BuildModelFactory<TModel>() where TModel : new(), allows ref struct
         {
-            var ctor = typeof(TModel).GetConstructor(Type.EmptyTypes);
-            if (ctor is null)
-            {
-                throw new InvalidOperationException($"Type {typeof(TModel).FullName} must have a parameterless constructor.");
-            }
-            var lambda = Expression.Lambda<Func<TModel>>(Expression.New(ctor));
+            var lambda = Expression.Lambda<Func<TModel>>(Expression.New(typeof(TModel)));
             return lambda.Compile();
         }
 

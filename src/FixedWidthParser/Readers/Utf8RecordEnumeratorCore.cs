@@ -46,7 +46,7 @@ namespace FixedWidthParser.Readers
 
         public bool MoveNext()
         {
-            var stream = _stream ?? throw new ObjectDisposedException(nameof(Utf8RecordEnumeratorCore<TModel>));
+            var stream = _stream ?? throw new ObjectDisposedException(nameof(Utf8RecordEnumeratorCore<>));
             while (true)
             {
                 var status = _lines.TryGetLine(out var line);

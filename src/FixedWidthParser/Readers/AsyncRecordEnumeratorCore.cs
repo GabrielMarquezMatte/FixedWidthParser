@@ -46,7 +46,7 @@ namespace FixedWidthParser.Readers
 
         public async ValueTask<bool> MoveNextAsync()
         {
-            var reader = _reader ?? throw new ObjectDisposedException(nameof(AsyncRecordEnumeratorCore<TModel, TParser>));
+            var reader = _reader ?? throw new ObjectDisposedException(nameof(AsyncRecordEnumeratorCore<,>));
             while (true)
             {
                 _cancellationToken.ThrowIfCancellationRequested();
@@ -84,7 +84,7 @@ namespace FixedWidthParser.Readers
             if (!_strategy.TryParse(line, _formatProvider, _stringPool, out _current))
             {
                 throw new FormatException(
-                    $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{line.ToString()}\".");
+                    $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{line}\".");
             }
         }
 

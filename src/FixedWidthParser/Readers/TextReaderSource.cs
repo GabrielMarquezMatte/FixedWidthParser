@@ -35,15 +35,21 @@ namespace FixedWidthParser.Readers
 
         /// <summary>Existing reader: single pass, not disposed by the enumerator.</summary>
         public static TextReaderSource FromReader(TextReader reader)
-            => new(reader, null, null, null, leaveOpen: false, useAsync: false, ownsReader: false);
+        {
+            return new(reader, null, null, null, leaveOpen: false, useAsync: false, ownsReader: false);
+        }
 
         /// <summary>Stream wrapped in a <see cref="StreamReader"/>: single pass; <paramref name="leaveOpen"/> controls closing the stream.</summary>
         public static TextReaderSource FromStream(Stream stream, Encoding encoding, bool leaveOpen)
-            => new(null, stream, null, encoding, leaveOpen, useAsync: false, ownsReader: true);
+        {
+            return new(null, stream, null, encoding, leaveOpen, useAsync: false, ownsReader: true);
+        }
 
         /// <summary>File path reopened per enumeration; <paramref name="useAsync"/> opts into asynchronous file I/O.</summary>
         public static TextReaderSource FromFile(string path, Encoding encoding, bool useAsync)
-            => new(null, null, path, encoding, leaveOpen: false, useAsync, ownsReader: true);
+        {
+            return new(null, null, path, encoding, leaveOpen: false, useAsync, ownsReader: true);
+        }
 
         /// <summary>
         /// Materializes the <see cref="TextReader"/>. Returns the injected reader as-is, or allocates a
@@ -58,15 +64,15 @@ namespace FixedWidthParser.Readers
             }
             if (_stream is not null)
             {
-                return new StreamReader(_stream, _encoding!, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize, leaveOpen: _leaveOpen);
+                return new StreamReader(_stream, _encoding, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize, leaveOpen: _leaveOpen);
             }
             if (_useAsync)
             {
                 return new StreamReader(
                     new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize, useAsync: true),
-                    _encoding!, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize);
+                    _encoding, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize);
             }
-            return new StreamReader(_path!, _encoding!, detectEncodingFromByteOrderMarks: true);
+            return new StreamReader(_path!, _encoding, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize);
         }
     }
 }
