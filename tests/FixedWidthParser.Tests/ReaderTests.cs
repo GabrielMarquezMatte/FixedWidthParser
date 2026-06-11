@@ -1,4 +1,3 @@
-using System.Globalization;
 using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Readers;
 using FixedWidthParser.Writers;

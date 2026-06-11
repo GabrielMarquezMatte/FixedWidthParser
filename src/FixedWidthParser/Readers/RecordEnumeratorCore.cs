@@ -19,7 +19,7 @@ namespace FixedWidthParser.Readers
         private readonly IFormatProvider? _formatProvider;
         private readonly StringPool? _stringPool;
         private TextReader? _reader;
-        private LineBufferState _lines;
+        private LineBufferState<char, CharLineFormat> _lines;
         private TModel _current;
 
         internal RecordEnumeratorCore(

@@ -1,4 +1,3 @@
-using FixedWidthParser;
 using FixedWidthParser.Attributes;
 
 namespace FixedWidthParser.Tests
