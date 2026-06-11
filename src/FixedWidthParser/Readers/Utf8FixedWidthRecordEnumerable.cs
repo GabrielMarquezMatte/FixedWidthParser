@@ -66,13 +66,20 @@ namespace FixedWidthParser.Readers
             return new(_parser, stream, _ownsStream, _formatProvider, _stringPool, _bufferSize);
         }
 
-        IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator() => GetEnumerator();
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+        IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
 
         /// <summary>Allocation-free <see langword="struct"/> enumerator forwarding to the shared core.</summary>
         public struct Enumerator : IEnumerator<TModel>
         {
-            private Utf8RecordEnumeratorCore<TModel> _core;
+            private Utf8RecordEnumeratorCore<TModel, ReflectionUtf8LineParser<TModel>> _core;
 
             internal Enumerator(
                 Utf8FixedWidthParser<TModel> parser,
@@ -81,14 +88,27 @@ namespace FixedWidthParser.Readers
                 IFormatProvider? formatProvider,
                 StringPool? stringPool,
                 int bufferSize)
-                => _core = new(parser, stream, ownsStream, formatProvider, stringPool, bufferSize);
+            {
+                _core = new(new ReflectionUtf8LineParser<TModel>(parser), stream, ownsStream, formatProvider, stringPool, bufferSize);
+            }
 
             public readonly TModel Current => _core.Current;
             readonly object IEnumerator.Current => _core.Current!;
 
-            public bool MoveNext() => _core.MoveNext();
-            public void Dispose() => _core.Dispose();
-            public readonly void Reset() => _core.Reset();
+            public bool MoveNext()
+            {
+                return _core.MoveNext();
+            }
+
+            public void Dispose()
+            {
+                _core.Dispose();
+            }
+
+            public readonly void Reset()
+            {
+                _core.Reset();
+            }
         }
     }
 }

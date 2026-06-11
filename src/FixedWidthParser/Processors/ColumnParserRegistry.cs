@@ -32,13 +32,20 @@ namespace FixedWidthParser.Processors
 
         /// <summary>Registers (or replaces) the value parser used for columns of type <typeparamref name="TValue"/>.</summary>
         public static void Register<TValue>(ColumnValueParser<TValue> parser)
-            => _parsers[typeof(TValue)] = parser;
+        {
+            _parsers[typeof(TValue)] = parser;
+        }
 
         /// <summary>Removes a previously registered parser. Returns <see langword="false"/> if none was registered.</summary>
-        public static bool Unregister<TValue>() => _parsers.TryRemove(typeof(TValue), out _);
+        public static bool Unregister<TValue>()
+        {
+            return _parsers.TryRemove(typeof(TValue), out _);
+        }
 
         /// <summary>Looks up the registered parser for <paramref name="valueType"/>, or <see langword="null"/> if none.</summary>
         internal static Delegate? Get(Type valueType)
-            => _parsers.TryGetValue(valueType, out var parser) ? parser : null;
+        {
+            return _parsers.TryGetValue(valueType, out var parser) ? parser : null;
+        }
     }
 }

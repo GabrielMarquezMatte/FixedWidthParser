@@ -16,6 +16,7 @@ namespace FixedWidthParser.Generator
     public sealed class FixedWidthModelGenerator : IIncrementalGenerator
     {
         private const string MarkerMetadataName = "FixedWidthParser.IFixedWidthModel`1";
+        private const string Utf8MarkerMetadataName = "FixedWidthParser.IUtf8FixedWidthModel`1";
         private const string ColumnAttributeMetadataName = "FixedWidthParser.Attributes.FixedColumnAttribute";
 
         private static readonly DiagnosticDescriptor MustBePartial = new(
@@ -31,6 +32,11 @@ namespace FixedWidthParser.Generator
         private static readonly DiagnosticDescriptor UnsupportedColumnType = new(
             "FWP003", "Unsupported fixed-width column type",
             "Column '{0}' has type '{1}', which is not string, double, float or ISpanParsable<T>; generated parsing cannot handle it",
+            "FixedWidthParser", DiagnosticSeverity.Error, isEnabledByDefault: true);
+
+        private static readonly DiagnosticDescriptor UnsupportedUtf8ColumnType = new(
+            "FWP007", "Unsupported UTF-8 fixed-width column type",
+            "Column '{0}' has type '{1}', which is not string, double, float or IUtf8SpanParsable<T>; generated UTF-8 parsing cannot handle it",
             "FixedWidthParser", DiagnosticSeverity.Error, isEnabledByDefault: true);
 
         private static readonly DiagnosticDescriptor NegativeStart = new(
@@ -68,18 +74,17 @@ namespace FixedWidthParser.Generator
 
             var compilation = ctx.SemanticModel.Compilation;
             var marker = compilation.GetTypeByMetadataName(MarkerMetadataName);
+            var utf8Marker = compilation.GetTypeByMetadataName(Utf8MarkerMetadataName);
             var columnAttribute = compilation.GetTypeByMetadataName(ColumnAttributeMetadataName);
-            if (marker is null || columnAttribute is null)
+            if (columnAttribute is null || (marker is null && utf8Marker is null))
             {
                 return null;
             }
 
-            // Implements IFixedWidthModel<ThisType>?
-            bool implementsMarker = symbol.AllInterfaces.Any(i =>
-                SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, marker)
-                && i.TypeArguments.Length == 1
-                && SymbolEqualityComparer.Default.Equals(i.TypeArguments[0], symbol));
-            if (!implementsMarker)
+            // Implements IFixedWidthModel<ThisType> (char) and/or IUtf8FixedWidthModel<ThisType> (byte)?
+            bool implementsChar = ImplementsMarker(symbol, marker);
+            bool implementsUtf8 = ImplementsMarker(symbol, utf8Marker);
+            if (!implementsChar && !implementsUtf8)
             {
                 return null;
             }
@@ -115,8 +120,8 @@ namespace FixedWidthParser.Generator
 
                 int start = attribute.ConstructorArguments[0].Value is int s ? s : 0;
                 int length = attribute.ConstructorArguments[1].Value is int l ? l : 0;
-                var (kind, parsableTypeFqn) = Classify(memberType, compilation);
-                columns.Add(new ColumnInfo(member.Name, start, length, kind, parsableTypeFqn));
+                var (kind, parsableTypeFqn, isCharParsable, isUtf8Parsable) = Classify(memberType, compilation);
+                columns.Add(new ColumnInfo(member.Name, start, length, kind, parsableTypeFqn, isCharParsable, isUtf8Parsable));
             }
 
             string? ns = symbol.ContainingNamespace.IsGlobalNamespace
@@ -131,39 +136,71 @@ namespace FixedWidthParser.Generator
                 new EquatableArray<ColumnInfo>(columns.ToImmutable()),
                 isPartial,
                 isNested,
+                implementsChar,
+                implementsUtf8,
                 declaration.Identifier.GetLocation());
         }
 
-        private static (ColumnKind Kind, string TypeFqn) Classify(ITypeSymbol type, Compilation compilation)
+        // Implements I…Model<ThisType> for the given (open) marker interface?
+        private static bool ImplementsMarker(INamedTypeSymbol symbol, INamedTypeSymbol? marker)
+        {
+            return marker is not null && symbol.AllInterfaces.Any(i =>
+                SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, marker)
+                && i.TypeArguments.Length == 1
+                && SymbolEqualityComparer.Default.Equals(i.TypeArguments[0], symbol));
+        }
+
+        private static (ColumnKind Kind, string TypeFqn, bool IsCharParsable, bool IsUtf8Parsable) Classify(ITypeSymbol type, Compilation compilation)
         {
             switch (type.SpecialType)
             {
                 case SpecialType.System_String:
-                    return (ColumnKind.String, "string");
+                    return (ColumnKind.String, "string", true, true);
                 case SpecialType.System_Double:
-                    return (ColumnKind.Double, "double");
+                    return (ColumnKind.Double, "double", true, true);
                 case SpecialType.System_Single:
-                    return (ColumnKind.Float, "float");
+                    return (ColumnKind.Float, "float", true, true);
                 default:
                     break;
             }
 
             string fqn = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            var spanParsable = compilation.GetTypeByMetadataName("System.ISpanParsable`1");
-            bool isSpanParsable = spanParsable is not null && type.AllInterfaces.Any(i =>
-                SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, spanParsable)
+            bool isCharParsable = ImplementsParsable(type, compilation, "System.ISpanParsable`1");
+            bool isUtf8Parsable = ImplementsParsable(type, compilation, "System.IUtf8SpanParsable`1");
+            // SpanParsable when at least one path can handle it; otherwise unsupported by every path.
+            var kind = isCharParsable || isUtf8Parsable ? ColumnKind.SpanParsable : ColumnKind.Unsupported;
+            return (kind, fqn, isCharParsable, isUtf8Parsable);
+        }
+
+        // Implements I…SpanParsable<ThisType> for the given (open) BCL interface metadata name?
+        private static bool ImplementsParsable(ITypeSymbol type, Compilation compilation, string interfaceMetadataName)
+        {
+            var parsable = compilation.GetTypeByMetadataName(interfaceMetadataName);
+            return parsable is not null && type.AllInterfaces.Any(i =>
+                SymbolEqualityComparer.Default.Equals(i.OriginalDefinition, parsable)
                 && i.TypeArguments.Length == 1
                 && SymbolEqualityComparer.Default.Equals(i.TypeArguments[0], type));
-            return isSpanParsable ? (ColumnKind.SpanParsable, fqn) : (ColumnKind.Unsupported, fqn);
         }
 
         private static string BuildTypeKeywords(INamedTypeSymbol symbol)
         {
             var sb = new StringBuilder();
-            if (symbol.IsReadOnly) sb.Append("readonly ");
-            if (symbol.IsRefLikeType) sb.Append("ref ");
+            if (symbol.IsReadOnly)
+            {
+                sb.Append("readonly ");
+            }
+
+            if (symbol.IsRefLikeType)
+            {
+                sb.Append("ref ");
+            }
+
             sb.Append("partial ");
-            if (symbol.IsRecord) sb.Append("record ");
+            if (symbol.IsRecord)
+            {
+                sb.Append("record ");
+            }
+
             sb.Append(symbol.TypeKind == TypeKind.Struct ? "struct" : "class");
             return sb.ToString();
         }
@@ -181,24 +218,37 @@ namespace FixedWidthParser.Generator
                 return;
             }
 
-            bool hasError = false;
+            // Structural errors (geometry) block BOTH generated methods. Per-column-type errors block
+            // only the affected path: FWP003 the char method, FWP007 the byte method.
+            bool structuralError = false;
+            bool charTypeError = false;
+            bool utf8TypeError = false;
             var columns = model.Columns.AsImmutableArray();
             foreach (var column in columns)
             {
-                if (column.Kind == ColumnKind.Unsupported)
+                bool isPrimitive = column.Kind is ColumnKind.String or ColumnKind.Double or ColumnKind.Float;
+                if (!isPrimitive)
                 {
-                    spc.ReportDiagnostic(Diagnostic.Create(UnsupportedColumnType, model.Location, column.Name, column.TypeFqn));
-                    hasError = true;
+                    if (model.ImplementsChar && !column.IsCharParsable)
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(UnsupportedColumnType, model.Location, column.Name, column.TypeFqn));
+                        charTypeError = true;
+                    }
+                    if (model.ImplementsUtf8 && !column.IsUtf8Parsable)
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(UnsupportedUtf8ColumnType, model.Location, column.Name, column.TypeFqn));
+                        utf8TypeError = true;
+                    }
                 }
                 if (column.Start < 0)
                 {
                     spc.ReportDiagnostic(Diagnostic.Create(NegativeStart, model.Location, column.Name, model.TypeName, column.Start));
-                    hasError = true;
+                    structuralError = true;
                 }
                 if (column.Length < 1)
                 {
                     spc.ReportDiagnostic(Diagnostic.Create(InvalidLength, model.Location, column.Name, model.TypeName, column.Length));
-                    hasError = true;
+                    structuralError = true;
                 }
             }
 
@@ -210,7 +260,7 @@ namespace FixedWidthParser.Generator
 
                 var farthest = sorted[0];
                 int maxEnd = farthest.Start + farthest.Length;
-                foreach(ref readonly var current in sorted.AsSpan(1))
+                foreach (ref readonly var current in sorted.AsSpan(1))
                 {
                     if (current.Start < maxEnd)
                     {
@@ -224,7 +274,7 @@ namespace FixedWidthParser.Generator
                             current.Name,
                             current.Start,
                             current.Start + current.Length));
-                        hasError = true;
+                        structuralError = true;
                     }
 
                     int end = current.Start + current.Length;
@@ -235,18 +285,27 @@ namespace FixedWidthParser.Generator
                     }
                 }
             }
-            if (hasError)
+            if (structuralError)
+            {
+                return;
+            }
+
+            bool emitChar = model.ImplementsChar && !charTypeError;
+            bool emitUtf8 = model.ImplementsUtf8 && !utf8TypeError;
+            if (!emitChar && !emitUtf8)
             {
                 return;
             }
 
             string hint = model.FullyQualifiedName.Replace("global::", string.Empty) + ".FixedWidth.g.cs";
-            spc.AddSource(hint, BuildSource(model));
+            spc.AddSource(hint, BuildSource(model, emitChar, emitUtf8));
         }
 
-        private static string BuildSource(ModelInfo model)
+        private const string CharRuntimeFqn = "global::FixedWidthParser.FixedWidthRuntime";
+        private const string Utf8RuntimeFqn = "global::FixedWidthParser.Utf8FixedWidthRuntime";
+
+        private static string BuildSource(ModelInfo model, bool emitChar, bool emitUtf8)
         {
-            var columns = model.Columns.AsImmutableArray();
             var sb = new StringBuilder();
             sb.AppendLine("// <auto-generated/>");
             sb.AppendLine("#nullable enable");
@@ -267,8 +326,35 @@ namespace FixedWidthParser.Generator
             sb.Append(indent).AppendLine("{");
 
             string body = indent + "    ";
+            // Both TryParse overloads (over char / over byte) coexist in one partial; each static
+            // abstract interface member binds implicitly to its matching span element type.
+            if (emitChar)
+            {
+                AppendMethod(sb, body, model, "char", CharRuntimeFqn);
+            }
+            if (emitUtf8)
+            {
+                if (emitChar)
+                {
+                    sb.AppendLine();
+                }
+                AppendMethod(sb, body, model, "byte", Utf8RuntimeFqn);
+            }
+
+            sb.Append(indent).AppendLine("}");
+            if (model.Namespace is not null)
+            {
+                sb.AppendLine("}");
+            }
+            return sb.ToString();
+        }
+
+        private static void AppendMethod(StringBuilder sb, string body, ModelInfo model, string elementType, string runtimeFqn)
+        {
+            var columns = model.Columns.AsImmutableArray();
             sb.Append(body)
-              .Append("public static bool TryParse(global::System.ReadOnlySpan<char> line, global::System.IFormatProvider? formatProvider, global::CommunityToolkit.HighPerformance.Buffers.StringPool? stringPool, out ")
+              .Append("public static bool TryParse(global::System.ReadOnlySpan<").Append(elementType)
+              .Append("> line, global::System.IFormatProvider? formatProvider, global::CommunityToolkit.HighPerformance.Buffers.StringPool? stringPool, out ")
               .Append(model.FullyQualifiedName).AppendLine(" model)");
             sb.Append(body).AppendLine("{");
 
@@ -286,26 +372,21 @@ namespace FixedWidthParser.Generator
                 }
 
                 sb.Append(stmt).Append("if (line.Length < ").Append(maxEnd).AppendLine(") { model = default!; return false; }");
-                AppendParseAndReturn(sb, stmt, model, static c => "line.Slice(" + c.Start + ", " + c.Length + ")");
+                AppendParseAndReturn(sb, stmt, model, runtimeFqn, static c => "line.Slice(" + c.Start + ", " + c.Length + ")");
             }
             else
             {
-                AppendParseAndReturn(sb, stmt, model, static _ => "default");
+                AppendParseAndReturn(sb, stmt, model, runtimeFqn, static _ => "default");
             }
 
             sb.Append(body).AppendLine("}");
-            sb.Append(indent).AppendLine("}");
-            if (model.Namespace is not null)
-            {
-                sb.AppendLine("}");
-            }
-            return sb.ToString();
         }
 
         private static void AppendParseAndReturn(
             StringBuilder sb,
             string stmt,
             ModelInfo model,
+            string runtimeFqn,
             Func<ColumnInfo, string> columnExpression)
         {
             var columns = model.Columns.AsImmutableArray();
@@ -317,18 +398,18 @@ namespace FixedWidthParser.Generator
                 {
                     case ColumnKind.String:
                         sb.Append(stmt).Append("string __v").Append(i)
-                          .Append(" = global::FixedWidthParser.FixedWidthRuntime.String(").Append(col).AppendLine(", stringPool);");
+                          .Append(" = ").Append(runtimeFqn).Append(".String(").Append(col).AppendLine(", stringPool);");
                         break;
                     case ColumnKind.Double:
-                        sb.Append(stmt).Append("if (!global::FixedWidthParser.FixedWidthRuntime.TryDouble(").Append(col)
+                        sb.Append(stmt).Append("if (!").Append(runtimeFqn).Append(".TryDouble(").Append(col)
                           .Append(", formatProvider, out double __v").Append(i).AppendLine(")) { model = default!; return false; }");
                         break;
                     case ColumnKind.Float:
-                        sb.Append(stmt).Append("if (!global::FixedWidthParser.FixedWidthRuntime.TryFloat(").Append(col)
+                        sb.Append(stmt).Append("if (!").Append(runtimeFqn).Append(".TryFloat(").Append(col)
                           .Append(", formatProvider, out float __v").Append(i).AppendLine(")) { model = default!; return false; }");
                         break;
                     case ColumnKind.SpanParsable:
-                        sb.Append(stmt).Append("if (!global::FixedWidthParser.FixedWidthRuntime.TryParse<").Append(c.TypeFqn).Append(">(").Append(col)
+                        sb.Append(stmt).Append("if (!").Append(runtimeFqn).Append(".TryParse<").Append(c.TypeFqn).Append(">(").Append(col)
                           .Append(", formatProvider, out ").Append(c.TypeFqn).Append(" __v").Append(i).AppendLine(")) { model = default!; return false; }");
                         break;
                     default:
@@ -349,33 +430,31 @@ namespace FixedWidthParser.Generator
 
         private enum ColumnKind { String, Double, Float, SpanParsable, Unsupported }
 
-        private readonly struct ColumnInfo : IEquatable<ColumnInfo>
+        private readonly struct ColumnInfo(string name, int start, int length, ColumnKind kind, string typeFqn, bool isCharParsable, bool isUtf8Parsable) : IEquatable<ColumnInfo>
         {
-            public readonly string Name;
-            public readonly int Start;
-            public readonly int Length;
-            public readonly ColumnKind Kind;
-            public readonly string TypeFqn;
-
-            public ColumnInfo(string name, int start, int length, ColumnKind kind, string typeFqn)
-            {
-                Name = name;
-                Start = start;
-                Length = length;
-                Kind = kind;
-                TypeFqn = typeFqn;
-            }
+            public readonly string Name = name;
+            public readonly int Start = start;
+            public readonly int Length = length;
+            public readonly ColumnKind Kind = kind;
+            public readonly string TypeFqn = typeFqn;
+            public readonly bool IsCharParsable = isCharParsable;
+            public readonly bool IsUtf8Parsable = isUtf8Parsable;
 
             public bool Equals(ColumnInfo other)
             {
                 return Start == other.Start
                        && Length == other.Length
                        && Kind == other.Kind
+                       && IsCharParsable == other.IsCharParsable
+                       && IsUtf8Parsable == other.IsUtf8Parsable
                        && string.Equals(Name, other.Name, StringComparison.Ordinal)
                        && string.Equals(TypeFqn, other.TypeFqn, StringComparison.Ordinal);
             }
 
-            public override bool Equals(object? obj) => obj is ColumnInfo other && Equals(other);
+            public override bool Equals(object? obj)
+            {
+                return obj is ColumnInfo other && Equals(other);
+            }
 
             public override int GetHashCode()
             {
@@ -387,44 +466,75 @@ namespace FixedWidthParser.Generator
                     hash = hash * 31 + Length;
                     hash = hash * 31 + (int)Kind;
                     hash = hash * 31 + StringComparer.Ordinal.GetHashCode(TypeFqn);
+                    hash = hash * 31 + (IsCharParsable ? 1 : 0);
+                    hash = hash * 31 + (IsUtf8Parsable ? 1 : 0);
                     return hash;
                 }
             }
         }
 
-        private sealed class ModelInfo
+        private sealed class ModelInfo(string? ns, string typeKeywords, string typeName, string fullyQualifiedName,
+                                       EquatableArray<ColumnInfo> columns, bool isPartial, bool isNested,
+                                       bool implementsChar, bool implementsUtf8, Location location) : IEquatable<ModelInfo>
         {
-            public string? Namespace { get; }
-            public string TypeKeywords { get; }
-            public string TypeName { get; }
-            public string FullyQualifiedName { get; }
-            public EquatableArray<ColumnInfo> Columns { get; }
-            public bool IsPartial { get; }
-            public bool IsNested { get; }
-            public Location Location { get; }
+            public string? Namespace { get; } = ns;
+            public string TypeKeywords { get; } = typeKeywords;
+            public string TypeName { get; } = typeName;
+            public string FullyQualifiedName { get; } = fullyQualifiedName;
+            public EquatableArray<ColumnInfo> Columns { get; } = columns;
+            public bool IsPartial { get; } = isPartial;
+            public bool IsNested { get; } = isNested;
+            public bool ImplementsChar { get; } = implementsChar;
+            public bool ImplementsUtf8 { get; } = implementsUtf8;
+            public Location Location { get; } = location;
 
-            public ModelInfo(string? ns, string typeKeywords, string typeName, string fullyQualifiedName,
-                EquatableArray<ColumnInfo> columns, bool isPartial, bool isNested, Location location)
+            // Value equality (excluding Location, which doesn't affect the emitted source) so the
+            // incremental pipeline caches correctly: toggling a marker or a column type re-runs Emit.
+            public bool Equals(ModelInfo? other)
             {
-                Namespace = ns;
-                TypeKeywords = typeKeywords;
-                TypeName = typeName;
-                FullyQualifiedName = fullyQualifiedName;
-                Columns = columns;
-                IsPartial = isPartial;
-                IsNested = isNested;
-                Location = location;
+                return other is not null
+                       && IsPartial == other.IsPartial
+                       && IsNested == other.IsNested
+                       && ImplementsChar == other.ImplementsChar
+                       && ImplementsUtf8 == other.ImplementsUtf8
+                       && string.Equals(Namespace, other.Namespace, StringComparison.Ordinal)
+                       && string.Equals(TypeKeywords, other.TypeKeywords, StringComparison.Ordinal)
+                       && string.Equals(TypeName, other.TypeName, StringComparison.Ordinal)
+                       && string.Equals(FullyQualifiedName, other.FullyQualifiedName, StringComparison.Ordinal)
+                       && Columns.Equals(other.Columns);
+            }
+
+            public override bool Equals(object? obj)
+            {
+                return Equals(obj as ModelInfo);
+            }
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int hash = 17;
+                    hash = hash * 31 + (Namespace is null ? 0 : StringComparer.Ordinal.GetHashCode(Namespace));
+                    hash = hash * 31 + StringComparer.Ordinal.GetHashCode(TypeKeywords);
+                    hash = hash * 31 + StringComparer.Ordinal.GetHashCode(TypeName);
+                    hash = hash * 31 + StringComparer.Ordinal.GetHashCode(FullyQualifiedName);
+                    hash = hash * 31 + Columns.GetHashCode();
+                    hash = hash * 31 + (IsPartial ? 1 : 0);
+                    hash = hash * 31 + (IsNested ? 1 : 0);
+                    hash = hash * 31 + (ImplementsChar ? 1 : 0);
+                    hash = hash * 31 + (ImplementsUtf8 ? 1 : 0);
+                    return hash;
+                }
             }
         }
 
         /// <summary>Value-equatable wrapper so the incremental pipeline caches correctly.</summary>
-        private readonly struct EquatableArray<T> : IEquatable<EquatableArray<T>> where T : IEquatable<T>
+        private readonly struct EquatableArray<T>(ImmutableArray<T> array) : IEquatable<EquatableArray<T>> where T : IEquatable<T>
         {
-            private readonly ImmutableArray<T> _array;
-
-            public EquatableArray(ImmutableArray<T> array) => _array = array;
-
-            public ImmutableArray<T> AsImmutableArray() => _array.IsDefault ? ImmutableArray<T>.Empty : _array;
+            public ImmutableArray<T> AsImmutableArray()
+            {
+                return array.IsDefault ? ImmutableArray<T>.Empty : array;
+            }
 
             public bool Equals(EquatableArray<T> other)
             {
@@ -444,7 +554,10 @@ namespace FixedWidthParser.Generator
                 return true;
             }
 
-            public override bool Equals(object? obj) => obj is EquatableArray<T> other && Equals(other);
+            public override bool Equals(object? obj)
+            {
+                return obj is EquatableArray<T> other && Equals(other);
+            }
 
             public override int GetHashCode()
             {

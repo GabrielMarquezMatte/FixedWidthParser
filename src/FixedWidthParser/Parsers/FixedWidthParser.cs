@@ -31,9 +31,10 @@ namespace FixedWidthParser.Parsers
                 _buildError = ExceptionDispatchInfo.Capture(ex);
             }
         }
-
-        public FixedWidthParser() => _buildError?.Throw();
-
+        public FixedWidthParser()
+        {
+            _buildError?.Throw();
+        }
         public bool TryParse(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
         {
             if (line.Length < _requiredLineLength)

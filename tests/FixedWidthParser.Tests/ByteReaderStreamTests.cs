@@ -16,7 +16,10 @@ namespace FixedWidthParser.Tests
             "John Doe  30   60000.00  \n" +
             "Jane      28   55000.00  ";
 
-        private static MemoryStream Utf8(string text) => new(Encoding.UTF8.GetBytes(text));
+        private static MemoryStream Utf8(string text)
+        {
+            return new(Encoding.UTF8.GetBytes(text));
+        }
 
         // ----------------------------- Synchronous -----------------------------
 
@@ -137,7 +140,10 @@ namespace FixedWidthParser.Tests
             var reader = new FixedWidthByteReader<CodeModel>();
             using var stream = Utf8("ABC\nDEF\n");
             int count = 0;
-            foreach (var _ in reader.Read(stream)) count++;
+            foreach (var _ in reader.Read(stream))
+            {
+                count++;
+            }
 
             Assert.Equal(2, count);
         }

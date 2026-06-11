@@ -38,7 +38,9 @@ namespace FixedWidthParser.Readers
         /// fails to parse.
         /// </summary>
         public bool TryParse(ReadOnlySpan<byte> line, out TModel model)
-            => _parser.TryParse(line, _formatProvider, _stringPool, out model);
+        {
+            return _parser.TryParse(line, _formatProvider, _stringPool, out model);
+        }
 
         /// <summary>
         /// Reads from a <see cref="Stream"/> (single pass) as raw bytes. <paramref name="leaveOpen"/>

@@ -84,11 +84,17 @@ namespace FixedWidthParser.Readers
         {
             _lines.Return();
 #pragma warning disable IDISP007 // Don't dispose injected
-            if (_ownsReader) _reader?.Dispose();
+            if (_ownsReader)
+            {
+                _reader?.Dispose();
+            }
 #pragma warning restore IDISP007 // Don't dispose injected
             _reader = null;
         }
 
-        public readonly void Reset() => throw new NotSupportedException("Reading is single-pass.");
+        public readonly void Reset()
+        {
+            throw new NotSupportedException("Reading is single-pass.");
+        }
     }
 }

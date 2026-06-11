@@ -6,14 +6,16 @@ namespace FixedWidthParser.Tests
 {
     public class RoundTripTests
     {
-        public static IEnumerable<object[]> PersonCases() =>
-        [
+        public static IEnumerable<object[]> PersonCases()
+        {
+            return [
             ["John Doe", 30, 60000.00],
             ["Alice", 25, 100.50],
             ["Bob", 0, 0.0],
             ["Max", -5, -1234.56],
             ["1234567890", 99999, 9999.99],
         ];
+        }
 
         [Theory]
         [MemberData(nameof(PersonCases))]

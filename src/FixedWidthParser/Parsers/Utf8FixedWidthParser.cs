@@ -43,9 +43,10 @@ namespace FixedWidthParser.Parsers
                 _buildError = ExceptionDispatchInfo.Capture(ex);
             }
         }
-
-        public Utf8FixedWidthParser() => _buildError?.Throw();
-
+        public Utf8FixedWidthParser()
+        {
+            _buildError?.Throw();
+        }
         /// <summary>
         /// Parses a single UTF-8 fixed-width line into <paramref name="model"/>. Returns
         /// <see langword="false"/> when the line is shorter (in bytes) than the configured layout or

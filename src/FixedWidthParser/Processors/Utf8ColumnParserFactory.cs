@@ -1,7 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
-using CommunityToolkit.HighPerformance.Buffers;
 
 namespace FixedWidthParser.Processors
 {

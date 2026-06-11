@@ -62,7 +62,11 @@ namespace Benchmarks.Perf
         {
             _stream.Position = 0;
             int sum = 0;
-            foreach (var model in _reader.Read(_stream, leaveOpen: true)) sum += model.Age;
+            foreach (var model in _reader.Read(_stream, leaveOpen: true))
+            {
+                sum += model.Age;
+            }
+
             return sum;
         }
 
@@ -72,7 +76,11 @@ namespace Benchmarks.Perf
         {
             _stream.Position = 0;
             int sum = 0;
-            foreach (var model in _pooledReader.Read(_stream, leaveOpen: true)) sum += model.Age;
+            foreach (var model in _pooledReader.Read(_stream, leaveOpen: true))
+            {
+                sum += model.Age;
+            }
+
             return sum;
         }
 
@@ -82,7 +90,11 @@ namespace Benchmarks.Perf
         {
             _numericStream.Position = 0;
             int sum = 0;
-            foreach (var model in _numericReader.Read(_numericStream, leaveOpen: true)) sum += model.Age;
+            foreach (var model in _numericReader.Read(_numericStream, leaveOpen: true))
+            {
+                sum += model.Age;
+            }
+
             return sum;
         }
     }

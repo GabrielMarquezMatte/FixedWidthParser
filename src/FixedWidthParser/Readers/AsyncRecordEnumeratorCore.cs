@@ -53,8 +53,15 @@ namespace FixedWidthParser.Readers
 
                 // Synchronous step: spans are confined here, never alive across the await.
                 var result = TryReadFromBuffer();
-                if (result == LineStatus.Line) return true;
-                if (result == LineStatus.End) return false;
+                if (result == LineStatus.Line)
+                {
+                    return true;
+                }
+
+                if (result == LineStatus.End)
+                {
+                    return false;
+                }
 
                 PrepareRefill();
                 int read = await reader
@@ -98,7 +105,10 @@ namespace FixedWidthParser.Readers
         {
             _lines.Return();
 #pragma warning disable IDISP007 // Don't dispose injected
-            if (_ownsReader) _reader?.Dispose();
+            if (_ownsReader)
+            {
+                _reader?.Dispose();
+            }
 #pragma warning restore IDISP007 // Don't dispose injected
             _reader = null;
             return ValueTask.CompletedTask;

@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Parsers;
@@ -264,7 +263,10 @@ namespace FixedWidthParser.Tests
 
         public readonly record struct TempModel
         {
-            public TempModel() => Temp = default;
+            public TempModel()
+            {
+                Temp = default;
+            }
 
             [FixedColumn(0, 4)] public Celsius Temp { get; init; }
         }

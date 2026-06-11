@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Readers;
-using Xunit;
 
 namespace FixedWidthParser.Tests
 {
@@ -32,7 +31,11 @@ namespace FixedWidthParser.Tests
 
             const int n = 10_000;
             long before = GC.GetAllocatedBytesForCurrentThread();
-            for (int i = 0; i < n; i++) _ = reader.Read(stream);
+            for (int i = 0; i < n; i++)
+            {
+                _ = reader.Read(stream);
+            }
+
             double perCall = (GC.GetAllocatedBytesForCurrentThread() - before) / (double)n;
 
             Assert.True(perCall <= 80, $"Read allocated {perCall} B/call (expected ~64 B: enumerable only, no closure).");
@@ -53,10 +56,37 @@ namespace FixedWidthParser.Tests
 
             const int n = 10_000;
             long before = GC.GetAllocatedBytesForCurrentThread();
-            for (int i = 0; i < n; i++) _ = reader.Read(tr);
+            for (int i = 0; i < n; i++)
+            {
+                _ = reader.Read(tr);
+            }
+
             double perCall = (GC.GetAllocatedBytesForCurrentThread() - before) / (double)n;
 
             Assert.True(perCall <= 104, $"Read allocated {perCall} B/call (expected ~88 B: enumerable only, no closure).");
+        }
+
+        /// <summary>
+        /// <see cref="FixedWidthUtf8.Read{TModel}(Stream, bool, IFormatProvider?, StringPool?, int)"/>
+        /// stores the stream directly (like the reflection byte reader), so a call allocates only the
+        /// enumerable object — no captured-variable display class and no delegate.
+        /// </summary>
+        [Fact]
+        public void GeneratedUtf8Read_AllocatesEnumerableOnly_NoClosure()
+        {
+            using var stream = new MemoryStream();
+            _ = FixedWidthUtf8.Read<GenCodeModel>(stream); // warmup/JIT
+
+            const int n = 10_000;
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < n; i++)
+            {
+                _ = FixedWidthUtf8.Read<GenCodeModel>(stream);
+            }
+
+            double perCall = (GC.GetAllocatedBytesForCurrentThread() - before) / (double)n;
+
+            Assert.True(perCall <= 80, $"Read allocated {perCall} B/call (expected ~64 B: enumerable only, no closure).");
         }
 
         private const string Line = "ABC";   // CodeModel/GenCodeModel: [FixedColumn(0, 3)] Code
@@ -66,7 +96,11 @@ namespace FixedWidthParser.Tests
         private static string Repeat(int lines)
         {
             var sb = new StringBuilder((Line.Length + 1) * lines);
-            for (int i = 0; i < lines; i++) sb.Append(Line).Append('\n');
+            for (int i = 0; i < lines; i++)
+            {
+                sb.Append(Line).Append('\n');
+            }
+
             return sb.ToString();
         }
 
@@ -97,11 +131,28 @@ namespace FixedWidthParser.Tests
             Assert.True(perLine <= 1, $"Generated pooled reader regressed to {perLine} B/line (expected ~0).");
         }
 
+        [Fact]
+        public void GeneratedUtf8PooledReader_AllocatesNothingPerLine()
+        {
+            var pool = new StringPool();
+            byte[] small = Encoding.UTF8.GetBytes(Repeat(Small)), large = Encoding.UTF8.GetBytes(Repeat(Large));
+
+            SumGeneratedUtf8(pool, small);
+            SumGeneratedUtf8(pool, large);
+
+            double perLine = MarginalPerLine(() => SumGeneratedUtf8(pool, small), () => SumGeneratedUtf8(pool, large));
+            Assert.True(perLine <= 1, $"Generated UTF-8 pooled reader regressed to {perLine} B/line (expected ~0).");
+        }
+
         private static int SumReflection(FixedWidthReader<CodeModel> reader, string text)
         {
             int total = 0;
             using var sr = new StringReader(text);
-            foreach (var m in reader.Read(sr)) total += m.Code.Length;
+            foreach (var m in reader.Read(sr))
+            {
+                total += m.Code.Length;
+            }
+
             return total;
         }
 
@@ -109,7 +160,23 @@ namespace FixedWidthParser.Tests
         {
             int total = 0;
             using var sr = new StringReader(text);
-            foreach (var m in FixedWidth.Read<GenCodeModel>(sr, CultureInfo.InvariantCulture, pool)) total += m.Code.Length;
+            foreach (var m in FixedWidth.Read<GenCodeModel>(sr, CultureInfo.InvariantCulture, pool))
+            {
+                total += m.Code.Length;
+            }
+
+            return total;
+        }
+
+        private static int SumGeneratedUtf8(StringPool pool, byte[] bytes)
+        {
+            int total = 0;
+            using var ms = new MemoryStream(bytes, writable: false);
+            foreach (var m in FixedWidthUtf8.Read<GenCodeModel>(ms, formatProvider: CultureInfo.InvariantCulture, stringPool: pool))
+            {
+                total += m.Code.Length;
+            }
+
             return total;
         }
 
