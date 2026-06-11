@@ -45,7 +45,7 @@ namespace FixedWidthParser.Readers
 
         public bool MoveNext()
         {
-            var reader = _reader ?? throw new ObjectDisposedException(nameof(RecordEnumeratorCore<TModel, TParser>));
+            var reader = _reader ?? throw new ObjectDisposedException(nameof(RecordEnumeratorCore<,>));
             while (true)
             {
                 var status = _lines.TryGetLine(out var line);

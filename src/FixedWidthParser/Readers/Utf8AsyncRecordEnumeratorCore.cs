@@ -46,7 +46,7 @@ namespace FixedWidthParser.Readers
 
         public async ValueTask<bool> MoveNextAsync()
         {
-            var stream = _stream ?? throw new ObjectDisposedException(nameof(Utf8AsyncRecordEnumeratorCore<TModel>));
+            var stream = _stream ?? throw new ObjectDisposedException(nameof(Utf8AsyncRecordEnumeratorCore<>));
             while (true)
             {
                 _cancellationToken.ThrowIfCancellationRequested();
