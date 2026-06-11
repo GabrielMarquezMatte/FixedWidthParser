@@ -25,17 +25,23 @@ namespace FixedWidthParser
         /// <summary>Parses a <see cref="double"/> column via csFastFloat, honoring the provider's decimal separator.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryDouble(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out double value)
-            => FastDoubleParser.TryParseDouble(column, out value, decimal_separator: CultureHelpers.GetDecimalSeparator(formatProvider));
+        {
+            return FastDoubleParser.TryParseDouble(column, out value, decimal_separator: CultureHelpers.GetDecimalSeparator(formatProvider));
+        }
 
         /// <summary>Parses a <see cref="float"/> column via csFastFloat, honoring the provider's decimal separator.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryFloat(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out float value)
-            => FastFloatParser.TryParseFloat(column, out value, decimal_separator: CultureHelpers.GetDecimalSeparator(formatProvider));
+        {
+            return FastFloatParser.TryParseFloat(column, out value, decimal_separator: CultureHelpers.GetDecimalSeparator(formatProvider));
+        }
 
         /// <summary>Parses any <see cref="ISpanParsable{TSelf}"/> column (int, decimal, DateTime, …), trimming trailing spaces.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryParse<TValue>(ReadOnlySpan<char> column, IFormatProvider? formatProvider, [MaybeNullWhen(false)] out TValue value)
             where TValue : ISpanParsable<TValue>
-            => TValue.TryParse(column.TrimEnd(' '), formatProvider, out value);
+        {
+            return TValue.TryParse(column.TrimEnd(' '), formatProvider, out value);
+        }
     }
 }

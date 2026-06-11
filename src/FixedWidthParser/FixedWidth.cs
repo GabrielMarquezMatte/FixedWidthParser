@@ -14,7 +14,9 @@ namespace FixedWidthParser
         /// <summary>Parses a single fixed-width line into <typeparamref name="TModel"/> using its generated parser.</summary>
         public static bool TryParse<TModel>(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
             where TModel : IFixedWidthModel<TModel>, allows ref struct
-            => TModel.TryParse(line, formatProvider, stringPool, out model);
+        {
+            return TModel.TryParse(line, formatProvider, stringPool, out model);
+        }
 
         /// <summary>Reads source-generated models from an existing <see cref="TextReader"/>.</summary>
         public static GeneratedFixedWidthRecordEnumerable<TModel> Read<TModel>(
@@ -27,7 +29,7 @@ namespace FixedWidthParser
             ArgumentNullException.ThrowIfNull(reader);
             ValidateBufferSize(bufferSize);
             return new GeneratedFixedWidthRecordEnumerable<TModel>(
-                () => reader, ownsReader: false, formatProvider, stringPool, bufferSize);
+                TextReaderSource.FromReader(reader), formatProvider, stringPool, bufferSize);
         }
 
         /// <summary>Reads source-generated models from a <see cref="Stream"/>.</summary>
@@ -44,11 +46,7 @@ namespace FixedWidthParser
             ValidateBufferSize(bufferSize);
             var enc = encoding ?? Encoding.UTF8;
             return new GeneratedFixedWidthRecordEnumerable<TModel>(
-                () => new StreamReader(stream, enc, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize, leaveOpen: leaveOpen),
-                ownsReader: true,
-                formatProvider,
-                stringPool,
-                bufferSize);
+                TextReaderSource.FromStream(stream, enc, leaveOpen), formatProvider, stringPool, bufferSize);
         }
 
         /// <summary>Reads source-generated models from a file, reopening it for each enumeration.</summary>
@@ -64,11 +62,7 @@ namespace FixedWidthParser
             ValidateBufferSize(bufferSize);
             var enc = encoding ?? Encoding.UTF8;
             return new GeneratedFixedWidthRecordEnumerable<TModel>(
-                () => new StreamReader(path, enc, detectEncodingFromByteOrderMarks: true),
-                ownsReader: true,
-                formatProvider,
-                stringPool,
-                bufferSize);
+                TextReaderSource.FromFile(path, enc, useAsync: false), formatProvider, stringPool, bufferSize);
         }
 
         /// <summary>Reads source-generated models from an existing <see cref="TextReader"/> via <c>await foreach</c>.</summary>
@@ -82,7 +76,7 @@ namespace FixedWidthParser
             ArgumentNullException.ThrowIfNull(reader);
             ValidateBufferSize(bufferSize);
             return new GeneratedFixedWidthAsyncRecordEnumerable<TModel>(
-                () => reader, ownsReader: false, formatProvider, stringPool, bufferSize);
+                TextReaderSource.FromReader(reader), formatProvider, stringPool, bufferSize);
         }
 
         /// <summary>Reads source-generated models from a <see cref="Stream"/> via <c>await foreach</c>.</summary>
@@ -99,11 +93,7 @@ namespace FixedWidthParser
             ValidateBufferSize(bufferSize);
             var enc = encoding ?? Encoding.UTF8;
             return new GeneratedFixedWidthAsyncRecordEnumerable<TModel>(
-                () => new StreamReader(stream, enc, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize, leaveOpen: leaveOpen),
-                ownsReader: true,
-                formatProvider,
-                stringPool,
-                bufferSize);
+                TextReaderSource.FromStream(stream, enc, leaveOpen), formatProvider, stringPool, bufferSize);
         }
 
         /// <summary>Reads source-generated models from a file asynchronously, reopening it for each enumeration.</summary>
@@ -119,15 +109,7 @@ namespace FixedWidthParser
             ValidateBufferSize(bufferSize);
             var enc = encoding ?? Encoding.UTF8;
             return new GeneratedFixedWidthAsyncRecordEnumerable<TModel>(
-                () => new StreamReader(
-                    new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize, useAsync: true),
-                    enc,
-                    detectEncodingFromByteOrderMarks: true,
-                    bufferSize: bufferSize),
-                ownsReader: true,
-                formatProvider,
-                stringPool,
-                bufferSize);
+                TextReaderSource.FromFile(path, enc, useAsync: true), formatProvider, stringPool, bufferSize);
         }
 
         private static void ValidateBufferSize(int bufferSize)

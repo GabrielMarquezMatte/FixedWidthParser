@@ -50,7 +50,10 @@ namespace Benchmarks.Perf
             string? line;
             while ((line = await reader.ReadLineAsync().ConfigureAwait(false)) is not null)
             {
-                if (_parser.TryParse(line, Culture, null, out var model)) sum += model.Age;
+                if (_parser.TryParse(line, Culture, null, out var model))
+                {
+                    sum += model.Age;
+                }
             }
             return sum;
         }
@@ -61,7 +64,11 @@ namespace Benchmarks.Perf
         {
             using var reader = new StringReader(_text);
             int sum = 0;
-            await foreach (var model in _reader.ReadAsync(reader).ConfigureAwait(false)) sum += model.Age;
+            await foreach (var model in _reader.ReadAsync(reader).ConfigureAwait(false))
+            {
+                sum += model.Age;
+            }
+
             return sum;
         }
 
@@ -71,7 +78,11 @@ namespace Benchmarks.Perf
         {
             using var reader = new StringReader(_text);
             int sum = 0;
-            await foreach (var model in _pooledReader.ReadAsync(reader).ConfigureAwait(false)) sum += model.Age;
+            await foreach (var model in _pooledReader.ReadAsync(reader).ConfigureAwait(false))
+            {
+                sum += model.Age;
+            }
+
             return sum;
         }
 
@@ -81,7 +92,11 @@ namespace Benchmarks.Perf
         {
             using var reader = new StringReader(_text);
             int sum = 0;
-            await foreach (var model in FixedWidth.ReadAsync<GenSampleModel>(reader, formatProvider: Culture).ConfigureAwait(false)) sum += model.Age;
+            await foreach (var model in FixedWidth.ReadAsync<GenSampleModel>(reader, formatProvider: Culture).ConfigureAwait(false))
+            {
+                sum += model.Age;
+            }
+
             return sum;
         }
 
@@ -91,7 +106,11 @@ namespace Benchmarks.Perf
         {
             using var reader = new StringReader(_text);
             int sum = 0;
-            await foreach (var model in FixedWidth.ReadAsync<GenSampleModel>(reader, formatProvider: Culture, stringPool: _generatedStringPool).ConfigureAwait(false)) sum += model.Age;
+            await foreach (var model in FixedWidth.ReadAsync<GenSampleModel>(reader, formatProvider: Culture, stringPool: _generatedStringPool).ConfigureAwait(false))
+            {
+                sum += model.Age;
+            }
+
             return sum;
         }
     }

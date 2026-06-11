@@ -19,7 +19,7 @@ namespace FixedWidthParser.Readers
         private readonly IFormatProvider? _formatProvider;
         private readonly StringPool? _stringPool;
         private TextReader? _reader;
-        private LineBufferState _lines;
+        private LineBufferState<char, CharLineFormat> _lines;
         private TModel _current;
 
         internal RecordEnumeratorCore(
@@ -45,7 +45,7 @@ namespace FixedWidthParser.Readers
 
         public bool MoveNext()
         {
-            var reader = _reader ?? throw new ObjectDisposedException(nameof(RecordEnumeratorCore<TModel, TParser>));
+            var reader = _reader ?? throw new ObjectDisposedException(nameof(RecordEnumeratorCore<,>));
             while (true)
             {
                 var status = _lines.TryGetLine(out var line);
@@ -84,11 +84,17 @@ namespace FixedWidthParser.Readers
         {
             _lines.Return();
 #pragma warning disable IDISP007 // Don't dispose injected
-            if (_ownsReader) _reader?.Dispose();
+            if (_ownsReader)
+            {
+                _reader?.Dispose();
+            }
 #pragma warning restore IDISP007 // Don't dispose injected
             _reader = null;
         }
 
-        public readonly void Reset() => throw new NotSupportedException("Reading is single-pass.");
+        public readonly void Reset()
+        {
+            throw new NotSupportedException("Reading is single-pass.");
+        }
     }
 }

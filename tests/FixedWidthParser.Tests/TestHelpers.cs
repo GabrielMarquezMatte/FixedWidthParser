@@ -37,6 +37,9 @@ namespace FixedWidthParser.Tests
             return Decode(ms);
         }
 
-        private static string Decode(MemoryStream ms) => Encoding.UTF8.GetString(ms.ToArray());
+        private static string Decode(MemoryStream ms)
+        {
+            return Encoding.UTF8.GetString(ms.ToArray());
+        }
     }
 }

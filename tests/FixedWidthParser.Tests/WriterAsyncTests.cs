@@ -11,12 +11,14 @@ namespace FixedWidthParser.Tests
     /// </summary>
     public class WriterAsyncTests
     {
-        private static PersonModel[] SampleModels() =>
-        [
+        private static PersonModel[] SampleModels()
+        {
+            return [
             new() { Name = "John Doe", Age = 30, Salary = 60000 },
             new() { Name = "Jane",     Age = 28, Salary = 55000 },
             new() { Name = "Max",      Age = 41, Salary = 72000 },
         ];
+        }
 
         [Fact]
         public async Task WriteManyAsync_Stream_MatchesSyncOutput()

@@ -22,7 +22,10 @@ namespace Benchmarks.Perf
             var fixedWidthReader = new FixedWidthReader<SampleModel>(Culture);
             using var reader = new StringReader(Text);
             int sum = 0;
-            foreach (var model in fixedWidthReader.Read(reader)) sum += model.Age;
+            foreach (var model in fixedWidthReader.Read(reader))
+            {
+                sum += model.Age;
+            }
             return sum;
         }
 
@@ -31,7 +34,10 @@ namespace Benchmarks.Perf
         {
             using var reader = new StringReader(Text);
             int sum = 0;
-            foreach (var model in FixedWidth.Read<GenSampleModel>(reader, formatProvider: Culture)) sum += model.Age;
+            foreach (var model in FixedWidth.Read<GenSampleModel>(reader, formatProvider: Culture))
+            {
+                sum += model.Age;
+            }
             return sum;
         }
     }

@@ -1,4 +1,3 @@
-using System.Buffers;
 using CommunityToolkit.HighPerformance.Buffers;
 
 namespace FixedWidthParser.Readers
@@ -20,7 +19,7 @@ namespace FixedWidthParser.Readers
         private readonly StringPool? _stringPool;
         private readonly CancellationToken _cancellationToken;
         private TextReader? _reader;
-        private LineBufferState _lines;
+        private LineBufferState<char, CharLineFormat> _lines;
         private TModel _current;
 
         internal AsyncRecordEnumeratorCore(
@@ -47,15 +46,22 @@ namespace FixedWidthParser.Readers
 
         public async ValueTask<bool> MoveNextAsync()
         {
-            var reader = _reader ?? throw new ObjectDisposedException(nameof(AsyncRecordEnumeratorCore<TModel, TParser>));
+            var reader = _reader ?? throw new ObjectDisposedException(nameof(AsyncRecordEnumeratorCore<,>));
             while (true)
             {
                 _cancellationToken.ThrowIfCancellationRequested();
 
                 // Synchronous step: spans are confined here, never alive across the await.
                 var result = TryReadFromBuffer();
-                if (result == LineStatus.Line) return true;
-                if (result == LineStatus.End) return false;
+                if (result == LineStatus.Line)
+                {
+                    return true;
+                }
+
+                if (result == LineStatus.End)
+                {
+                    return false;
+                }
 
                 PrepareRefill();
                 int read = await reader
@@ -85,7 +91,7 @@ namespace FixedWidthParser.Readers
             if (!_strategy.TryParse(line, _formatProvider, _stringPool, out _current))
             {
                 throw new FormatException(
-                    $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{line.ToString()}\".");
+                    $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{line}\".");
             }
         }
 
@@ -99,7 +105,10 @@ namespace FixedWidthParser.Readers
         {
             _lines.Return();
 #pragma warning disable IDISP007 // Don't dispose injected
-            if (_ownsReader) _reader?.Dispose();
+            if (_ownsReader)
+            {
+                _reader?.Dispose();
+            }
 #pragma warning restore IDISP007 // Don't dispose injected
             _reader = null;
             return ValueTask.CompletedTask;

@@ -11,7 +11,10 @@ namespace FixedWidthParser.Tests
             "John Doe  30   60000.00  \n" +
             "Jane      28   55000.00  ";
 
-        private static MemoryStream Utf8(string text) => new(Encoding.UTF8.GetBytes(text));
+        private static MemoryStream Utf8(string text)
+        {
+            return new(Encoding.UTF8.GetBytes(text));
+        }
 
         // ----------------------------- Stream overloads – sync -----------------------------
 
@@ -213,7 +216,10 @@ namespace FixedWidthParser.Tests
             Assert.True(typeof(GeneratedFixedWidthRecordEnumerable<GenCodeModel>.Enumerator).IsValueType);
 
             int count = 0;
-            foreach (var _ in FixedWidth.Read<GenCodeModel>(new StringReader("ABC\nDEF\n"))) count++;
+            foreach (var _ in FixedWidth.Read<GenCodeModel>(new StringReader("ABC\nDEF\n")))
+            {
+                count++;
+            }
 
             Assert.Equal(2, count);
         }
