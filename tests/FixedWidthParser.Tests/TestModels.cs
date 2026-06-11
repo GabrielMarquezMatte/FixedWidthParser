@@ -125,6 +125,13 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 3)] public string Code;
     }
 
+    /// <summary>No <see cref="FixedColumnAttribute"/> members — invalid layout (must fail on construction).</summary>
+    public struct NoColumnsModel
+    {
+        [ExcludeFromCodeCoverage]
+        public int Ignored { get; set; }
+    }
+
     /// <summary>Adjacent but non-overlapping columns — valid layout (edge case).</summary>
     public readonly record struct AdjacentColumnsModel
     {
