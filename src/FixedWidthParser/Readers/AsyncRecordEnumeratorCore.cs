@@ -1,4 +1,3 @@
-using System.Buffers;
 using CommunityToolkit.HighPerformance.Buffers;
 
 namespace FixedWidthParser.Readers
@@ -20,7 +19,7 @@ namespace FixedWidthParser.Readers
         private readonly StringPool? _stringPool;
         private readonly CancellationToken _cancellationToken;
         private TextReader? _reader;
-        private LineBufferState _lines;
+        private LineBufferState<char, CharLineFormat> _lines;
         private TModel _current;
 
         internal AsyncRecordEnumeratorCore(

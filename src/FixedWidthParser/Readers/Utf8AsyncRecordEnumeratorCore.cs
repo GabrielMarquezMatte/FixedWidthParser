@@ -19,7 +19,7 @@ namespace FixedWidthParser.Readers
         private readonly StringPool? _stringPool;
         private readonly CancellationToken _cancellationToken;
         private Stream? _stream;
-        private Utf8LineBufferState _lines;
+        private LineBufferState<byte, Utf8LineFormat> _lines;
         private TModel _current;
 
         internal Utf8AsyncRecordEnumeratorCore(

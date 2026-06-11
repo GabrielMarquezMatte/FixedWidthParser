@@ -1,8 +1,5 @@
-using System.Linq.Expressions;
-using System.Reflection;
 using System.Runtime.ExceptionServices;
 using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Attributes;
 using FixedWidthParser.Processors;
 
 namespace FixedWidthParser.Parsers
@@ -21,9 +18,8 @@ namespace FixedWidthParser.Parsers
     /// </summary>
     public sealed class Utf8FixedWidthParser<TModel> where TModel : new(), allows ref struct
     {
-        private readonly record struct ColumnParserInfo(int Start, int Length, Utf8ColumnParser<TModel> Parse);
         private static readonly Func<TModel> _modelFactory;
-        private static readonly ColumnParserInfo[] _processors;
+        private static readonly ColumnParserInfo<Utf8ColumnParser<TModel>>[] _processors;
         private static readonly int _requiredLineLength;
         private static readonly ExceptionDispatchInfo? _buildError;
 
@@ -34,9 +30,9 @@ namespace FixedWidthParser.Parsers
         {
             try
             {
-                _modelFactory = BuildModelFactory();
-                _processors = BuildProcessors();
-                _requiredLineLength = ComputeRequiredLineLength(_processors);
+                _modelFactory = ParserBuilder.BuildModelFactory<TModel>();
+                _processors = ParserBuilder.BuildProcessors<TModel, Utf8ColumnParser<TModel>>(Utf8ColumnParserFactory.Create<TModel>);
+                _requiredLineLength = ParserBuilder.ComputeRequiredLineLength(_processors);
                 _buildError = null;
             }
             catch (Exception ex)
@@ -49,48 +45,6 @@ namespace FixedWidthParser.Parsers
         }
 
         public Utf8FixedWidthParser() => _buildError?.Throw();
-
-        private static Func<TModel> BuildModelFactory()
-        {
-            var ctor = typeof(TModel).GetConstructor(Type.EmptyTypes);
-            if (ctor is null)
-            {
-                throw new InvalidOperationException($"Type {typeof(TModel).FullName} must have a parameterless constructor.");
-            }
-            var lambda = Expression.Lambda<Func<TModel>>(Expression.New(ctor));
-            return lambda.Compile();
-        }
-
-        private static ColumnParserInfo[] BuildProcessors()
-        {
-            var processors = new List<ColumnParserInfo>();
-            ModelColumns.ForEachColumn(typeof(TModel), (member, attribute) =>
-                processors.Add(new(attribute.Start, attribute.Length, CreateColumnParser(member))));
-            return processors.ToArray();
-        }
-
-        private static int ComputeRequiredLineLength(ReadOnlySpan<ColumnParserInfo> processors)
-        {
-            int required = 0;
-            foreach (var (Start, Length, _) in processors)
-            {
-                int end = Start + Length;
-                if (end > required)
-                {
-                    required = end;
-                }
-            }
-            return required;
-        }
-
-        private static Utf8ColumnParser<TModel> CreateColumnParser(MemberInfo member)
-        {
-            var (memberType, model, access) = ModelColumns.MemberAccess(typeof(TModel), member);
-            var value = Expression.Parameter(memberType, "value");
-            var actionType = typeof(RefAction<,>).MakeGenericType(typeof(TModel), memberType);
-            var setter = Expression.Lambda(actionType, Expression.Assign(access, value), model, value).Compile();
-            return Utf8ColumnParserFactory.Create<TModel>(memberType, setter);
-        }
 
         /// <summary>
         /// Parses a single UTF-8 fixed-width line into <paramref name="model"/>. Returns
