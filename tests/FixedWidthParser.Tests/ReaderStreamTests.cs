@@ -14,7 +14,10 @@ namespace FixedWidthParser.Tests
             "John Doe  30   60000.00  \n" +
             "Jane      28   55000.00  ";
 
-        private static MemoryStream Utf8(string text) => new(Encoding.UTF8.GetBytes(text));
+        private static MemoryStream Utf8(string text)
+        {
+            return new(Encoding.UTF8.GetBytes(text));
+        }
 
         // ----------------------------- Synchronous -----------------------------
 

@@ -50,7 +50,10 @@ namespace Benchmarks.Perf
             string? line;
             while ((line = reader.ReadLine()) is not null)
             {
-                if (_parser.TryParse(line, Culture, null, out var model)) sum += model.Age;
+                if (_parser.TryParse(line, Culture, null, out var model))
+                {
+                    sum += model.Age;
+                }
             }
             return sum;
         }
@@ -61,7 +64,11 @@ namespace Benchmarks.Perf
         {
             using var reader = new StringReader(_text);
             int sum = 0;
-            foreach (var model in _reader.Read(reader)) sum += model.Age;
+            foreach (var model in _reader.Read(reader))
+            {
+                sum += model.Age;
+            }
+
             return sum;
         }
 
@@ -71,7 +78,11 @@ namespace Benchmarks.Perf
         {
             using var reader = new StringReader(_text);
             int sum = 0;
-            foreach (var model in _pooledReader.Read(reader)) sum += model.Age;
+            foreach (var model in _pooledReader.Read(reader))
+            {
+                sum += model.Age;
+            }
+
             return sum;
         }
 
@@ -81,7 +92,11 @@ namespace Benchmarks.Perf
         {
             using var reader = new StringReader(_text);
             int sum = 0;
-            foreach (var model in FixedWidth.Read<GenSampleModel>(reader, formatProvider: Culture)) sum += model.Age;
+            foreach (var model in FixedWidth.Read<GenSampleModel>(reader, formatProvider: Culture))
+            {
+                sum += model.Age;
+            }
+
             return sum;
         }
 
@@ -91,7 +106,11 @@ namespace Benchmarks.Perf
         {
             using var reader = new StringReader(_text);
             int sum = 0;
-            foreach (var model in FixedWidth.Read<GenSampleModel>(reader, formatProvider: Culture, stringPool: _generatedStringPool)) sum += model.Age;
+            foreach (var model in FixedWidth.Read<GenSampleModel>(reader, formatProvider: Culture, stringPool: _generatedStringPool))
+            {
+                sum += model.Age;
+            }
+
             return sum;
         }
     }

@@ -14,7 +14,9 @@ namespace FixedWidthParser
         /// <summary>Parses a single fixed-width line into <typeparamref name="TModel"/> using its generated parser.</summary>
         public static bool TryParse<TModel>(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
             where TModel : IFixedWidthModel<TModel>, allows ref struct
-            => TModel.TryParse(line, formatProvider, stringPool, out model);
+        {
+            return TModel.TryParse(line, formatProvider, stringPool, out model);
+        }
 
         /// <summary>Reads source-generated models from an existing <see cref="TextReader"/>.</summary>
         public static GeneratedFixedWidthRecordEnumerable<TModel> Read<TModel>(

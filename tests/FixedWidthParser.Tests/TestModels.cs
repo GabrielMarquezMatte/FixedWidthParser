@@ -151,9 +151,16 @@ namespace FixedWidthParser.Tests
         }
 
         [ExcludeFromCodeCoverage]
-        public string ToString(string? format, IFormatProvider? formatProvider) => new('X', count);
+        public string ToString(string? format, IFormatProvider? formatProvider)
+        {
+            return new('X', count);
+        }
+
         [ExcludeFromCodeCoverage]
-        public override string ToString() => new('X', count);
+        public override string ToString()
+        {
+            return new('X', count);
+        }
     }
 
     /// <summary>Single column of a value type that can format wider than the stack buffer.</summary>

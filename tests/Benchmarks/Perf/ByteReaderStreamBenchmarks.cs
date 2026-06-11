@@ -38,7 +38,10 @@ namespace Benchmarks.Perf
         }
 
         [GlobalCleanup]
-        public void Cleanup() => _stream.Dispose();
+        public void Cleanup()
+        {
+            _stream.Dispose();
+        }
 
         /// <summary>Char reader: StreamReader decodes UTF-8 → UTF-16, then span slicing. Baseline.</summary>
         [Benchmark(Baseline = true)]
@@ -46,7 +49,11 @@ namespace Benchmarks.Perf
         {
             _stream.Position = 0;
             int sum = 0;
-            foreach (var model in _charReader.Read(_stream, leaveOpen: true)) sum += model.Age;
+            foreach (var model in _charReader.Read(_stream, leaveOpen: true))
+            {
+                sum += model.Age;
+            }
+
             return sum;
         }
 
@@ -56,7 +63,11 @@ namespace Benchmarks.Perf
         {
             _stream.Position = 0;
             int sum = 0;
-            foreach (var model in _byteReader.Read(_stream, leaveOpen: true)) sum += model.Age;
+            foreach (var model in _byteReader.Read(_stream, leaveOpen: true))
+            {
+                sum += model.Age;
+            }
+
             return sum;
         }
     }

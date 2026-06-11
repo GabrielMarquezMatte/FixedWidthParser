@@ -66,7 +66,10 @@ namespace Benchmarks.Perf
             int sum = 0;
             foreach (var line in _charLines)
             {
-                if (_charParser.TryParse(line, Culture, null, out var model)) sum += model.Age;
+                if (_charParser.TryParse(line, Culture, null, out var model))
+                {
+                    sum += model.Age;
+                }
             }
             return sum;
         }
@@ -79,7 +82,10 @@ namespace Benchmarks.Perf
             foreach (var bytes in _byteLines)
             {
                 var line = Encoding.UTF8.GetString(bytes);
-                if (_charParser.TryParse(line, Culture, null, out var model)) sum += model.Age;
+                if (_charParser.TryParse(line, Culture, null, out var model))
+                {
+                    sum += model.Age;
+                }
             }
             return sum;
         }
@@ -91,7 +97,10 @@ namespace Benchmarks.Perf
             int sum = 0;
             foreach (var bytes in _byteLines)
             {
-                if (_byteParser.TryParse(bytes, Culture, null, out var model)) sum += model.Age;
+                if (_byteParser.TryParse(bytes, Culture, null, out var model))
+                {
+                    sum += model.Age;
+                }
             }
             return sum;
         }

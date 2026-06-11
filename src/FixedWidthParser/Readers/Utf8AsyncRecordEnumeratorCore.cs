@@ -1,19 +1,20 @@
 using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Parsers;
 
 namespace FixedWidthParser.Readers
 {
     /// <summary>
     /// UTF-8 / byte counterpart of <see cref="AsyncRecordEnumeratorCore{TModel, TParser}"/>: reads raw
-    /// bytes from a <see cref="Stream"/> via <c>await foreach</c>. A class (not a struct) because an
-    /// <c>async</c> method captures <c>this</c> by value, which would lose a struct enumerator's state.
-    /// The span scanning happens in a synchronous step; only the buffer refill is awaited, using
-    /// <see cref="Memory{T}"/> (which can cross the <c>await</c>).
+    /// bytes from a <see cref="Stream"/> via <c>await foreach</c>, specialized by a
+    /// <see langword="struct"/> <typeparamref name="TParser"/> strategy (devirtualized parse). A class
+    /// (not a struct) because an <c>async</c> method captures <c>this</c> by value, which would lose a
+    /// struct enumerator's state. The span scanning happens in a synchronous step; only the buffer
+    /// refill is awaited, using <see cref="Memory{T}"/> (which can cross the <c>await</c>).
     /// </summary>
-    public sealed class Utf8AsyncRecordEnumeratorCore<TModel> : IAsyncEnumerator<TModel> where TModel : new()
+    public sealed class Utf8AsyncRecordEnumeratorCore<TModel, TParser> : IAsyncEnumerator<TModel>
+        where TParser : struct, IUtf8LineParser<TModel>
     {
-        private readonly Utf8FixedWidthParser<TModel> _parser;
+        private readonly TParser _strategy;
         private readonly bool _ownsStream;
         private readonly IFormatProvider? _formatProvider;
         private readonly StringPool? _stringPool;
@@ -23,7 +24,7 @@ namespace FixedWidthParser.Readers
         private TModel _current;
 
         internal Utf8AsyncRecordEnumeratorCore(
-            Utf8FixedWidthParser<TModel> parser,
+            TParser strategy,
             Stream stream,
             bool ownsStream,
             IFormatProvider? formatProvider,
@@ -31,7 +32,7 @@ namespace FixedWidthParser.Readers
             int bufferSize,
             CancellationToken cancellationToken)
         {
-            _parser = parser;
+            _strategy = strategy;
             _stream = stream;
             _ownsStream = ownsStream;
             _formatProvider = formatProvider;
@@ -46,15 +47,22 @@ namespace FixedWidthParser.Readers
 
         public async ValueTask<bool> MoveNextAsync()
         {
-            var stream = _stream ?? throw new ObjectDisposedException(nameof(Utf8AsyncRecordEnumeratorCore<>));
+            var stream = _stream ?? throw new ObjectDisposedException(nameof(Utf8AsyncRecordEnumeratorCore<,>));
             while (true)
             {
                 _cancellationToken.ThrowIfCancellationRequested();
 
                 // Synchronous step: spans are confined here, never alive across the await.
                 var result = TryReadFromBuffer();
-                if (result == LineStatus.Line) return true;
-                if (result == LineStatus.End) return false;
+                if (result == LineStatus.Line)
+                {
+                    return true;
+                }
+
+                if (result == LineStatus.End)
+                {
+                    return false;
+                }
 
                 PrepareRefill();
                 int read = await stream
@@ -81,7 +89,7 @@ namespace FixedWidthParser.Readers
 
         private void Parse(ReadOnlySpan<byte> line)
         {
-            if (!_parser.TryParse(line, _formatProvider, _stringPool, out _current))
+            if (!_strategy.TryParse(line, _formatProvider, _stringPool, out _current))
             {
                 throw new FormatException(
                     $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{Encoding.UTF8.GetString(line)}\".");
@@ -98,7 +106,10 @@ namespace FixedWidthParser.Readers
         {
             _lines.Return();
 #pragma warning disable IDISP007 // Don't dispose injected
-            if (_ownsStream) _stream?.Dispose();
+            if (_ownsStream)
+            {
+                _stream?.Dispose();
+            }
 #pragma warning restore IDISP007 // Don't dispose injected
             _stream = null;
             return ValueTask.CompletedTask;
