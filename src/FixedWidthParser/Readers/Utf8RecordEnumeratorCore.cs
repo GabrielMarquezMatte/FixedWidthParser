@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
 
@@ -43,6 +44,7 @@ namespace FixedWidthParser.Readers
         }
 
         public readonly TModel Current => _current;
+        [ExcludeFromCodeCoverage]
         readonly object IEnumerator.Current => _current!;
 
         public bool MoveNext()
@@ -94,6 +96,7 @@ namespace FixedWidthParser.Readers
             _stream = null;
         }
 
+        [ExcludeFromCodeCoverage]
         public readonly void Reset()
         {
             throw new NotSupportedException("Reading is single-pass.");
