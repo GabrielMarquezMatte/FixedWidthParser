@@ -249,7 +249,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void ReadAsync_NullStream_Throws()
         {
-            Assert.Throws<ArgumentNullException>(() => FixedWidthUtf8.ReadAsync<GenCodeModel>(null!));
+            Assert.Throws<ArgumentNullException>(() => FixedWidthUtf8.ReadAsync<GenCodeModel>((Stream)null!));
         }
 
         [Fact]

@@ -1,3 +1,4 @@
+using System.IO.Pipelines;
 using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Parsers;
 
@@ -81,6 +82,20 @@ namespace FixedWidthParser.Readers
             ArgumentException.ThrowIfNullOrEmpty(path);
             return new Utf8FixedWidthAsyncRecordEnumerable<TModel>(
                 _parser, path, _formatProvider, _stringPool, _bufferSize);
+        }
+
+        /// <summary>
+        /// Reads from a <see cref="PipeReader"/> via <c>await foreach</c> (single pass) as raw bytes,
+        /// letting the pipe own buffering and read-ahead. Use this when the source is already a pipe
+        /// (e.g. a Kestrel request body, a socket, or an upstream <c>System.IO.Pipelines</c> stage);
+        /// the configured buffer size does not apply since the pipe manages its own segments.
+        /// <paramref name="leaveOpen"/> controls whether the reader is completed when iteration ends.
+        /// </summary>
+        public Utf8FixedWidthPipeRecordEnumerable<TModel> ReadAsync(PipeReader reader, bool leaveOpen = false)
+        {
+            ArgumentNullException.ThrowIfNull(reader);
+            return new Utf8FixedWidthPipeRecordEnumerable<TModel>(
+                _parser, reader, completeReader: !leaveOpen, _formatProvider, _stringPool);
         }
     }
 }
