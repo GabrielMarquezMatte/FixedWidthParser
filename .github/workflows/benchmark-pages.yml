@@ -48,7 +48,7 @@ jobs:
             filter: Benchmarks.Perf.WriterBenchmarks.*
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -79,7 +79,7 @@ jobs:
             -- --filter "${patterns[@]}" --warmupCount 3 --iterationCount 10
 
       - name: Upload JSON results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bench-json-${{ matrix.group.name }}
           path: BenchmarkDotNet.Artifacts/results/*-report-full.json
@@ -93,7 +93,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download all JSON results
         uses: actions/download-artifact@v4
