@@ -140,6 +140,8 @@ foreach (var person in reader.ReadFile("people.txt"))
 
 `Read(TextReader)` and `Read(Stream, encoding, leaveOpen)` are also available. Reading is lazy and reuses a pooled buffer; lines are sliced directly from the buffer, so the reader does not allocate a string per line. A malformed line throws a `FormatException` carrying the line number.
 
+Empty lines (including a trailing newline at end of file) are skipped: they are counted toward the line number but not yielded as records. A line that is non-empty but shorter than the declared layout is treated as malformed and throws.
+
 The source-generated facade has matching overloads:
 
 ```csharp
@@ -200,6 +202,8 @@ await foreach (var person in FixedWidthUtf8.ReadAsync<GeneratedPerson>(stream, f
 
 Column offsets on the UTF-8 path are byte offsets. That is ideal for the ASCII-style payloads common in flat files; with multi-byte UTF-8 characters, byte offsets and character offsets are not the same.
 
+The byte path supports the same `StringPool` interning as the char path: pass a pool to `FixedWidthByteReader<T>` / the `FixedWidthUtf8` methods (the `stringPool` argument above) and string columns are interned through it; pass `null` to decode a fresh string per value.
+
 ## Writing
 
 ```csharp
@@ -252,6 +256,8 @@ var reader = new FixedWidthReader<Person>(CultureInfo.InvariantCulture, stringPo
 ```
 
 This is a time-vs-memory trade-off: pooling removes repeated string allocations but costs extra CPU for hashing and lookup. Prefer it for GC-sensitive or high-concurrency workloads; skip it for raw throughput.
+
+Pooling applies to both the `char` and UTF-8 byte paths (`FixedWidthReader<T>`/`FixedWidthByteReader<T>` and the `FixedWidth`/`FixedWidthUtf8` facades), and to `ref struct` models. When no pool is supplied, each string column is decoded into a fresh string.
 
 ## Validation
 

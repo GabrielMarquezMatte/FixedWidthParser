@@ -161,6 +161,22 @@ namespace FixedWidthParser.Tests
             Assert.Equal(3.14f, model.Value, 2);
         }
 
+        [Fact]
+        public void Parser_DoubleColumn_NonAsciiSeparatorCulture_Throws()
+        {
+            // The byte parser matches the decimal separator against raw UTF-8 bytes, so a non-ASCII
+            // separator (here U+066B ARABIC DECIMAL SEPARATOR) cannot be represented as a single byte.
+            // It must be rejected with a clear error rather than silently truncated to the wrong byte.
+            var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+            culture.NumberFormat.NumberDecimalSeparator = "٫";
+
+            var parser = new Utf8FixedWidthParser<PersonModel>();
+
+            var ex = Assert.Throws<NotSupportedException>(
+                () => parser.TryParse("Bob       30   1234.50   "u8, culture, null, out _));
+            Assert.Contains("ASCII", ex.Message, StringComparison.Ordinal);
+        }
+
         // ----------------------- Facade -----------------------
 
         [Fact]
