@@ -18,7 +18,7 @@ Instead, use one of the following private channels:
 
 1. **Preferred:** GitHub's private vulnerability reporting —
    [open a report](https://github.com/GabrielMarquezMatte/FixedWidthParser/security/advisories/new).
-2. Email the maintainer at **gabriel.matte@peakinvest.com.br** with the details.
+2. Email the maintainer at **gabrielandremarquez.matte@gmail.com** with the details.
 
 Please include:
 
