@@ -188,5 +188,51 @@ namespace FixedWidthParser.Tests
 
             Assert.Throws<ArgumentNullException>(() => reader.ReadAsync((PipeReader)null!));
         }
+
+        [Fact]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("IDisposableAnalyzers.Correctness", "IDISP016:Don't use disposed instance",
+            Justification = "The test deliberately uses the enumerator after disposal to verify it throws.")]
+        public async Task ReadAsync_Pipe_MoveNextAfterDispose_Throws()
+        {
+            var reader = new FixedWidthByteReader<CodeModel>();
+            var enumerator = reader.ReadAsync(Pipe("ABC\nDEF\n")).GetAsyncEnumerator();
+            await enumerator.DisposeAsync().ConfigureAwait(true);
+
+            await Assert.ThrowsAsync<ObjectDisposedException>(async () => await enumerator.MoveNextAsync().ConfigureAwait(false)).ConfigureAwait(true);
+        }
+
+        [Fact]
+        public async Task ReadAsync_Pipe_AssemblesAcrossManySmallWrites()
+        {
+            // Feeding one byte at a time forces the BOM check and every line to span multiple reads,
+            // exercising the "need more data" paths (both before and within a line).
+            var pipe = new Pipe();
+            var reader = new FixedWidthByteReader<CodeModel>();
+
+            var produce = Task.Run(async () =>
+            {
+                foreach (var b in Encoding.UTF8.GetBytes("ABC\nDEF\n"))
+                {
+                    await pipe.Writer.WriteAsync(new[] { b }).ConfigureAwait(false);
+                    await pipe.Writer.FlushAsync().ConfigureAwait(false);
+                }
+                await pipe.Writer.CompleteAsync().ConfigureAwait(false);
+            });
+
+            var codes = (await CollectAsync(reader.ReadAsync(pipe.Reader)).ConfigureAwait(true)).Select(m => m.Code).ToList();
+            await produce.ConfigureAwait(true);
+
+            Assert.Equal(["ABC", "DEF"], codes);
+        }
+
+        [Fact]
+        public Task ReadAsync_Pipe_UnparseableLine_ThrowsFormat()
+        {
+            var reader = new FixedWidthByteReader<CodeModel>();
+
+            // "A" is shorter than CodeModel's 3-wide column, so the trailing line fails to parse.
+            return Assert.ThrowsAsync<FormatException>(async () =>
+                await CollectAsync(reader.ReadAsync(Pipe("A"))).ConfigureAwait(false));
+        }
     }
 }

@@ -105,6 +105,53 @@ namespace FixedWidthParser.Generator.Tests
             Assert.Empty(result.GeneratedSources);
         }
 
+        [Fact]
+        public void DualMarker_ColumnOnlyCharParsable_EmitsCharMethodOnly_AndReportsFwp007()
+        {
+            // A dual-marked model whose column is ISpanParsable but not IUtf8SpanParsable: FWP007 blocks
+            // ONLY the byte path, so the char TryParse is still emitted (partial emit).
+            var result = Run("""
+                public readonly struct OnlyCharParsable : System.ISpanParsable<OnlyCharParsable>
+                {
+                    public static OnlyCharParsable Parse(System.ReadOnlySpan<char> s, System.IFormatProvider? p) => default;
+                    public static bool TryParse(System.ReadOnlySpan<char> s, System.IFormatProvider? p, out OnlyCharParsable r) { r = default; return true; }
+                    public static OnlyCharParsable Parse(string s, System.IFormatProvider? p) => default;
+                    public static bool TryParse(string? s, System.IFormatProvider? p, out OnlyCharParsable r) { r = default; return true; }
+                }
+
+                public readonly partial record struct DualPartialModel : IFixedWidthModel<DualPartialModel>, IUtf8FixedWidthModel<DualPartialModel>
+                {
+                    [FixedColumn(0, 5)] public OnlyCharParsable Value { get; init; }
+                }
+                """);
+
+            Assert.Contains(result.GeneratorDiagnostics, d => string.Equals(d.Id, "FWP007", StringComparison.Ordinal));
+            var generated = Assert.Single(result.GeneratedSources);
+            Assert.Contains("global::System.ReadOnlySpan<char> line", generated, StringComparison.Ordinal);
+            Assert.DoesNotContain("global::System.ReadOnlySpan<byte> line", generated, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Model_IgnoresStaticAndGetOnlyColumns()
+        {
+            // Static members and get-only properties carrying [FixedColumn] are not settable columns and
+            // are silently skipped; only the settable instance column is generated.
+            var result = Run("""
+                public partial class IgnoringModel : IFixedWidthModel<IgnoringModel>
+                {
+                    [FixedColumn(0, 5)] public string Code { get; set; }
+                    [FixedColumn(5, 5)] public static string Ignored1 { get; set; }
+                    [FixedColumn(10, 5)] public string Ignored2 { get; }
+                }
+                """);
+
+            Assert.Empty(result.GeneratorDiagnostics);
+            var generated = Assert.Single(result.GeneratedSources);
+            Assert.Contains("Code = __v0", generated, StringComparison.Ordinal);
+            Assert.DoesNotContain("Ignored1", generated, StringComparison.Ordinal);
+            Assert.DoesNotContain("Ignored2", generated, StringComparison.Ordinal);
+        }
+
         [Theory]
         [InlineData("""
             public readonly record struct BadModel : IFixedWidthModel<BadModel>
@@ -249,6 +296,102 @@ namespace FixedWidthParser.Generator.Tests
             var generated = Assert.Single(result.GeneratedSources);
             Assert.Contains("partial record class RecordClassModel", generated, StringComparison.Ordinal);
             Assert.Contains("public static bool TryParse", generated, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void IncrementalCaching_UnrelatedChange_ReusesModelOutput()
+        {
+            // Verifies the incremental pipeline caches: an unrelated edit must not re-run source output
+            // for an unchanged model. This exercises the value-equality members (ModelInfo/ColumnInfo/
+            // EquatableArray Equals + GetHashCode) the framework uses to decide whether to recompute.
+            var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview);
+            var compilation = CreateCompilation("""
+                public readonly partial record struct CachedModel : IFixedWidthModel<CachedModel>
+                {
+                    [FixedColumn(0, 5)] public string Code { get; init; }
+                    [FixedColumn(5, 3)] public int Quantity { get; init; }
+                }
+                """, parseOptions);
+
+            var generator = new FixedWidthModelGenerator().AsSourceGenerator();
+            GeneratorDriver driver = CSharpGeneratorDriver.Create(
+                generators: [generator],
+                additionalTexts: null,
+                parseOptions: parseOptions,
+                optionsProvider: null,
+                driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
+
+            driver = driver.RunGenerators(compilation);
+            var first = driver.GetRunResult().Results[0];
+
+            // Add an unrelated type (no base list) so the model's own input is unchanged.
+            var updated = compilation.AddSyntaxTrees(
+                CSharpSyntaxTree.ParseText("namespace GeneratorSmoke { internal sealed class Unrelated { } }", parseOptions));
+            driver = driver.RunGenerators(updated);
+            var second = driver.GetRunResult().Results[0];
+
+            // Identical output across runs, and the source-output step was served from cache.
+            Assert.Equal(
+                first.GeneratedSources.Single().SourceText.ToString(),
+                second.GeneratedSources.Single().SourceText.ToString());
+
+            var reasons = second.TrackedOutputSteps
+                .SelectMany(step => step.Value)
+                .SelectMany(run => run.Outputs)
+                .Select(output => output.Reason);
+            Assert.Contains(IncrementalStepRunReason.Cached, reasons);
+        }
+
+        [Fact]
+        public void IncrementalCaching_ColumnChange_RegeneratesOutput()
+        {
+            // The mirror of the cache-reuse test: a real change to a column must invalidate the cache and
+            // regenerate, exercising the value-equality members' not-equal branches.
+            var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview);
+            var generator = new FixedWidthModelGenerator().AsSourceGenerator();
+            GeneratorDriver driver = CSharpGeneratorDriver.Create(
+                generators: [generator],
+                additionalTexts: null,
+                parseOptions: parseOptions,
+                optionsProvider: null,
+                driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
+
+            driver = driver.RunGenerators(CreateCompilation("""
+                public readonly partial record struct EvolvingModel : IFixedWidthModel<EvolvingModel>
+                {
+                    [FixedColumn(0, 5)] public string Code { get; init; }
+                }
+                """, parseOptions));
+            var first = driver.GetRunResult().Results[0].GeneratedSources.Single().SourceText.ToString();
+
+            driver = driver.RunGenerators(CreateCompilation("""
+                public readonly partial record struct EvolvingModel : IFixedWidthModel<EvolvingModel>
+                {
+                    [FixedColumn(0, 8)] public string Code { get; init; }
+                }
+                """, parseOptions));
+            var second = driver.GetRunResult().Results[0].GeneratedSources.Single().SourceText.ToString();
+
+            Assert.NotEqual(first, second);
+            Assert.Contains("line.Length < 8", second, StringComparison.Ordinal);
+        }
+
+        private static CSharpCompilation CreateCompilation(string modelSource, CSharpParseOptions parseOptions)
+        {
+            string source = """
+                using FixedWidthParser;
+                using FixedWidthParser.Attributes;
+
+                namespace GeneratorSmoke;
+
+                """ + modelSource;
+
+            return CSharpCompilation.Create(
+                "GeneratorSmoke",
+                [CSharpSyntaxTree.ParseText(source, parseOptions)],
+                References.Value,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+                    .WithNullableContextOptions(NullableContextOptions.Enable));
         }
 
         private static GeneratorRunResult Run(string modelSource)

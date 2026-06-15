@@ -41,6 +41,24 @@ namespace FixedWidthParser.Tests
             Assert.Equal(55000.00, people[1].Salary, 2);
         }
 
+        [Fact]
+        public void Read_StructEnumerator_IteratesManually()
+        {
+            // Exercises the public struct Enumerator on GeneratedUtf8FixedWidthRecordEnumerable directly
+            // (GetEnumerator / MoveNext / Current / Dispose) rather than through foreach.
+            using var stream = Utf8(TwoPeople);
+            var enumerable = FixedWidthUtf8.Read<GenPersonModel>(stream, formatProvider: Inv);
+
+            using var enumerator = enumerable.GetEnumerator();
+            var names = new List<string>();
+            while (enumerator.MoveNext())
+            {
+                names.Add(enumerator.Current.Name);
+            }
+
+            Assert.Equal(["John Doe", "Jane"], names);
+        }
+
         [Theory]
         [InlineData("ABC\nDEF\n")]    // LF + trailing newline
         [InlineData("ABC\r\nDEF\r\n")] // CRLF
