@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
@@ -451,11 +452,13 @@ namespace FixedWidthParser.Generator
                        && string.Equals(TypeFqn, other.TypeFqn, StringComparison.Ordinal);
             }
 
+            [ExcludeFromCodeCoverage]
             public override bool Equals(object? obj)
             {
                 return obj is ColumnInfo other && Equals(other);
             }
 
+            [ExcludeFromCodeCoverage]
             public override int GetHashCode()
             {
                 unchecked
@@ -490,6 +493,7 @@ namespace FixedWidthParser.Generator
 
             // Value equality (excluding Location, which doesn't affect the emitted source) so the
             // incremental pipeline caches correctly: toggling a marker or a column type re-runs Emit.
+            [ExcludeFromCodeCoverage]
             public bool Equals(ModelInfo? other)
             {
                 return other is not null
@@ -504,11 +508,13 @@ namespace FixedWidthParser.Generator
                        && Columns.Equals(other.Columns);
             }
 
+            [ExcludeFromCodeCoverage]
             public override bool Equals(object? obj)
             {
                 return Equals(obj as ModelInfo);
             }
 
+            [ExcludeFromCodeCoverage]
             public override int GetHashCode()
             {
                 unchecked
@@ -554,11 +560,13 @@ namespace FixedWidthParser.Generator
                 return true;
             }
 
+            [ExcludeFromCodeCoverage]
             public override bool Equals(object? obj)
             {
                 return obj is EquatableArray<T> other && Equals(other);
             }
 
+            [ExcludeFromCodeCoverage]
             public override int GetHashCode()
             {
                 unchecked
