@@ -25,14 +25,25 @@ jobs:
       fail-fast: false
       matrix:
         group:
+          # Space-separated fully-qualified class patterns.
+          # Each pattern becomes a separate --filter flag (BenchmarkDotNet ORs them).
           - name: parser
-            filter: "*ParserBenchmarks*|*SourceGenParserBenchmarks*|*IntHeavyParser*"
+            filter: >-
+              Benchmarks.Perf.ParserBenchmarks.*
+              Benchmarks.Perf.SourceGenParserBenchmarks.*
+              Benchmarks.Perf.IntHeavyParserBenchmarks.*
           - name: reader
-            filter: "*ReaderBenchmarks*|*ReaderStartupBenchmarks*|*AsyncReader*"
+            filter: >-
+              Benchmarks.Perf.ReaderBenchmarks.*
+              Benchmarks.Perf.ReaderStartupBenchmarks.*
+              Benchmarks.Perf.AsyncReaderBenchmarks.*
           - name: byte
-            filter: "*ByteReader*"
+            filter: >-
+              Benchmarks.Perf.ByteReaderBenchmarks.*
+              Benchmarks.Perf.ByteReaderPoolingBenchmarks.*
+              Benchmarks.Perf.ByteReaderStreamBenchmarks.*
           - name: writer
-            filter: "*WriterBenchmarks*"
+            filter: Benchmarks.Perf.WriterBenchmarks.*
 
     steps:
       - uses: actions/checkout@v4
@@ -49,10 +60,16 @@ jobs:
 
       - name: Run benchmarks
         run: |
+          # Build one --filter arg per space-separated pattern.
+          # Single-quoting the substitution prevents bash glob-expanding the '*'.
+          IFS=' ' read -ra patterns <<< '${{ matrix.group.filter }}'
+          filter_args=()
+          for pattern in "${patterns[@]}"; do
+            filter_args+=(--filter "$pattern")
+          done
           dotnet run --project tests/Benchmarks/Benchmarks.csproj \
             --configuration Release --no-build \
-            -- --filter '${{ matrix.group.filter }}' \
-               --warmupCount 1 --iterationCount 5
+            -- "${filter_args[@]}" --warmupCount 1 --iterationCount 5
 
       - name: Upload markdown results
         uses: actions/upload-artifact@v4
