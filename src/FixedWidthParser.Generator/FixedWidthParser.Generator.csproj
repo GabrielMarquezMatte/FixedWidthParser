@@ -10,6 +10,11 @@
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <!-- Shipped bundled inside the FixedWidthParser package as an analyzer, not as its own package. -->
     <IsPackable>false</IsPackable>
+    <!-- Emit a portable PDB even in Release so code-coverage tooling can instrument the generator.
+         Directory.Build.props sets DebugType=none for Release; override it here. The PDB is not packed
+         (IncludeBuildOutput is false; only the analyzer DLL is added to the package). -->
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
     <!-- Release tracking is for shipped analyzers; not needed for this in-repo generator. -->
     <NoWarn>$(NoWarn);RS2008</NoWarn>
   </PropertyGroup>

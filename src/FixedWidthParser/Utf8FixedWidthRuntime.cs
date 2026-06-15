@@ -28,7 +28,7 @@ namespace FixedWidthParser
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryDouble(ReadOnlySpan<byte> column, IFormatProvider? formatProvider, out double value)
         {
-            return FastDoubleParser.TryParseDouble(column, out value, decimal_separator: (byte)CultureHelpers.GetDecimalSeparator(formatProvider));
+            return FastDoubleParser.TryParseDouble(column, out value, decimal_separator: CultureHelpers.GetDecimalSeparatorByte(formatProvider));
         }
 
 
@@ -36,7 +36,7 @@ namespace FixedWidthParser
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryFloat(ReadOnlySpan<byte> column, IFormatProvider? formatProvider, out float value)
         {
-            return FastFloatParser.TryParseFloat(column, out value, decimal_separator: (byte)CultureHelpers.GetDecimalSeparator(formatProvider));
+            return FastFloatParser.TryParseFloat(column, out value, decimal_separator: CultureHelpers.GetDecimalSeparatorByte(formatProvider));
         }
 
 

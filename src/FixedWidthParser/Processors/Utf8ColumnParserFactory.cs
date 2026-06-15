@@ -10,7 +10,8 @@ namespace FixedWidthParser.Processors
     /// span is sliced (in bytes) by the parser and passed in, so these closures only parse and assign.
     /// The value parser comes from <see cref="Utf8ColumnParserRegistry"/> or, when absent, from the
     /// <see cref="IUtf8SpanParsable{TSelf}"/> fallback. <c>string</c> is special-cased: it never fails
-    /// and is decoded with <see cref="Encoding.UTF8"/> (the byte reader does not pool strings).
+    /// and is decoded with <see cref="Encoding.UTF8"/>, interned through the supplied
+    /// <see cref="CommunityToolkit.HighPerformance.Buffers.StringPool"/> when one is provided.
     /// </summary>
     internal static class Utf8ColumnParserFactory
     {
