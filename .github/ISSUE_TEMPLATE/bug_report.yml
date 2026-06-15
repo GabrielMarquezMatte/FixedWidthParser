@@ -1,0 +1,58 @@
+name: Bug report
+description: Report incorrect parsing, writing, or generator behavior.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! Please provide a **minimal reproduction** — a model class and
+        a sample input line are usually enough.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected instead.
+      placeholder: Parsing column X returns "..." but should return "...".
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Model definition + input + the call you make. This will be rendered as C#.
+      render: csharp
+      placeholder: |
+        public partial class MyModel : IFixedWidthModel<MyModel>
+        {
+            [FixedColumn(0, 10)] public string Name { get; set; }
+        }
+        // input: "John      "
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      description: Which version of FixedWidthParser.NET?
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: path
+    attributes:
+      label: Which path is affected?
+      multiple: true
+      options:
+        - Runtime parser (char)
+        - UTF-8 byte parser
+        - Source generator
+        - Writer
+        - Reader (sync/async)
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS / runtime
+      placeholder: "Windows 11 / .NET 10.0.x"
