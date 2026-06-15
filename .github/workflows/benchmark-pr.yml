@@ -19,8 +19,20 @@ permissions:
 
 jobs:
   benchmark:
-    name: Run & Comment
+    name: Run (${{ matrix.group.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+          - name: parser
+            filter: "*ParserBenchmarks*|*SourceGenParserBenchmarks*|*IntHeavyParser*"
+          - name: reader
+            filter: "*ReaderBenchmarks*|*ReaderStartupBenchmarks*|*AsyncReader*"
+          - name: byte
+            filter: "*ByteReader*"
+          - name: writer
+            filter: "*WriterBenchmarks*"
 
     steps:
       - uses: actions/checkout@v4
@@ -39,18 +51,41 @@ jobs:
         run: |
           dotnet run --project tests/Benchmarks/Benchmarks.csproj \
             --configuration Release --no-build \
-            -- --filter '*' --warmupCount 1 --iterationCount 5
+            -- --filter '${{ matrix.group.filter }}' \
+               --warmupCount 1 --iterationCount 5
 
-      - name: Collect results
-        id: results
+      - name: Upload markdown results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-md-${{ matrix.group.name }}
+          path: BenchmarkDotNet.Artifacts/results/*-report-github.md
+          retention-days: 1
+
+  comment:
+    name: Post PR Comment
+    needs: benchmark
+    # Post partial results even when some shards fail.
+    if: always() && needs.benchmark.result != 'cancelled'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all markdown results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bench-md-*
+          merge-multiple: true
+          path: results/
+
+      - name: Build comment body
+        id: build
         run: |
           {
             echo 'body<<BENCHMARK_EOF'
             echo '## Benchmark Results'
             echo ''
-            echo '_Measured on `ubuntu-latest` (GitHub Actions). Runner noise may affect numbers; use these for relative comparisons, not absolute ones._'
+            echo '_Measured on `ubuntu-latest` (GitHub Actions). Runner noise may affect absolute numbers; use these for relative comparisons within a PR._'
             echo ''
-            for f in BenchmarkDotNet.Artifacts/results/*-report-github.md; do
+            for f in results/*-report-github.md; do
               [ -f "$f" ] || continue
               name=$(basename "$f" -report-github.md)
               echo "### $name"
@@ -65,4 +100,4 @@ jobs:
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: benchmarks
-          message: ${{ steps.results.outputs.body }}
+          message: ${{ steps.build.outputs.body }}
