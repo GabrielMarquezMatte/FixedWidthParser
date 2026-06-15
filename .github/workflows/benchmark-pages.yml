@@ -1,12 +1,12 @@
 name: Benchmarks → GitHub Pages
 
-# Runs on every push to master, publishes benchmark results to GitHub Pages.
+# Runs on every push to master. Benchmark classes are split across parallel
+# runners and the results are merged and published to GitHub Pages.
 #
 # Prerequisites (one-time setup in GitHub repo settings):
 #   Settings → Pages → Source: "Deploy from a branch" → Branch: gh-pages / root
 #
-# The published chart is available at:
-#   https://<owner>.github.io/<repo>/dev/bench/
+# Published chart: https://<owner>.github.io/<repo>/dev/bench/
 
 on:
   push:
@@ -21,8 +21,20 @@ permissions:
 
 jobs:
   benchmark:
-    name: Run & Publish
+    name: Run (${{ matrix.group.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+          - name: parser
+            filter: "*ParserBenchmarks*|*SourceGenParserBenchmarks*|*IntHeavyParser*"
+          - name: reader
+            filter: "*ReaderBenchmarks*|*ReaderStartupBenchmarks*|*AsyncReader*"
+          - name: byte
+            filter: "*ByteReader*"
+          - name: writer
+            filter: "*WriterBenchmarks*"
 
     steps:
       - uses: actions/checkout@v4
@@ -41,14 +53,37 @@ jobs:
         run: |
           dotnet run --project tests/Benchmarks/Benchmarks.csproj \
             --configuration Release --no-build \
-            -- --filter '*' --warmupCount 3 --iterationCount 10
+            -- --filter '${{ matrix.group.filter }}' \
+               --warmupCount 3 --iterationCount 10
 
-      - name: Combine JSON results
+      - name: Upload JSON results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-json-${{ matrix.group.name }}
+          path: BenchmarkDotNet.Artifacts/results/*-report-full.json
+          retention-days: 1
+
+  publish:
+    name: Publish to Pages
+    needs: benchmark
+    # Run even when some matrix shards fail so partial results are still published.
+    if: always() && needs.benchmark.result != 'cancelled'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all JSON results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bench-json-*
+          merge-multiple: true
+          path: results/
+
+      - name: Combine JSON files
         run: |
           jq -s '{
             "Title": "FixedWidthParser Benchmarks",
             "Benchmarks": [.[].Benchmarks[]]
-          }' BenchmarkDotNet.Artifacts/results/*-report-full.json > combined-report.json
+          }' results/*.json > combined-report.json
 
       - name: Publish to GitHub Pages
         uses: benchmark-action/github-action-benchmark@v1
@@ -59,7 +94,7 @@ jobs:
           auto-push: true
           gh-pages-branch: gh-pages
           benchmark-data-dir-path: dev/bench
-          # Alert thresholds — sends a commit comment on master if perf regresses.
+          # Post a commit comment on master when any metric regresses beyond 150%.
           alert-threshold: '150%'
           comment-on-alert: true
           fail-on-alert: false
