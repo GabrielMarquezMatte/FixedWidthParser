@@ -1,6 +1,8 @@
 namespace FixedWidthParser.Formatters
 {
-    public sealed class StringColumnFormatter<TModel>(
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes",
+        Justification = "Instantiated via reflection (Activator.CreateInstance) in FixedWidthWriter.CreateFormatter.")]
+    internal sealed class StringColumnFormatter<TModel>(
         int start, int length, ColumnFormatOptions options, string columnName, RefGetter<TModel, string> getter)
         : IColumnFormatter<TModel>
     {

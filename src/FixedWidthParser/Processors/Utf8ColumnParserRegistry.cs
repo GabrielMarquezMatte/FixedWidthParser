@@ -13,10 +13,21 @@ namespace FixedWidthParser.Processors
     /// the parser (UTF-8 decode, never fails) and is not part of this registry.
     /// </para>
     /// <para>
-    /// Registration is process-wide and must happen before the first use of
-    /// <see cref="Parsers.Utf8FixedWidthParser{TModel}"/> for a given model, since that type caches its
-    /// column parsers in a static constructor. This registry is independent of the <c>char</c>
-    /// <see cref="ColumnParserRegistry"/>; registering a type in one does not affect the other.
+    /// <b>Lifecycle.</b> Registration is process-wide and affects every model. It must happen
+    /// <i>before</i> the first use of <see cref="Parsers.Utf8FixedWidthParser{TModel}"/> for a given
+    /// model: that type resolves and caches its column parsers in a static constructor (once per
+    /// <c>TModel</c>), so a <see cref="Register{TValue}"/> or <see cref="Unregister{TValue}"/> call made
+    /// after a model has first been parsed has <b>no effect</b> on that model's already-cached parsers.
+    /// Register your custom types once at application startup.
+    /// </para>
+    /// <para>
+    /// <b>Thread safety.</b> The backing store is a <see cref="System.Collections.Concurrent.ConcurrentDictionary{TKey,TValue}"/>,
+    /// so individual <see cref="Register{TValue}"/>/<see cref="Unregister{TValue}"/>/lookup calls are
+    /// safe to call concurrently; there is no atomicity across the register-then-first-parse sequence.
+    /// </para>
+    /// <para>
+    /// This registry is independent of the <c>char</c> <see cref="ColumnParserRegistry"/>; registering a
+    /// type in one does not affect the other.
     /// </para>
     /// </summary>
     public static class Utf8ColumnParserRegistry

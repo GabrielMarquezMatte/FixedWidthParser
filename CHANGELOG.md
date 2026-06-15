@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** the internal column formatters `StringColumnFormatter<TModel>` and
+  `SpanFormattableColumnFormatter<TModel, TProperty>` are now `internal` (they were unintentionally
+  `public`). They are implementation details resolved by the writer; the public extension point is the
+  `IColumnFormatter<TModel>` interface. The reader/enumerator strategy types remain `public` because
+  they appear in `GetAsyncEnumerator()` return types (a deliberate allocation-free design choice).
+
 ### Fixed
 - UTF-8 byte parser: a culture whose decimal separator is not a single ASCII character (e.g. the
   Arabic decimal separator U+066B) previously had its separator silently truncated to the wrong
@@ -21,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `StringPool` (identical to the `char` path); the previous "no pooling" note was inaccurate.
 - Documented that empty lines are skipped (counted but not yielded) while a non-empty line shorter
   than the declared layout is treated as malformed and throws.
+- Expanded the `ColumnParserRegistry` / `Utf8ColumnParserRegistry` lifecycle docs: registration must
+  happen before a model is first parsed (parsers are cached per model in a static constructor, so later
+  `Register`/`Unregister` calls do not affect already-built parsers), and the registries are individually
+  thread-safe (backed by a `ConcurrentDictionary`).
 
 ## [1.0.0]
 
