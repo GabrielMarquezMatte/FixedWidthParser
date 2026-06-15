@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Parsers;
 
@@ -71,6 +72,7 @@ namespace FixedWidthParser.Readers
             return GetEnumerator();
         }
 
+        [ExcludeFromCodeCoverage]
         IEnumerator IEnumerable.GetEnumerator()
         {
             return GetEnumerator();
@@ -93,6 +95,7 @@ namespace FixedWidthParser.Readers
             }
 
             public readonly TModel Current => _core.Current;
+            [ExcludeFromCodeCoverage]
             readonly object IEnumerator.Current => _core.Current!;
 
             public bool MoveNext()
@@ -105,6 +108,7 @@ namespace FixedWidthParser.Readers
                 _core.Dispose();
             }
 
+            [ExcludeFromCodeCoverage]
             public readonly void Reset()
             {
                 _core.Reset();
