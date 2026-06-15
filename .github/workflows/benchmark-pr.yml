@@ -119,7 +119,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Post (or update) PR comment
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: benchmarks
           message: ${{ steps.build.outputs.body }}
