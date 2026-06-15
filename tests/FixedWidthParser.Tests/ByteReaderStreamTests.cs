@@ -266,7 +266,7 @@ namespace FixedWidthParser.Tests
         {
             var reader = new FixedWidthByteReader<CodeModel>();
 
-            Assert.Throws<ArgumentNullException>(() => reader.ReadAsync(null!));
+            Assert.Throws<ArgumentNullException>(() => reader.ReadAsync((Stream)null!));
         }
 
         [Fact]

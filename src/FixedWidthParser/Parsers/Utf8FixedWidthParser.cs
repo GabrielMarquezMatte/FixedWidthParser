@@ -13,7 +13,8 @@ namespace FixedWidthParser.Parsers
     /// that fixed-width/flat files almost always use; for content with multi-byte UTF-8 (e.g. accented
     /// characters) a byte offset is not the same as a character offset, so this parser is intended for
     /// single-byte payloads. Non-string columns parse via <see cref="Utf8ColumnParserRegistry"/> /
-    /// <see cref="IUtf8SpanParsable{TSelf}"/>; <c>string</c> columns are UTF-8 decoded (no pooling).
+    /// <see cref="IUtf8SpanParsable{TSelf}"/>; <c>string</c> columns are UTF-8 decoded and, when a
+    /// <see cref="StringPool"/> is supplied, interned through it (otherwise a fresh string per value).
     /// </para>
     /// </summary>
     public sealed class Utf8FixedWidthParser<TModel> where TModel : new(), allows ref struct

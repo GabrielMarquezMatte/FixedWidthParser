@@ -42,6 +42,7 @@ jobs:
               Benchmarks.Perf.ByteReaderBenchmarks.*
               Benchmarks.Perf.ByteReaderPoolingBenchmarks.*
               Benchmarks.Perf.ByteReaderStreamBenchmarks.*
+              Benchmarks.Perf.PipeReaderBenchmarks.*
           - name: writer
             filter: Benchmarks.Perf.WriterBenchmarks.*
 
