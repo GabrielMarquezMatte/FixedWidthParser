@@ -1,5 +1,13 @@
 # FixedWidthParser
 
+[![CI](https://github.com/GabrielMarquezMatte/FixedWidthParser/actions/workflows/ci.yml/badge.svg)](https://github.com/GabrielMarquezMatte/FixedWidthParser/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/GabrielMarquezMatte/FixedWidthParser/actions/workflows/codeql.yml/badge.svg)](https://github.com/GabrielMarquezMatte/FixedWidthParser/actions/workflows/codeql.yml)
+[![codecov](https://codecov.io/gh/GabrielMarquezMatte/FixedWidthParser/branch/master/graph/badge.svg)](https://codecov.io/gh/GabrielMarquezMatte/FixedWidthParser)
+[![NuGet](https://img.shields.io/nuget/v/FixedWidthParser.NET.svg)](https://www.nuget.org/packages/FixedWidthParser.NET)
+[![NuGet downloads](https://img.shields.io/nuget/dt/FixedWidthParser.NET.svg)](https://www.nuget.org/packages/FixedWidthParser.NET)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Benchmarks](https://img.shields.io/badge/benchmarks-GitHub%20Pages-informational)](https://gabrielmarquezmatte.github.io/FixedWidthParser/dev/bench/)
+
 A high-performance, low-allocation library for **parsing and writing fixed-width (flat) files** in .NET 10. Columns are declared with attributes, layouts are validated up front, and the hot paths work over spans so fixed-width records can be parsed, streamed and written without the usual per-line churn.
 
 The package includes both:
