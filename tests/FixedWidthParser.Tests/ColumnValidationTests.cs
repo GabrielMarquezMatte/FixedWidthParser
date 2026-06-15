@@ -38,6 +38,27 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
+        public void Parser_NoColumns_ThrowsOnConstruction()
+        {
+            var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthParser<NoColumnsModel>());
+            Assert.Contains("no [FixedColumn]", ex.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Utf8Parser_NoColumns_ThrowsOnConstruction()
+        {
+            var ex = Assert.Throws<InvalidOperationException>(() => new Utf8FixedWidthParser<NoColumnsModel>());
+            Assert.Contains("no [FixedColumn]", ex.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Writer_NoColumns_ThrowsOnConstruction()
+        {
+            var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthWriter<NoColumnsModel>());
+            Assert.Contains("no [FixedColumn]", ex.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void AdjacentColumns_AreValid()
         {
             // Touching columns (end of one == start of the next) do not overlap.
