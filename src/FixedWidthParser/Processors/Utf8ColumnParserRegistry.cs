@@ -27,9 +27,9 @@ namespace FixedWidthParser.Processors
         static Utf8ColumnParserRegistry()
         {
             Register(static (ReadOnlySpan<byte> span, IFormatProvider? formatProvider, out double value)
-                => FastDoubleParser.TryParseDouble(span, out value, decimal_separator: (byte)CultureHelpers.GetDecimalSeparator(formatProvider)));
+                => FastDoubleParser.TryParseDouble(span, out value, decimal_separator: CultureHelpers.GetDecimalSeparatorByte(formatProvider)));
             Register(static (ReadOnlySpan<byte> span, IFormatProvider? formatProvider, out float value)
-                => FastFloatParser.TryParseFloat(span, out value, decimal_separator: (byte)CultureHelpers.GetDecimalSeparator(formatProvider)));
+                => FastFloatParser.TryParseFloat(span, out value, decimal_separator: CultureHelpers.GetDecimalSeparatorByte(formatProvider)));
         }
 
         /// <summary>Registers (or replaces) the UTF-8 value parser used for columns of type <typeparamref name="TValue"/>.</summary>

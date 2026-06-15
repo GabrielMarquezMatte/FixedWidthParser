@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 
@@ -34,6 +35,34 @@ namespace FixedWidthParser.Processors
                 return memo.Separator;
             }
             return Resolve(formatProvider);
+        }
+
+        /// <summary>
+        /// Decimal separator as a single UTF-8 byte, for the byte-based numeric parsers (csFastFloat's
+        /// byte API on the UTF-8 path). That API matches the separator against raw bytes, so only an
+        /// ASCII separator (&lt;= 0x7F) can be represented as one byte; a non-ASCII separator would be a
+        /// multi-byte sequence in the UTF-8 data and is rejected with a clear error rather than silently
+        /// truncated to the wrong byte.
+        /// </summary>
+        /// <exception cref="NotSupportedException">The culture's decimal separator is not a single ASCII character.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static byte GetDecimalSeparatorByte(IFormatProvider? formatProvider)
+        {
+            char separator = GetDecimalSeparator(formatProvider);
+            if (separator > '\x7F')
+            {
+                ThrowNonAsciiSeparator(separator);
+            }
+            return (byte)separator;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        [DoesNotReturn]
+        private static void ThrowNonAsciiSeparator(char separator)
+        {
+            throw new NotSupportedException(
+                $"The decimal separator '{separator}' (U+{(int)separator:X4}) is not a single ASCII byte. " +
+                "The UTF-8 byte parser only supports ASCII decimal separators; use the char-based parser for this culture.");
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]

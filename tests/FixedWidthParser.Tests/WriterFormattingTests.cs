@@ -95,6 +95,21 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
+        public void Write_ValueThatNeverFits_ThrowsClearError()
+        {
+            var writer = new FixedWidthWriter<WideValueModel>();
+
+            // 1<<21 chars exceeds the formatter's grow ceiling (1<<20), so TryFormat never succeeds.
+            // The grow loop must fail fast with a clear, named error rather than overflowing its size
+            // counter into a negative/huge ArrayPool rent.
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => WriteOne(writer, new WideValueModel { Value = new RepeatedChar(1 << 21) }));
+
+            Assert.Contains(nameof(WideValueModel.Value), ex.Message, StringComparison.Ordinal);
+            Assert.Contains("could not be formatted", ex.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void Write_RightAlignedOverflow_TruncatesKeepingRightmostChars()
         {
             var writer = new FixedWidthWriter<RightTruncateModel>();

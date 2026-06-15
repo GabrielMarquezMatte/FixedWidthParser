@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- UTF-8 byte parser: a culture whose decimal separator is not a single ASCII character (e.g. the
+  Arabic decimal separator U+066B) previously had its separator silently truncated to the wrong
+  byte, mis-parsing `double`/`float` columns. Such cultures now throw a clear `NotSupportedException`
+  on the byte path; use the `char`-based parser for them. ASCII separators (`.`/`,`) are unaffected.
+- Writer: a value whose `ISpanFormattable.TryFormat` never succeeded could overflow the formatter's
+  buffer-growth counter into a negative/huge `ArrayPool` rent. The grow loop is now bounded (1M chars)
+  and throws a clear `InvalidOperationException` naming the column instead.
+
+### Documentation
+- Corrected the UTF-8 byte path docs: `string` columns **are** interned through a supplied
+  `StringPool` (identical to the `char` path); the previous "no pooling" note was inaccurate.
+- Documented that empty lines are skipped (counted but not yielded) while a non-empty line shorter
+  than the declared layout is treated as malformed and throws.
+
 ## [1.0.0]
 
 Initial release.
@@ -26,8 +41,9 @@ Initial release.
   overlapping columns with a clear error.
 - `ref struct` model support on the parser.
 - A bundled Roslyn source generator: models implementing `IFixedWidthModel<TSelf>` get a
-  reflection-free `TryParse` generated at compile time, with diagnostics (FWP001–FWP006) for invalid
-  layouts. Shipped inside the package as an analyzer — no extra package required.
+  reflection-free `TryParse` generated at compile time, with diagnostics (FWP001-FWP007) for invalid
+  layouts and unsupported column types. Shipped inside the package as an analyzer — no extra package
+  required.
 
 [Unreleased]: https://github.com/GabrielMarquezMatte/FixedWidthParser/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/GabrielMarquezMatte/FixedWidthParser/releases/tag/v1.0.0
