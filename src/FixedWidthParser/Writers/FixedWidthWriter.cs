@@ -116,7 +116,7 @@ namespace FixedWidthParser.Writers
             }
         }
         [SkipLocalsInit]
-        public void Write(StreamWriter writer, in TModel model, IFormatProvider? formatProvider)
+        public void Write(StreamWriter writer, in TModel model, IFormatProvider? formatProvider = null)
         {
             if (_lineLength <= 1024)
             {

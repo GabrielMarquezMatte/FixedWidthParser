@@ -29,13 +29,8 @@ namespace FixedWidthParser.Processors
         public static Utf8ColumnParser<TModel> Create<TModel>(Type valueType, Delegate setter)
             where TModel : allows ref struct
         {
-            if (valueType == typeof(string))
-            {
-                return BuildString((RefAction<TModel, string>)setter);
-            }
-            var valueParser = Utf8ColumnParserRegistry.Get(valueType) ?? (Delegate)CreateParsableValueParserMethod.MakeGenericMethod(valueType).Invoke(null, null)!;
-            return (Utf8ColumnParser<TModel>)BuildGenericMethod.MakeGenericMethod(typeof(TModel), valueType)
-                                                               .Invoke(null, [setter, valueParser])!;
+            return ColumnParserFactoryShared.Create<TModel, Utf8ColumnParser<TModel>>(
+                valueType, setter, Utf8ColumnParserRegistry.Get, CreateParsableValueParserMethod, BuildGenericMethod, BuildString);
         }
 
         private static Utf8ColumnValueParser<TValue> CreateParsableValueParser<TValue>() where TValue : IUtf8SpanParsable<TValue>

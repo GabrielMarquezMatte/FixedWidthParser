@@ -1,0 +1,117 @@
+name: Benchmarks → PR Comment
+
+# Runs on every PR push targeting master and develop.
+# Results are posted (and updated) as a sticky comment on the PR only —
+# no data is written to the gh-pages branch or anywhere else shared.
+
+on:
+  pull_request:
+    branches: [master, develop]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: benchmark-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write  # needed to post/update the PR comment
+
+jobs:
+  benchmark:
+    name: Run (${{ matrix.group.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group:
+          # Space-separated fully-qualified class patterns.
+          # Each pattern becomes a separate --filter flag (BenchmarkDotNet ORs them).
+          - name: parser
+            filter: >-
+              Benchmarks.Perf.ParserBenchmarks.*
+              Benchmarks.Perf.SourceGenParserBenchmarks.*
+              Benchmarks.Perf.IntHeavyParserBenchmarks.*
+          - name: reader
+            filter: >-
+              Benchmarks.Perf.ReaderBenchmarks.*
+              Benchmarks.Perf.ReaderStartupBenchmarks.*
+              Benchmarks.Perf.AsyncReaderBenchmarks.*
+          - name: byte
+            filter: >-
+              Benchmarks.Perf.ByteReaderBenchmarks.*
+              Benchmarks.Perf.ByteReaderPoolingBenchmarks.*
+              Benchmarks.Perf.ByteReaderStreamBenchmarks.*
+          - name: writer
+            filter: Benchmarks.Perf.WriterBenchmarks.*
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore tests/Benchmarks/Benchmarks.csproj
+
+      - name: Build (Release)
+        run: dotnet build tests/Benchmarks/Benchmarks.csproj --configuration Release --no-restore
+
+      - name: Run benchmarks
+        run: |
+          # --filter accepts multiple space-separated patterns as values of a
+          # single flag: `--filter Pat1 Pat2 Pat3`.
+          # Single-quoting the substitution prevents bash glob-expanding the '*'.
+          IFS=' ' read -ra patterns <<< '${{ matrix.group.filter }}'
+          dotnet run --project tests/Benchmarks/Benchmarks.csproj \
+            --configuration Release --no-build \
+            -- --filter "${patterns[@]}" --warmupCount 1 --iterationCount 5
+
+      - name: Upload markdown results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-md-${{ matrix.group.name }}
+          path: BenchmarkDotNet.Artifacts/results/*-report-github.md
+          retention-days: 1
+
+  comment:
+    name: Post PR Comment
+    needs: benchmark
+    # Post partial results even when some shards fail.
+    if: always() && needs.benchmark.result != 'cancelled'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all markdown results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bench-md-*
+          merge-multiple: true
+          path: results/
+
+      - name: Build comment body
+        id: build
+        run: |
+          {
+            echo 'body<<BENCHMARK_EOF'
+            echo '## Benchmark Results'
+            echo ''
+            echo '_Measured on `ubuntu-latest` (GitHub Actions). Runner noise may affect absolute numbers; use these for relative comparisons within a PR._'
+            echo ''
+            for f in results/*-report-github.md; do
+              [ -f "$f" ] || continue
+              name=$(basename "$f" -report-github.md)
+              echo "### $name"
+              echo ''
+              cat "$f"
+              echo ''
+            done
+            echo 'BENCHMARK_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post (or update) PR comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: benchmarks
+          message: ${{ steps.build.outputs.body }}

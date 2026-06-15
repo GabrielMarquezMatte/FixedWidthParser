@@ -182,18 +182,17 @@ namespace FixedWidthParser.Readers
             Start = 0;
         }
 
-        internal bool GrowIfFull()
+        internal void GrowIfFull()
         {
             if (End != Buffer.Length)
             {
-                return false;
+                return;
             }
 
             var bigger = ArrayPool<T>.Shared.Rent(Buffer.Length * 2);
             Array.Copy(Buffer, 0, bigger, 0, End);
             ArrayPool<T>.Shared.Return(Buffer);
             Buffer = bigger;
-            return true;
         }
 
         internal void Advance(int read)
