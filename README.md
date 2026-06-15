@@ -22,6 +22,7 @@ The package includes both:
 - **Source-generated parsing** for `partial` models implementing `IFixedWidthModel<TSelf>`.
 - **UTF-8 byte parsing** via `Utf8FixedWidthParser<T>`, `FixedWidthByteReader<T>` and generated `IUtf8FixedWidthModel<TSelf>` models, avoiding `StreamReader` and UTF-16 transcoding for ASCII-style flat files.
 - **Synchronous and asynchronous readers** (`IEnumerable<T>` / `IAsyncEnumerable<T>`) with struct enumerators on the synchronous path.
+- **`System.IO.Pipelines` support** on the byte path: read records straight from a `PipeReader` (`FixedWidthByteReader<T>.ReadAsync(PipeReader)` / `FixedWidthUtf8.ReadAsync<T>(PipeReader)`).
 - **Writing** for single records and batches, synchronous and asynchronous, with `StreamWriter` reuse and `ReadOnlySpan<T>` overloads for zero-allocation output.
 - **Configurable formatting** per column: alignment, padding character, format string and explicit overflow policy.
 - **Culture-aware** numeric parsing/formatting, including `double`/`float` via csFastFloat and generic `ISpanParsable` / `ISpanFormattable` support.
@@ -203,6 +204,34 @@ await foreach (var person in FixedWidthUtf8.ReadAsync<GeneratedPerson>(stream, f
 Column offsets on the UTF-8 path are byte offsets. That is ideal for the ASCII-style payloads common in flat files; with multi-byte UTF-8 characters, byte offsets and character offsets are not the same.
 
 The byte path supports the same `StringPool` interning as the char path: pass a pool to `FixedWidthByteReader<T>` / the `FixedWidthUtf8` methods (the `stringPool` argument above) and string columns are interned through it; pass `null` to decode a fresh string per value.
+
+### Reading from a PipeReader
+
+When the source is already a [`System.IO.Pipelines.PipeReader`](https://learn.microsoft.com/dotnet/standard/io/pipelines) — a Kestrel request body, a socket, a named pipe, or an upstream pipeline stage — you can parse straight off it, letting the pipe own buffering and read-ahead. Both the reflection reader and the generated facade expose a `PipeReader` overload of `ReadAsync`:
+
+```csharp
+using System.IO.Pipelines;
+using System.Globalization;
+using FixedWidthParser;
+using FixedWidthParser.Readers;
+
+// Reflection reader:
+var reader = new FixedWidthByteReader<Person>(CultureInfo.InvariantCulture);
+await foreach (var person in reader.ReadAsync(pipeReader))
+{
+    // parsed from the pipe
+}
+
+// Source-generated facade:
+await foreach (var person in FixedWidthUtf8.ReadAsync<GeneratedPerson>(pipeReader, formatProvider: CultureInfo.InvariantCulture))
+{
+    // ...
+}
+```
+
+Lines are sliced from the pipe's `ReadOnlySequence<byte>` and parsed in place when contiguous, copying into a pooled buffer only when a line spans segment boundaries. The same line semantics apply (BOM skipped once, `\n`/`\r\n`, empty lines skipped, trailing line without a newline yielded). By default the reader is completed when iteration ends; pass `leaveOpen: true` to leave it open.
+
+> **When to use it.** Prefer the `PipeReader` overload when you already hold a pipe. For plain files and streams the `Stream`/file overloads remain the faster default — a `PipeReader` adds per-read overhead that only pays off when there is real I/O to overlap (network, slow disk), not for in-memory or local-file sources.
 
 ## Writing
 
