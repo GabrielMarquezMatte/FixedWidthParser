@@ -1,0 +1,65 @@
+name: Benchmarks → GitHub Pages
+
+# Runs on every push to master, publishes benchmark results to GitHub Pages.
+#
+# Prerequisites (one-time setup in GitHub repo settings):
+#   Settings → Pages → Source: "Deploy from a branch" → Branch: gh-pages / root
+#
+# The published chart is available at:
+#   https://<owner>.github.io/<repo>/dev/bench/
+
+on:
+  push:
+    branches: [master]
+
+concurrency:
+  group: benchmark-pages
+  cancel-in-progress: true
+
+permissions:
+  contents: write   # needed to push data to the gh-pages branch
+
+jobs:
+  benchmark:
+    name: Run & Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore tests/Benchmarks/Benchmarks.csproj
+
+      - name: Build (Release)
+        run: dotnet build tests/Benchmarks/Benchmarks.csproj --configuration Release --no-restore
+
+      - name: Run benchmarks
+        run: |
+          dotnet run --project tests/Benchmarks/Benchmarks.csproj \
+            --configuration Release --no-build \
+            -- --filter '*' --warmupCount 3 --iterationCount 10
+
+      - name: Combine JSON results
+        run: |
+          jq -s '{
+            "Title": "FixedWidthParser Benchmarks",
+            "Benchmarks": [.[].Benchmarks[]]
+          }' BenchmarkDotNet.Artifacts/results/*-report-full.json > combined-report.json
+
+      - name: Publish to GitHub Pages
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: benchmarkdotnet
+          output-file-path: combined-report.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: dev/bench
+          # Alert thresholds — sends a commit comment on master if perf regresses.
+          alert-threshold: '150%'
+          comment-on-alert: true
+          fail-on-alert: false
