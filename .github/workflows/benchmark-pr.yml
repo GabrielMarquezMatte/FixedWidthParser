@@ -1,0 +1,68 @@
+name: Benchmarks → PR Comment
+
+# Runs on every PR push targeting master and develop.
+# Results are posted (and updated) as a sticky comment on the PR only —
+# no data is written to the gh-pages branch or anywhere else shared.
+
+on:
+  pull_request:
+    branches: [master, develop]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: benchmark-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write  # needed to post/update the PR comment
+
+jobs:
+  benchmark:
+    name: Run & Comment
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore tests/Benchmarks/Benchmarks.csproj
+
+      - name: Build (Release)
+        run: dotnet build tests/Benchmarks/Benchmarks.csproj --configuration Release --no-restore
+
+      - name: Run benchmarks
+        run: |
+          dotnet run --project tests/Benchmarks/Benchmarks.csproj \
+            --configuration Release --no-build \
+            -- --filter '*' --warmupCount 1 --iterationCount 5
+
+      - name: Collect results
+        id: results
+        run: |
+          {
+            echo 'body<<BENCHMARK_EOF'
+            echo '## Benchmark Results'
+            echo ''
+            echo '_Measured on `ubuntu-latest` (GitHub Actions). Runner noise may affect numbers; use these for relative comparisons, not absolute ones._'
+            echo ''
+            for f in BenchmarkDotNet.Artifacts/results/*-report-github.md; do
+              [ -f "$f" ] || continue
+              name=$(basename "$f" -report-github.md)
+              echo "### $name"
+              echo ''
+              cat "$f"
+              echo ''
+            done
+            echo 'BENCHMARK_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post (or update) PR comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: benchmarks
+          message: ${{ steps.results.outputs.body }}
