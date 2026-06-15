@@ -18,8 +18,12 @@ permissions:
 
 jobs:
   test:
-    name: Build & Test
-    runs-on: ubuntu-latest
+    name: Build & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - name: Checkout
@@ -30,13 +34,24 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Cache restored NuGet packages keyed on the project/props files.
+      # (setup-dotnet's built-in cache needs a packages.lock.json, which this repo
+      # does not use, so we cache the global packages folder directly.)
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
       - name: Restore
         run: dotnet restore FixedWidthParser.slnx
 
       - name: Build (Release)
         run: dotnet build FixedWidthParser.slnx --configuration Release --no-restore
 
-      - name: Test (Release)
+      - name: Test (Release) + collect coverage
         run: >-
           dotnet test FixedWidthParser.slnx
           --configuration Release
@@ -44,11 +59,46 @@ jobs:
           --verbosity normal
           --logger "trx;LogFileName=test-results.trx"
           --results-directory ./TestResults
+          --collect:"XPlat Code Coverage"
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: ./TestResults/*.trx
+          name: test-results-${{ matrix.os }}
+          path: ./TestResults/**/*.trx
           if-no-files-found: ignore
+
+      # Coverage is uploaded once, from the Linux leg only, to avoid duplicate reports.
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./TestResults/**/coverage.cobertura.xml
+          fail_ci_if_error: false
+
+  # Surfaces vulnerable transitive/direct packages regardless of NoWarn suppressions
+  # in Directory.Build.props (NU190x warnings are silenced there).
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore FixedWidthParser.slnx
+
+      - name: Check for vulnerable packages
+        run: |
+          echo "Scanning for known-vulnerable packages…"
+          output=$(dotnet list FixedWidthParser.slnx package --vulnerable --include-transitive)
+          echo "$output"
+          if echo "$output" | grep -q -E '\b(High|Critical)\b'; then
+            echo "::error::High or Critical severity vulnerability found in dependencies."
+            exit 1
+          fi
