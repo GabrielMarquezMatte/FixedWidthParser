@@ -60,16 +60,13 @@ jobs:
 
       - name: Run benchmarks
         run: |
-          # Build one --filter arg per space-separated pattern.
+          # --filter accepts multiple space-separated patterns as values of a
+          # single flag: `--filter Pat1 Pat2 Pat3`.
           # Single-quoting the substitution prevents bash glob-expanding the '*'.
           IFS=' ' read -ra patterns <<< '${{ matrix.group.filter }}'
-          filter_args=()
-          for pattern in "${patterns[@]}"; do
-            filter_args+=(--filter "$pattern")
-          done
           dotnet run --project tests/Benchmarks/Benchmarks.csproj \
             --configuration Release --no-build \
-            -- "${filter_args[@]}" --warmupCount 1 --iterationCount 5
+            -- --filter "${patterns[@]}" --warmupCount 1 --iterationCount 5
 
       - name: Upload markdown results
         uses: actions/upload-artifact@v4
