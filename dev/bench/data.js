@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1781506601110,
+  "lastUpdate": 1781534577565,
   "repoUrl": "https://github.com/GabrielMarquezMatte/FixedWidthParser",
   "entries": {
     "Benchmark": [
@@ -378,6 +378,384 @@ window.BENCHMARK_DATA = {
             "value": 141391.78979492188,
             "unit": "ns",
             "range": "± 290.49142570495917"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "gabrielandremarquez.matte@gmail.com",
+            "name": "Gabriel Matte",
+            "username": "GabrielMarquezMatte"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "365dd3b5bbf9b20da4d218018b4739c43190aed7",
+          "message": "Merge pull request #6 from GabrielMarquezMatte/develop\n\nfeat: add EditorConfig, issue templates, and CI/CD workflows for impr…",
+          "timestamp": "2026-06-15T11:37:07-03:00",
+          "tree_id": "34784d0d490ee76fc1b75f636441f33c2d428bab",
+          "url": "https://github.com/GabrielMarquezMatte/FixedWidthParser/commit/365dd3b5bbf9b20da4d218018b4739c43190aed7"
+        },
+        "date": 1781534577282,
+        "tool": "benchmarkdotnet",
+        "benches": [
+          {
+            "name": "Benchmarks.Perf.AsyncReaderBenchmarks.GeneratedReader_ReadAsync(Count: 100)",
+            "value": 5425.841876029968,
+            "unit": "ns",
+            "range": "± 3.888400836224885"
+          },
+          {
+            "name": "Benchmarks.Perf.AsyncReaderBenchmarks.Naive_ReadLineAsync(Count: 100)",
+            "value": 7053.788059997559,
+            "unit": "ns",
+            "range": "± 102.18779671392952"
+          },
+          {
+            "name": "Benchmarks.Perf.AsyncReaderBenchmarks.SpanReader_ReadAsync(Count: 100)",
+            "value": 7556.022347344293,
+            "unit": "ns",
+            "range": "± 18.548939922555036"
+          },
+          {
+            "name": "Benchmarks.Perf.AsyncReaderBenchmarks.GeneratedReader_ReadAsync_Pooled(Count: 100)",
+            "value": 10022.458414713541,
+            "unit": "ns",
+            "range": "± 15.072073885188653"
+          },
+          {
+            "name": "Benchmarks.Perf.AsyncReaderBenchmarks.SpanReader_ReadAsync_Pooled(Count: 100)",
+            "value": 11482.230963134765,
+            "unit": "ns",
+            "range": "± 31.24176989808192"
+          },
+          {
+            "name": "Benchmarks.Perf.AsyncReaderBenchmarks.GeneratedReader_ReadAsync(Count: 1000)",
+            "value": 53483.63941040039,
+            "unit": "ns",
+            "range": "± 113.20035722726765"
+          },
+          {
+            "name": "Benchmarks.Perf.AsyncReaderBenchmarks.Naive_ReadLineAsync(Count: 1000)",
+            "value": 69106.75161132813,
+            "unit": "ns",
+            "range": "± 964.6710220307316"
+          },
+          {
+            "name": "Benchmarks.Perf.AsyncReaderBenchmarks.SpanReader_ReadAsync(Count: 1000)",
+            "value": 72181.12121582031,
+            "unit": "ns",
+            "range": "± 97.2351061937393"
+          },
+          {
+            "name": "Benchmarks.Perf.AsyncReaderBenchmarks.GeneratedReader_ReadAsync_Pooled(Count: 1000)",
+            "value": 94334.761328125,
+            "unit": "ns",
+            "range": "± 154.94505925827795"
+          },
+          {
+            "name": "Benchmarks.Perf.AsyncReaderBenchmarks.SpanReader_ReadAsync_Pooled(Count: 1000)",
+            "value": 119041.7568359375,
+            "unit": "ns",
+            "range": "± 164.868625837301"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderBenchmarks.CharParser_Parse(Count: 100)",
+            "value": 4685.220668792725,
+            "unit": "ns",
+            "range": "± 9.983026986695767"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderBenchmarks.ByteParser_Parse(Count: 100)",
+            "value": 5180.9491539001465,
+            "unit": "ns",
+            "range": "± 17.35099355970812"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderBenchmarks.CharParser_Parse_AfterUtf8Decode(Count: 100)",
+            "value": 6694.766918182373,
+            "unit": "ns",
+            "range": "± 14.737826802077661"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderBenchmarks.CharParser_Parse(Count: 1000)",
+            "value": 46221.39039916992,
+            "unit": "ns",
+            "range": "± 87.75816736195155"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderBenchmarks.ByteParser_Parse(Count: 1000)",
+            "value": 53235.65180799696,
+            "unit": "ns",
+            "range": "± 127.90420185125082"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderBenchmarks.CharParser_Parse_AfterUtf8Decode(Count: 1000)",
+            "value": 66737.30627441406,
+            "unit": "ns",
+            "range": "± 967.4518189666979"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderPoolingBenchmarks.NoString(Count: 100)",
+            "value": 4003.375768280029,
+            "unit": "ns",
+            "range": "± 3.8101488138664905"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderPoolingBenchmarks.WithString_NoPool(Count: 100)",
+            "value": 6170.012501186795,
+            "unit": "ns",
+            "range": "± 15.110492722969479"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderPoolingBenchmarks.WithString_Pooled(Count: 100)",
+            "value": 13969.142810397678,
+            "unit": "ns",
+            "range": "± 26.293032347423523"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderPoolingBenchmarks.NoString(Count: 1000)",
+            "value": 39157.709275987414,
+            "unit": "ns",
+            "range": "± 21.58252894042987"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderPoolingBenchmarks.WithString_NoPool(Count: 1000)",
+            "value": 63621.23541937934,
+            "unit": "ns",
+            "range": "± 102.98413895889934"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderPoolingBenchmarks.WithString_Pooled(Count: 1000)",
+            "value": 139694.8930175781,
+            "unit": "ns",
+            "range": "± 1417.6260278511393"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderStreamBenchmarks.ByteReader_Read(Count: 100)",
+            "value": 5813.624204254151,
+            "unit": "ns",
+            "range": "± 10.234856797377695"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderStreamBenchmarks.CharReader_Read(Count: 100)",
+            "value": 6104.551345825195,
+            "unit": "ns",
+            "range": "± 19.85997278389228"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderStreamBenchmarks.ByteReader_Read(Count: 1000)",
+            "value": 60658.01577148437,
+            "unit": "ns",
+            "range": "± 241.0133672881335"
+          },
+          {
+            "name": "Benchmarks.Perf.ByteReaderStreamBenchmarks.CharReader_Read(Count: 1000)",
+            "value": 60695.40968322754,
+            "unit": "ns",
+            "range": "± 85.89439970422373"
+          },
+          {
+            "name": "Benchmarks.Perf.ParserBenchmarks.Parse_NoPool(Line: \"Jane Smith 28   55000.00 \")",
+            "value": 50.06170801818371,
+            "unit": "ns",
+            "range": "± 0.036035240442761955"
+          },
+          {
+            "name": "Benchmarks.Perf.ParserBenchmarks.Parse_WithStringPool(Line: \"Jane Smith 28   55000.00 \")",
+            "value": 78.53575213750203,
+            "unit": "ns",
+            "range": "± 0.10167648942719822"
+          },
+          {
+            "name": "Benchmarks.Perf.ParserBenchmarks.Parse_NoPool(Line: \"John Doe   30   60000.00 \")",
+            "value": 53.7081088953548,
+            "unit": "ns",
+            "range": "± 0.4189624512745925"
+          },
+          {
+            "name": "Benchmarks.Perf.ParserBenchmarks.Parse_WithStringPool(Line: \"John Doe   30   60000.00 \")",
+            "value": 71.85023950205908,
+            "unit": "ns",
+            "range": "± 0.07386529516623892"
+          },
+          {
+            "name": "Benchmarks.Perf.ReaderBenchmarks.GeneratedReader_Read(Count: 100)",
+            "value": 4211.690056800842,
+            "unit": "ns",
+            "range": "± 2.1911588866116296"
+          },
+          {
+            "name": "Benchmarks.Perf.ReaderBenchmarks.SpanReader_Read(Count: 100)",
+            "value": 5461.633589850531,
+            "unit": "ns",
+            "range": "± 7.41216785997112"
+          },
+          {
+            "name": "Benchmarks.Perf.ReaderBenchmarks.Naive_ReadLine(Count: 100)",
+            "value": 5875.990509033203,
+            "unit": "ns",
+            "range": "± 11.096575797685492"
+          },
+          {
+            "name": "Benchmarks.Perf.ReaderBenchmarks.GeneratedReader_Read_Pooled(Count: 100)",
+            "value": 8630.752735900878,
+            "unit": "ns",
+            "range": "± 19.649591200124306"
+          },
+          {
+            "name": "Benchmarks.Perf.ReaderBenchmarks.SpanReader_Read_Pooled(Count: 100)",
+            "value": 9943.843788994684,
+            "unit": "ns",
+            "range": "± 17.036203992288325"
+          },
+          {
+            "name": "Benchmarks.Perf.ReaderBenchmarks.GeneratedReader_Read(Count: 1000)",
+            "value": 42677.27515258789,
+            "unit": "ns",
+            "range": "± 67.51200769970434"
+          },
+          {
+            "name": "Benchmarks.Perf.ReaderBenchmarks.SpanReader_Read(Count: 1000)",
+            "value": 52715.70299530029,
+            "unit": "ns",
+            "range": "± 117.80859134388662"
+          },
+          {
+            "name": "Benchmarks.Perf.ReaderBenchmarks.Naive_ReadLine(Count: 1000)",
+            "value": 59263.523634168836,
+            "unit": "ns",
+            "range": "± 264.4498175750861"
+          },
+          {
+            "name": "Benchmarks.Perf.ReaderBenchmarks.GeneratedReader_Read_Pooled(Count: 1000)",
+            "value": 83159.64979248047,
+            "unit": "ns",
+            "range": "± 259.5627253864134"
+          },
+          {
+            "name": "Benchmarks.Perf.ReaderBenchmarks.SpanReader_Read_Pooled(Count: 1000)",
+            "value": 97574.47402615017,
+            "unit": "ns",
+            "range": "± 87.94560892347039"
+          },
+          {
+            "name": "Benchmarks.Perf.ReaderStartupBenchmarks.GeneratedReader_ReadOne",
+            "value": 95.42233635319604,
+            "unit": "ns",
+            "range": "± 0.07030251751392358"
+          },
+          {
+            "name": "Benchmarks.Perf.ReaderStartupBenchmarks.ReflectionReader_ConstructAndReadOne",
+            "value": 127.53021907806396,
+            "unit": "ns",
+            "range": "± 0.12605821525213978"
+          },
+          {
+            "name": "Benchmarks.Perf.SourceGenParserBenchmarks.Reflection(Line: \"John Doe  30   6000000.00\")",
+            "value": 48.7518342534701,
+            "unit": "ns",
+            "range": "± 0.11623461014429752"
+          },
+          {
+            "name": "Benchmarks.Perf.SourceGenParserBenchmarks.Generated(Line: \"John Doe  30   6000000.00\")",
+            "value": 50.48127063512802,
+            "unit": "ns",
+            "range": "± 0.12895384871622054"
+          },
+          {
+            "name": "Benchmarks.Perf.WriterBenchmarks.WriteMany_ReuseWriterSpan(Count: 1)",
+            "value": 119.48545289039612,
+            "unit": "ns",
+            "range": "± 0.08844077385523223"
+          },
+          {
+            "name": "Benchmarks.Perf.WriterBenchmarks.WriteMany_ReuseWriter(Count: 1)",
+            "value": 119.80607197284698,
+            "unit": "ns",
+            "range": "± 0.3527889248750615"
+          },
+          {
+            "name": "Benchmarks.Perf.WriterBenchmarks.WriteMany_AsyncReuseWriter(Count: 1)",
+            "value": 177.39463464419046,
+            "unit": "ns",
+            "range": "± 0.41607966961492815"
+          },
+          {
+            "name": "Benchmarks.Perf.WriterBenchmarks.WriteMany_NewStream(Count: 1)",
+            "value": 273.2026673316956,
+            "unit": "ns",
+            "range": "± 9.494331851699107"
+          },
+          {
+            "name": "Benchmarks.Perf.WriterBenchmarks.WriteMany_AsyncNewStream(Count: 1)",
+            "value": 552.4711515426636,
+            "unit": "ns",
+            "range": "± 10.827537536884286"
+          },
+          {
+            "name": "Benchmarks.Perf.WriterBenchmarks.WriteMany_ReuseWriter(Count: 100)",
+            "value": 12491.831337822809,
+            "unit": "ns",
+            "range": "± 64.78082322780661"
+          },
+          {
+            "name": "Benchmarks.Perf.WriterBenchmarks.WriteMany_ReuseWriterSpan(Count: 100)",
+            "value": 12780.007148742676,
+            "unit": "ns",
+            "range": "± 8.278267180062679"
+          },
+          {
+            "name": "Benchmarks.Perf.WriterBenchmarks.WriteMany_NewStream(Count: 100)",
+            "value": 13397.39235534668,
+            "unit": "ns",
+            "range": "± 31.758984933888286"
+          },
+          {
+            "name": "Benchmarks.Perf.WriterBenchmarks.WriteMany_AsyncReuseWriter(Count: 100)",
+            "value": 14231.267956203885,
+            "unit": "ns",
+            "range": "± 31.60387238501361"
+          },
+          {
+            "name": "Benchmarks.Perf.WriterBenchmarks.WriteMany_AsyncNewStream(Count: 100)",
+            "value": 14631.192993164062,
+            "unit": "ns",
+            "range": "± 56.24682282322688"
+          },
+          {
+            "name": "Benchmarks.Perf.WriterBenchmarks.WriteMany_ReuseWriterSpan(Count: 1000)",
+            "value": 124514.32162475586,
+            "unit": "ns",
+            "range": "± 164.75539750829762"
+          },
+          {
+            "name": "Benchmarks.Perf.WriterBenchmarks.WriteMany_ReuseWriter(Count: 1000)",
+            "value": 125095.48977661133,
+            "unit": "ns",
+            "range": "± 99.31161107788368"
+          },
+          {
+            "name": "Benchmarks.Perf.WriterBenchmarks.WriteMany_NewStream(Count: 1000)",
+            "value": 127313.84318033855,
+            "unit": "ns",
+            "range": "± 254.11315441018476"
+          },
+          {
+            "name": "Benchmarks.Perf.WriterBenchmarks.WriteMany_AsyncNewStream(Count: 1000)",
+            "value": 142526.91793823242,
+            "unit": "ns",
+            "range": "± 242.06136117625"
+          },
+          {
+            "name": "Benchmarks.Perf.WriterBenchmarks.WriteMany_AsyncReuseWriter(Count: 1000)",
+            "value": 149666.57497829862,
+            "unit": "ns",
+            "range": "± 318.7569018572843"
           }
         ]
       }
