@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `System.IO.Pipelines` integration on the UTF-8 byte path: `FixedWidthByteReader<T>.ReadAsync(PipeReader)`
+  (reflection) and `FixedWidthUtf8.ReadAsync<T>(PipeReader)` (source-generated) stream records straight
+  off a `PipeReader` via `await foreach`. Lines are sliced from the `ReadOnlySequence<byte>` and parsed in
+  place when contiguous, copied into a pooled scratch buffer only when they span segments. Intended for
+  sources that are already pipes (Kestrel request bodies, sockets, upstream pipeline stages); for plain
+  files/streams the existing `Stream` overloads remain the faster default (see `PipeReaderBenchmarks`).
+
 ### Changed
 - **Breaking:** the internal column formatters `StringColumnFormatter<TModel>` and
   `SpanFormattableColumnFormatter<TModel, TProperty>` are now `internal` (they were unintentionally
