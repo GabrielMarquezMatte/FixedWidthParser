@@ -15,7 +15,7 @@ namespace FixedWidthParser.Processors
             public readonly char Separator = separator;
         }
 
-        private static Memo? _memo;
+        private static volatile Memo? _memo;
 
         /// <summary>
         /// Decimal separator derived from the IFormatProvider (dot when null). Used by the

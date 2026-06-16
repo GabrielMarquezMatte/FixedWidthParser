@@ -37,7 +37,7 @@ namespace FixedWidthParser.Processors
         private static Utf8ColumnValueParser<TValue> CreateParsableValueParser<TValue>() where TValue : IUtf8SpanParsable<TValue>
         {
             return static (span, formatProvider, [MaybeNullWhen(false)] out value)
-                        => TValue.TryParse(span.TrimEnd((byte)' '), formatProvider, out value);
+                        => TValue.TryParse(span, formatProvider, out value);
         }
 
         private static Utf8ColumnParser<TModel> BuildGeneric<TModel, TValue>(
@@ -46,7 +46,7 @@ namespace FixedWidthParser.Processors
         {
             return (column, formatProvider, _, ref model) =>
             {
-                if (!valueParser(column, formatProvider, out var value))
+                if (!valueParser(column.TrimEnd((byte)' '), formatProvider, out var value))
                 {
                     return false;
                 }

@@ -354,6 +354,8 @@ namespace FixedWidthParser.Generator
         {
             var columns = model.Columns.AsImmutableArray();
             sb.Append(body)
+              .AppendLine("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
+            sb.Append(body)
               .Append("public static bool TryParse(global::System.ReadOnlySpan<").Append(elementType)
               .Append("> line, global::System.IFormatProvider? formatProvider, global::CommunityToolkit.HighPerformance.Buffers.StringPool? stringPool, out ")
               .Append(model.FullyQualifiedName).AppendLine(" model)");
