@@ -53,13 +53,17 @@ jobs:
 
       - name: Test (Release) + collect coverage
         run: >-
-          dotnet test FixedWidthParser.slnx
-          --configuration Release
+          dotnet test --solution FixedWidthParser.slnx 
+          --results-directory ./TestResults 
+          --configuration Release 
+          --verbosity normal 
           --no-build
-          --verbosity normal
-          --logger "trx;LogFileName=test-results.trx"
-          --results-directory ./TestResults
-          --collect:"XPlat Code Coverage"
+          -- 
+          --report-xunit-trx 
+          --report-xunit-trx-filename test-results.trx 
+          --coverage 
+          --coverage-output-format cobertura 
+          --coverage-output coverage.cobertura.xml
 
       - name: Upload test results
         if: always()

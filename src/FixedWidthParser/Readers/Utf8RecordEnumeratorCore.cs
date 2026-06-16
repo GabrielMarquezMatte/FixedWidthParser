@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
 
@@ -67,6 +68,7 @@ namespace FixedWidthParser.Readers
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void Parse(ReadOnlySpan<byte> line)
         {
             if (!_strategy.TryParse(line, _formatProvider, _stringPool, out _current))
