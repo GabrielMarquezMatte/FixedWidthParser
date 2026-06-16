@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using CommunityToolkit.HighPerformance.Buffers;
 
 namespace FixedWidthParser.Readers
@@ -71,6 +72,7 @@ namespace FixedWidthParser.Readers
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private LineStatus TryReadFromBuffer()
         {
             var status = _lines.TryGetLine(out var line);
@@ -86,6 +88,7 @@ namespace FixedWidthParser.Readers
             return LineStatus.NeedData;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void Parse(ReadOnlySpan<char> line)
         {
             if (!_strategy.TryParse(line, _formatProvider, _stringPool, out _current))
