@@ -48,8 +48,13 @@ jobs:
       - name: Restore
         run: dotnet restore FixedWidthParser.slnx
 
+      # DeterministicSourcePaths is disabled here so the Microsoft code-coverage
+      # collector can map IL back to source. With it on (it is enabled on CI via
+      # ContinuousIntegrationBuild in FixedWidthParser.csproj), source paths get
+      # remapped and coverage for the library comes out empty. This build is only
+      # used for test/coverage; the pack/publish pipeline lives in release.yml.
       - name: Build (Release)
-        run: dotnet build FixedWidthParser.slnx --configuration Release --no-restore
+        run: dotnet build FixedWidthParser.slnx --configuration Release --no-restore -p:DeterministicSourcePaths=false
 
       - name: Test (Release) + collect coverage
         run: >-
@@ -77,7 +82,7 @@ jobs:
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./TestResults/**/*.cobertura.xml
+          files: ./TestResults/*.cobertura.xml
           fail_ci_if_error: false
 
   # Surfaces vulnerable transitive/direct packages regardless of NoWarn suppressions
