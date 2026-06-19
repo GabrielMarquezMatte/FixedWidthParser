@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using CommunityToolkit.HighPerformance.Buffers;
 
@@ -13,8 +12,8 @@ namespace FixedWidthParser.Processors
     /// </summary>
     internal static class ColumnParserFactory
     {
-        private static readonly MethodInfo CreateParsableValueParserMethod =
-            typeof(ColumnParserFactory).GetMethod(nameof(CreateParsableValueParser), BindingFlags.NonPublic | BindingFlags.Static)!;
+        private static readonly MethodInfo BuildParsableMethod =
+            typeof(ColumnParserFactory).GetMethod(nameof(BuildParsable), BindingFlags.NonPublic | BindingFlags.Static)!;
         private static readonly MethodInfo BuildGenericMethod =
             typeof(ColumnParserFactory).GetMethod(nameof(BuildGeneric), BindingFlags.NonPublic | BindingFlags.Static)!;
 
@@ -27,13 +26,27 @@ namespace FixedWidthParser.Processors
             where TModel : allows ref struct
         {
             return ColumnParserFactoryShared.Create<TModel, ColumnParser<TModel>>(
-                valueType, setter, ColumnParserRegistry.Get, CreateParsableValueParserMethod, BuildGenericMethod, BuildString);
+                valueType, setter, ColumnParserRegistry.Get, BuildParsableMethod, BuildGenericMethod, BuildString);
         }
 
-        private static ColumnValueParser<TValue> CreateParsableValueParser<TValue>() where TValue : ISpanParsable<TValue>
+        // Fallback for types not in the registry: call the static-abstract ISpanParsable.TryParse
+        // directly inside the column closure. This is a constrained call the JIT devirtualizes to the
+        // concrete TValue.TryParse (and can inline), saving one indirect call per column versus routing
+        // through a ColumnValueParser delegate — and no such delegate is allocated. Registered (custom)
+        // parsers are runtime delegates and still go through BuildGeneric.
+        private static ColumnParser<TModel> BuildParsable<TModel, TValue>(RefAction<TModel, TValue> setter)
+            where TModel : allows ref struct
+            where TValue : ISpanParsable<TValue>
         {
-            return static (span, formatProvider, [MaybeNullWhen(false)] out value)
-                        => TValue.TryParse(span, formatProvider, out value);
+            return (column, formatProvider, _, ref model) =>
+            {
+                if (!TValue.TryParse(column.TrimEnd(' '), formatProvider, out var value))
+                {
+                    return false;
+                }
+                setter(ref model, value);
+                return true;
+            };
         }
 
         private static ColumnParser<TModel> BuildGeneric<TModel, TValue>(
