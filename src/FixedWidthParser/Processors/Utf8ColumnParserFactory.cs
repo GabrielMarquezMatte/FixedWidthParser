@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
 
@@ -15,8 +14,8 @@ namespace FixedWidthParser.Processors
     /// </summary>
     internal static class Utf8ColumnParserFactory
     {
-        private static readonly MethodInfo CreateParsableValueParserMethod =
-            typeof(Utf8ColumnParserFactory).GetMethod(nameof(CreateParsableValueParser), BindingFlags.NonPublic | BindingFlags.Static)!;
+        private static readonly MethodInfo BuildParsableMethod =
+            typeof(Utf8ColumnParserFactory).GetMethod(nameof(BuildParsable), BindingFlags.NonPublic | BindingFlags.Static)!;
         private static readonly MethodInfo BuildGenericMethod =
             typeof(Utf8ColumnParserFactory).GetMethod(nameof(BuildGeneric), BindingFlags.NonPublic | BindingFlags.Static)!;
 
@@ -31,13 +30,27 @@ namespace FixedWidthParser.Processors
             where TModel : allows ref struct
         {
             return ColumnParserFactoryShared.Create<TModel, Utf8ColumnParser<TModel>>(
-                valueType, setter, Utf8ColumnParserRegistry.Get, CreateParsableValueParserMethod, BuildGenericMethod, BuildString);
+                valueType, setter, Utf8ColumnParserRegistry.Get, BuildParsableMethod, BuildGenericMethod, BuildString);
         }
 
-        private static Utf8ColumnValueParser<TValue> CreateParsableValueParser<TValue>() where TValue : IUtf8SpanParsable<TValue>
+        // Fallback for types not in the registry: call the static-abstract IUtf8SpanParsable.TryParse
+        // directly inside the column closure. This is a constrained call the JIT devirtualizes to the
+        // concrete TValue.TryParse (and can inline), saving one indirect call per column versus routing
+        // through a Utf8ColumnValueParser delegate — and no such delegate is allocated. Registered
+        // (custom) parsers are runtime delegates and still go through BuildGeneric.
+        private static Utf8ColumnParser<TModel> BuildParsable<TModel, TValue>(RefAction<TModel, TValue> setter)
+            where TModel : allows ref struct
+            where TValue : IUtf8SpanParsable<TValue>
         {
-            return static (span, formatProvider, [MaybeNullWhen(false)] out value)
-                        => TValue.TryParse(span, formatProvider, out value);
+            return (column, formatProvider, _, ref model) =>
+            {
+                if (!TValue.TryParse(column.TrimEnd((byte)' '), formatProvider, out var value))
+                {
+                    return false;
+                }
+                setter(ref model, value);
+                return true;
+            };
         }
 
         private static Utf8ColumnParser<TModel> BuildGeneric<TModel, TValue>(
