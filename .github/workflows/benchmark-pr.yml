@@ -45,6 +45,10 @@ jobs:
               Benchmarks.Perf.PipeReaderBenchmarks.*
           - name: writer
             filter: Benchmarks.Perf.WriterBenchmarks.*
+          - name: comparison
+            filter: >-
+              Benchmarks.Perf.ComparisonWriterBenchmarks.*
+              Benchmarks.Perf.ComparisonBenchmarks.*
 
     steps:
       - uses: actions/checkout@v7
