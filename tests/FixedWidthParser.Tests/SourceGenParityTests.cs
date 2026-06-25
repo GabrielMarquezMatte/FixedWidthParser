@@ -120,6 +120,7 @@ namespace FixedWidthParser.Tests
             }
         }
 
+#if NET9_0_OR_GREATER
         [Fact]
         public void RefStruct_GeneratedMatchesReflection()
         {
@@ -134,6 +135,7 @@ namespace FixedWidthParser.Tests
             Assert.Equal(r.Age, g.Age);
             Assert.Equal(r.Salary, g.Salary);
         }
+#endif
 
         [Fact]
         public void StringPool_InternsAndMatchesReflection()

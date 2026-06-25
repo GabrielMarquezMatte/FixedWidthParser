@@ -17,7 +17,11 @@ namespace FixedWidthParser.Parsers
     /// <see cref="StringPool"/> is supplied, interned through it (otherwise a fresh string per value).
     /// </para>
     /// </summary>
+#if NET9_0_OR_GREATER
     public sealed class Utf8FixedWidthParser<TModel> where TModel : new(), allows ref struct
+#else
+    public sealed class Utf8FixedWidthParser<TModel> where TModel : new()
+#endif
     {
         private static readonly Func<TModel> _modelFactory;
         private static readonly ColumnParserInfo<Utf8ColumnParser<TModel>>[] _processors;

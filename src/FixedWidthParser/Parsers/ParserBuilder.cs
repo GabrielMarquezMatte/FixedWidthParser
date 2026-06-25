@@ -21,14 +21,20 @@ namespace FixedWidthParser.Parsers
     /// </summary>
     internal static class ParserBuilder
     {
+#if NET9_0_OR_GREATER
         public static Func<TModel> BuildModelFactory<TModel>() where TModel : new(), allows ref struct
+#else
+        public static Func<TModel> BuildModelFactory<TModel>() where TModel : new()
+#endif
         {
             var lambda = Expression.Lambda<Func<TModel>>(Expression.New(typeof(TModel)));
             return lambda.Compile();
         }
 
         public static ColumnParserInfo<TParser>[] BuildProcessors<TModel, TParser>(Func<Type, Delegate, TParser> createParser)
+#if NET9_0_OR_GREATER
             where TModel : allows ref struct
+#endif
         {
             List<ColumnParserInfo<TParser>> processors = [];
             ModelColumns.ForEachColumn(typeof(TModel), (member, attribute) =>
