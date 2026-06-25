@@ -45,6 +45,10 @@ jobs:
               Benchmarks.Perf.PipeReaderBenchmarks.*
           - name: writer
             filter: Benchmarks.Perf.WriterBenchmarks.*
+          - name: comparison
+            filter: >-
+              Benchmarks.Perf.ComparisonWriterBenchmarks.*
+              Benchmarks.Perf.ComparisonBenchmarks.*
 
     steps:
       - uses: actions/checkout@v7
@@ -54,7 +58,7 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Cache NuGet packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
