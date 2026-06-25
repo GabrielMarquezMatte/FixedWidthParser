@@ -23,7 +23,9 @@ namespace FixedWidthParser.Processors
         /// </summary>
         /// <remarks><paramref name="setter"/> must be a <c>RefAction&lt;TModel, valueType&gt;</c> assigning the parsed value to the member.</remarks>
         public static ColumnParser<TModel> Create<TModel>(Type valueType, Delegate setter)
+#if NET9_0_OR_GREATER
             where TModel : allows ref struct
+#endif
         {
             return ColumnParserFactoryShared.Create<TModel, ColumnParser<TModel>>(
                 valueType, setter, ColumnParserRegistry.Get, BuildParsableMethod, BuildGenericMethod, BuildString);
@@ -35,7 +37,9 @@ namespace FixedWidthParser.Processors
         // through a ColumnValueParser delegate — and no such delegate is allocated. Registered (custom)
         // parsers are runtime delegates and still go through BuildGeneric.
         private static ColumnParser<TModel> BuildParsable<TModel, TValue>(RefAction<TModel, TValue> setter)
+#if NET9_0_OR_GREATER
             where TModel : allows ref struct
+#endif
             where TValue : ISpanParsable<TValue>
         {
             return (column, formatProvider, _, ref model) =>
@@ -51,7 +55,9 @@ namespace FixedWidthParser.Processors
 
         private static ColumnParser<TModel> BuildGeneric<TModel, TValue>(
             RefAction<TModel, TValue> setter, ColumnValueParser<TValue> valueParser)
+#if NET9_0_OR_GREATER
             where TModel : allows ref struct
+#endif
         {
             return (column, formatProvider, _, ref model) =>
             {
@@ -65,7 +71,9 @@ namespace FixedWidthParser.Processors
         }
 
         private static ColumnParser<TModel> BuildString<TModel>(RefAction<TModel, string> setter)
+#if NET9_0_OR_GREATER
             where TModel : allows ref struct
+#endif
         {
             return (column, _, stringPool, ref model) =>
             {

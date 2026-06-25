@@ -48,6 +48,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 3)] public string Code { get; init; }
     }
 
+#if NET9_0_OR_GREATER
     /// <summary>Ref struct model — proves generated parsing works under `allows ref struct`. Mirrors <see cref="RefPersonModel"/>.</summary>
     public ref partial struct GenRefPersonModel : IFixedWidthModel<GenRefPersonModel>, IUtf8FixedWidthModel<GenRefPersonModel>
     {
@@ -55,4 +56,5 @@ namespace FixedWidthParser.Tests
         [FixedColumn(10, 5)] public int Age { get; set; }
         [FixedColumn(15, 10)] public double Salary { get; set; }
     }
+#endif
 }

@@ -3,6 +3,7 @@ using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
 {
+#if NET9_0_OR_GREATER
     /// <summary>
     /// Confirms the parser's <c>allows ref struct</c> constraint is real: a ref struct model is
     /// built and parsed at runtime (Func/expression trees accept ref struct on .NET 10).
@@ -22,4 +23,5 @@ namespace FixedWidthParser.Tests
             Assert.Equal(60000.00, model.Salary, 2);
         }
     }
+#endif
 }

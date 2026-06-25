@@ -28,7 +28,9 @@ namespace FixedWidthParser.Processors
             MethodInfo buildParsableMethod,
             MethodInfo buildGenericMethod,
             Func<RefAction<TModel, string>, TColumnParser> buildString)
+#if NET9_0_OR_GREATER
             where TModel : allows ref struct
+#endif
             where TColumnParser : Delegate
         {
             if (valueType == typeof(string))

@@ -4,7 +4,11 @@ using CommunityToolkit.HighPerformance.Buffers;
 
 namespace FixedWidthParser.Parsers
 {
+#if NET9_0_OR_GREATER
     public sealed class FixedWidthParser<TModel> where TModel : new(), allows ref struct
+#else
+    public sealed class FixedWidthParser<TModel> where TModel : new()
+#endif
     {
         private static readonly Func<TModel> _modelFactory;
         private static readonly ColumnParserInfo<ColumnParser<TModel>>[] _processors;

@@ -9,7 +9,11 @@ namespace FixedWidthParser
     /// runtime <see cref="Parsers.FixedWidthParser{TModel}"/> semantics). Mirrors the shape of
     /// <see cref="ISpanParsable{TSelf}"/> so a generic, devirtualized read path is possible.
     /// </summary>
+#if NET9_0_OR_GREATER
     public interface IFixedWidthModel<TSelf> where TSelf : IFixedWidthModel<TSelf>, allows ref struct
+#else
+    public interface IFixedWidthModel<TSelf> where TSelf : IFixedWidthModel<TSelf>
+#endif
     {
         /// <summary>
         /// Parses a single fixed-width line into <paramref name="model"/>. Returns
