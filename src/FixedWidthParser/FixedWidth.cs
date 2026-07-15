@@ -13,7 +13,11 @@ namespace FixedWidthParser
     {
         /// <summary>Parses a single fixed-width line into <typeparamref name="TModel"/> using its generated parser.</summary>
         public static bool TryParse<TModel>(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
+#if NET9_0_OR_GREATER
             where TModel : IFixedWidthModel<TModel>, allows ref struct
+#else
+            where TModel : IFixedWidthModel<TModel>
+#endif
         {
             return TModel.TryParse(line, formatProvider, stringPool, out model);
         }

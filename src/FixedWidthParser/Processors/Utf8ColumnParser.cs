@@ -19,7 +19,11 @@ namespace FixedWidthParser.Processors
         ReadOnlySpan<byte> column,
         IFormatProvider? formatProvider,
         StringPool? stringPool,
+#if NET9_0_OR_GREATER
         ref TModel model) where TModel : allows ref struct;
+#else
+        ref TModel model);
+#endif
 
     /// <summary>
     /// UTF-8 counterpart of <see cref="ColumnValueParser{TValue}"/>: parses the (already sliced, not

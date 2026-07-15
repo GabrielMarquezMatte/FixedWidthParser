@@ -13,7 +13,11 @@ namespace FixedWidthParser.Processors
         ReadOnlySpan<char> column,
         IFormatProvider? formatProvider,
         StringPool? stringPool,
+#if NET9_0_OR_GREATER
         ref TModel model) where TModel : allows ref struct;
+#else
+        ref TModel model);
+#endif
 
     /// <summary>
     /// Parses the (already sliced, not trimmed) text of a single column into a value of type
