@@ -14,7 +14,11 @@ namespace FixedWidthParser
     /// <para><b>Column offsets are measured in bytes</b>, exact for the single-byte/ASCII payloads
     /// typical of flat files (see <see cref="Parsers.Utf8FixedWidthParser{TModel}"/>).</para>
     /// </summary>
+#if NET9_0_OR_GREATER
     public interface IUtf8FixedWidthModel<TSelf> where TSelf : IUtf8FixedWidthModel<TSelf>, allows ref struct
+#else
+    public interface IUtf8FixedWidthModel<TSelf> where TSelf : IUtf8FixedWidthModel<TSelf>
+#endif
     {
         /// <summary>
         /// Parses a single UTF-8 fixed-width line into <paramref name="model"/>. Returns

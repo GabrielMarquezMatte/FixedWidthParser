@@ -78,6 +78,7 @@ namespace FixedWidthParser.Tests
             Assert.Equal(42, model.Quantity);
         }
 
+#if NET9_0_OR_GREATER
         [Fact]
         public void Parser_SupportsRefStructModel()
         {
@@ -90,6 +91,7 @@ namespace FixedWidthParser.Tests
             Assert.Equal(30, model.Age);
             Assert.Equal(60000.00, model.Salary, 2);
         }
+#endif
 
         // ----------------------- Rejection paths -----------------------
 
