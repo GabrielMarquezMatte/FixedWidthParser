@@ -174,49 +174,40 @@ namespace FixedWidthParser.Processors
             char trim = (char)trimChar;
             if (valueType == typeof(DateTime))
             {
-                var s = (RefAction<TModel, DateTime>)setter;
-                return (column, fp, _, ref model) =>
-                {
-                    var trimmed = FixedWidthRuntime.TrimColumn(column, trim, trimMode);
-                    if (!DateTime.TryParseExact(trimmed, format, fp ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out var val)) return false;
-                    s(ref model, val);
-                    return true;
-                };
+                return BuildExact((RefAction<TModel, DateTime>)setter, format, trim, trimMode, DateTime.TryParseExact);
             }
             if (valueType == typeof(DateOnly))
             {
-                var s = (RefAction<TModel, DateOnly>)setter;
-                return (column, fp, _, ref model) =>
-                {
-                    var trimmed = FixedWidthRuntime.TrimColumn(column, trim, trimMode);
-                    if (!DateOnly.TryParseExact(trimmed, format, fp ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out var val)) return false;
-                    s(ref model, val);
-                    return true;
-                };
+                return BuildExact((RefAction<TModel, DateOnly>)setter, format, trim, trimMode, DateOnly.TryParseExact);
             }
             if (valueType == typeof(TimeOnly))
             {
-                var s = (RefAction<TModel, TimeOnly>)setter;
-                return (column, fp, _, ref model) =>
-                {
-                    var trimmed = FixedWidthRuntime.TrimColumn(column, trim, trimMode);
-                    if (!TimeOnly.TryParseExact(trimmed, format, fp ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out var val)) return false;
-                    s(ref model, val);
-                    return true;
-                };
+                return BuildExact((RefAction<TModel, TimeOnly>)setter, format, trim, trimMode, TimeOnly.TryParseExact);
             }
             if (valueType == typeof(DateTimeOffset))
             {
-                var s = (RefAction<TModel, DateTimeOffset>)setter;
-                return (column, fp, _, ref model) =>
-                {
-                    var trimmed = FixedWidthRuntime.TrimColumn(column, trim, trimMode);
-                    if (!DateTimeOffset.TryParseExact(trimmed, format, fp ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out var val)) return false;
-                    s(ref model, val);
-                    return true;
-                };
+                return BuildExact((RefAction<TModel, DateTimeOffset>)setter, format, trim, trimMode, DateTimeOffset.TryParseExact);
             }
             throw new InvalidOperationException($"Unsupported TryParseExact type {valueType}");
+        }
+
+        private delegate bool ExactParser<TValue>(ReadOnlySpan<char> value, ReadOnlySpan<char> format, IFormatProvider? formatProvider, DateTimeStyles styles, out TValue result);
+
+        private static ColumnParser<TModel> BuildExact<TModel, TValue>(RefAction<TModel, TValue> setter, string format, char trim, Attributes.TrimMode trimMode, ExactParser<TValue> parser)
+#if NET9_0_OR_GREATER
+            where TModel : allows ref struct
+#endif
+        {
+            return (column, fp, _, ref model) =>
+            {
+                var trimmed = FixedWidthRuntime.TrimColumn(column, trim, trimMode);
+                if (!parser(trimmed, format, fp ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out var value))
+                {
+                    return false;
+                }
+                setter(ref model, value);
+                return true;
+            };
         }
     }
 }

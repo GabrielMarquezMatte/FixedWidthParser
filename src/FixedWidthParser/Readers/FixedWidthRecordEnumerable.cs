@@ -2,7 +2,6 @@ using System.Buffers;
 using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Parsers;
 
 namespace FixedWidthParser.Readers
 {
@@ -13,16 +12,17 @@ namespace FixedWidthParser.Readers
     /// parser. Exposes a <see langword="struct"/> enumerator for allocation-free iteration in
     /// <c>foreach</c>, and implements <see cref="IEnumerable{T}"/> for LINQ interop.
     /// </summary>
-    public sealed class FixedWidthRecordEnumerable<TModel> : IEnumerable<TModel> where TModel : new()
+    public sealed class FixedWidthRecordEnumerable<TModel, TParser> : IEnumerable<TModel>
+        where TParser : struct, IRecordLineParser<char, TModel>
     {
-        private readonly FixedWidthParser<TModel> _parser;
+        private readonly TParser _parser;
         private readonly TextReaderSource _source;
         private readonly IFormatProvider? _formatProvider;
         private readonly StringPool? _stringPool;
         private readonly int _bufferSize;
 
         internal FixedWidthRecordEnumerable(
-            FixedWidthParser<TModel> parser,
+            TParser parser,
             TextReaderSource source,
             IFormatProvider? formatProvider,
             StringPool? stringPool,
@@ -36,9 +36,9 @@ namespace FixedWidthParser.Readers
         }
 
         /// <summary>Struct enumerator: <c>foreach</c> iteration without heap allocation.</summary>
-        public RecordEnumeratorCore<char, CharLineFormat, TModel, ReflectionLineParser<TModel>, TextReaderSource> GetEnumerator()
+        public RecordEnumeratorCore<char, CharLineFormat, TModel, TParser, TextReaderSource> GetEnumerator()
         {
-            return new(new ReflectionLineParser<TModel>(_parser), _source.Create(_bufferSize), _formatProvider, _stringPool, _bufferSize);
+            return new(_parser, _source.Create(_bufferSize), _formatProvider, _stringPool, _bufferSize);
         }
 
         IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator()

@@ -47,41 +47,41 @@ namespace FixedWidthParser.Readers
         /// Reads from a <see cref="Stream"/> (single pass) as raw bytes. <paramref name="leaveOpen"/>
         /// controls whether the stream is disposed when iteration completes.
         /// </summary>
-        public Utf8FixedWidthRecordEnumerable<TModel> Read(Stream stream, bool leaveOpen = false)
+        public Utf8FixedWidthRecordEnumerable<TModel, ReflectionUtf8LineParser<TModel>> Read(Stream stream, bool leaveOpen = false)
         {
             ArgumentNullException.ThrowIfNull(stream);
-            return new Utf8FixedWidthRecordEnumerable<TModel>(
-                _parser, stream, ownsStream: !leaveOpen, _formatProvider, _stringPool, _bufferSize);
+            return new Utf8FixedWidthRecordEnumerable<TModel, ReflectionUtf8LineParser<TModel>>(
+                new ReflectionUtf8LineParser<TModel>(_parser), stream, ownsStream: !leaveOpen, _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>Reads from a file as raw bytes. Re-enumerable: each iteration opens the file again.</summary>
-        public Utf8FixedWidthRecordEnumerable<TModel> ReadFile(string path)
+        public Utf8FixedWidthRecordEnumerable<TModel, ReflectionUtf8LineParser<TModel>> ReadFile(string path)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
-            return new Utf8FixedWidthRecordEnumerable<TModel>(
-                _parser, path, _formatProvider, _stringPool, _bufferSize);
+            return new Utf8FixedWidthRecordEnumerable<TModel, ReflectionUtf8LineParser<TModel>>(
+                new ReflectionUtf8LineParser<TModel>(_parser), path, _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>
         /// Reads from a <see cref="Stream"/> via <c>await foreach</c> (single pass) as raw bytes.
         /// <paramref name="leaveOpen"/> controls whether the stream is disposed when iteration completes.
         /// </summary>
-        public Utf8FixedWidthAsyncRecordEnumerable<TModel> ReadAsync(Stream stream, bool leaveOpen = false)
+        public Utf8FixedWidthAsyncRecordEnumerable<TModel, ReflectionUtf8LineParser<TModel>> ReadAsync(Stream stream, bool leaveOpen = false)
         {
             ArgumentNullException.ThrowIfNull(stream);
-            return new Utf8FixedWidthAsyncRecordEnumerable<TModel>(
-                _parser, stream, ownsStream: !leaveOpen, _formatProvider, _stringPool, _bufferSize);
+            return new Utf8FixedWidthAsyncRecordEnumerable<TModel, ReflectionUtf8LineParser<TModel>>(
+                new ReflectionUtf8LineParser<TModel>(_parser), stream, ownsStream: !leaveOpen, _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>
         /// Reads from a file via <c>await foreach</c>, with true asynchronous I/O (FileStream useAsync).
         /// Re-enumerable: each iteration reopens the file.
         /// </summary>
-        public Utf8FixedWidthAsyncRecordEnumerable<TModel> ReadFileAsync(string path)
+        public Utf8FixedWidthAsyncRecordEnumerable<TModel, ReflectionUtf8LineParser<TModel>> ReadFileAsync(string path)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
-            return new Utf8FixedWidthAsyncRecordEnumerable<TModel>(
-                _parser, path, _formatProvider, _stringPool, _bufferSize);
+            return new Utf8FixedWidthAsyncRecordEnumerable<TModel, ReflectionUtf8LineParser<TModel>>(
+                new ReflectionUtf8LineParser<TModel>(_parser), path, _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>
