@@ -44,7 +44,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Read_StructEnumerator_IteratesManually()
         {
-            // Exercises the public struct core returned by GeneratedUtf8FixedWidthRecordEnumerable directly
+            // Exercises the public struct core returned by the generated UTF-8 enumerable directly
             // (GetEnumerator / MoveNext / Current / Dispose) rather than through foreach.
             using var stream = Utf8(TwoPeople);
             var enumerable = FixedWidthUtf8.Read<GenPersonModel>(stream, formatProvider: Inv);

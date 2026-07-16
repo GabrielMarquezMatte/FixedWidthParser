@@ -1,12 +1,11 @@
 using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Parsers;
 
 namespace FixedWidthParser.Readers
 {
     /// <summary>
-    /// UTF-8 / byte counterpart of <see cref="FixedWidthRecordEnumerable{TModel}"/>: a lazily-read
+    /// UTF-8 / byte counterpart of <see cref="FixedWidthRecordEnumerable{TModel, TParser}"/>: a lazily-read
     /// sequence of models read straight from a <see cref="Stream"/> as raw bytes (no
     /// <see cref="StreamReader"/>, no transcode, no string per line). Exposes a <see langword="struct"/>
     /// enumerator for allocation-free <c>foreach</c> and implements <see cref="IEnumerable{T}"/> for
@@ -17,9 +16,10 @@ namespace FixedWidthParser.Readers
     /// enumerable itself, no closure.
     /// </para>
     /// </summary>
-    public sealed class Utf8FixedWidthRecordEnumerable<TModel> : IEnumerable<TModel> where TModel : new()
+    public sealed class Utf8FixedWidthRecordEnumerable<TModel, TParser> : IEnumerable<TModel>
+        where TParser : struct, IRecordLineParser<byte, TModel>
     {
-        private readonly Utf8FixedWidthParser<TModel> _parser;
+        private readonly TParser _parser;
         private readonly Stream? _stream;
         private readonly string? _path;
         private readonly bool _ownsStream;
@@ -29,7 +29,7 @@ namespace FixedWidthParser.Readers
 
         /// <summary>Single-pass source: a fixed stream.</summary>
         internal Utf8FixedWidthRecordEnumerable(
-            Utf8FixedWidthParser<TModel> parser,
+            TParser parser,
             Stream stream,
             bool ownsStream,
             IFormatProvider? formatProvider,
@@ -46,7 +46,7 @@ namespace FixedWidthParser.Readers
 
         /// <summary>Re-enumerable source: a file path reopened on each enumeration.</summary>
         internal Utf8FixedWidthRecordEnumerable(
-            Utf8FixedWidthParser<TModel> parser,
+            TParser parser,
             string path,
             IFormatProvider? formatProvider,
             StringPool? stringPool,
@@ -61,10 +61,10 @@ namespace FixedWidthParser.Readers
         }
 
         /// <summary>Struct enumerator: <c>foreach</c> iteration without heap allocation.</summary>
-        public RecordEnumeratorCore<byte, Utf8LineFormat, TModel, ReflectionUtf8LineParser<TModel>, StreamSource> GetEnumerator()
+        public RecordEnumeratorCore<byte, Utf8LineFormat, TModel, TParser, StreamSource> GetEnumerator()
         {
             var stream = _stream ?? new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.SequentialScan);
-            return new(new ReflectionUtf8LineParser<TModel>(_parser), new StreamSource(stream, _ownsStream), _formatProvider, _stringPool, _bufferSize);
+            return new(_parser, new StreamSource(stream, _ownsStream), _formatProvider, _stringPool, _bufferSize);
         }
 
         IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator()

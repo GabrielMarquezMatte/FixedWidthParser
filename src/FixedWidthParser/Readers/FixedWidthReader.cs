@@ -25,64 +25,64 @@ namespace FixedWidthParser.Readers
         }
 
         /// <summary>Reads from an existing <see cref="TextReader"/> (single pass; does not dispose it).</summary>
-        public FixedWidthRecordEnumerable<TModel> Read(TextReader reader)
+        public FixedWidthRecordEnumerable<TModel, ReflectionLineParser<TModel>> Read(TextReader reader)
         {
             ArgumentNullException.ThrowIfNull(reader);
-            return new FixedWidthRecordEnumerable<TModel>(
-                _parser, TextReaderSource.FromReader(reader), _formatProvider, _stringPool, _bufferSize);
+            return new FixedWidthRecordEnumerable<TModel, ReflectionLineParser<TModel>>(
+                new ReflectionLineParser<TModel>(_parser), TextReaderSource.FromReader(reader), _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>
         /// Reads from a <see cref="Stream"/> (single pass). Disposes the internally created
         /// <see cref="StreamReader"/>; <paramref name="leaveOpen"/> controls closing the stream.
         /// </summary>
-        public FixedWidthRecordEnumerable<TModel> Read(Stream stream, Encoding? encoding = null, bool leaveOpen = false)
+        public FixedWidthRecordEnumerable<TModel, ReflectionLineParser<TModel>> Read(Stream stream, Encoding? encoding = null, bool leaveOpen = false)
         {
             ArgumentNullException.ThrowIfNull(stream);
             var enc = encoding ?? Encoding.UTF8;
-            return new FixedWidthRecordEnumerable<TModel>(
-                _parser, TextReaderSource.FromStream(stream, enc, leaveOpen), _formatProvider, _stringPool, _bufferSize);
+            return new FixedWidthRecordEnumerable<TModel, ReflectionLineParser<TModel>>(
+                new ReflectionLineParser<TModel>(_parser), TextReaderSource.FromStream(stream, enc, leaveOpen), _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>Reads from a file. Re-enumerable: each iteration opens the file again.</summary>
-        public FixedWidthRecordEnumerable<TModel> ReadFile(string path, Encoding? encoding = null)
+        public FixedWidthRecordEnumerable<TModel, ReflectionLineParser<TModel>> ReadFile(string path, Encoding? encoding = null)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
             var enc = encoding ?? Encoding.UTF8;
-            return new FixedWidthRecordEnumerable<TModel>(
-                _parser, TextReaderSource.FromFile(path, enc, useAsync: false), _formatProvider, _stringPool, _bufferSize);
+            return new FixedWidthRecordEnumerable<TModel, ReflectionLineParser<TModel>>(
+                new ReflectionLineParser<TModel>(_parser), TextReaderSource.FromFile(path, enc, useAsync: false), _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>Reads from an existing <see cref="TextReader"/> via await foreach (does not dispose it).</summary>
-        public FixedWidthAsyncRecordEnumerable<TModel> ReadAsync(TextReader reader)
+        public FixedWidthAsyncRecordEnumerable<TModel, ReflectionLineParser<TModel>> ReadAsync(TextReader reader)
         {
             ArgumentNullException.ThrowIfNull(reader);
-            return new FixedWidthAsyncRecordEnumerable<TModel>(
-                _parser, TextReaderSource.FromReader(reader), _formatProvider, _stringPool, _bufferSize);
+            return new FixedWidthAsyncRecordEnumerable<TModel, ReflectionLineParser<TModel>>(
+                new ReflectionLineParser<TModel>(_parser), TextReaderSource.FromReader(reader), _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>
         /// Reads from a <see cref="Stream"/> via await foreach (single pass). Disposes the created
         /// <see cref="StreamReader"/>; <paramref name="leaveOpen"/> controls the stream.
         /// </summary>
-        public FixedWidthAsyncRecordEnumerable<TModel> ReadAsync(Stream stream, Encoding? encoding = null, bool leaveOpen = false)
+        public FixedWidthAsyncRecordEnumerable<TModel, ReflectionLineParser<TModel>> ReadAsync(Stream stream, Encoding? encoding = null, bool leaveOpen = false)
         {
             ArgumentNullException.ThrowIfNull(stream);
             var enc = encoding ?? Encoding.UTF8;
-            return new FixedWidthAsyncRecordEnumerable<TModel>(
-                _parser, TextReaderSource.FromStream(stream, enc, leaveOpen), _formatProvider, _stringPool, _bufferSize);
+            return new FixedWidthAsyncRecordEnumerable<TModel, ReflectionLineParser<TModel>>(
+                new ReflectionLineParser<TModel>(_parser), TextReaderSource.FromStream(stream, enc, leaveOpen), _formatProvider, _stringPool, _bufferSize);
         }
 
         /// <summary>
         /// Reads from a file via await foreach, with true asynchronous I/O (FileStream useAsync).
         /// Re-enumerable: each iteration reopens the file.
         /// </summary>
-        public FixedWidthAsyncRecordEnumerable<TModel> ReadFileAsync(string path, Encoding? encoding = null)
+        public FixedWidthAsyncRecordEnumerable<TModel, ReflectionLineParser<TModel>> ReadFileAsync(string path, Encoding? encoding = null)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
             var enc = encoding ?? Encoding.UTF8;
-            return new FixedWidthAsyncRecordEnumerable<TModel>(
-                _parser, TextReaderSource.FromFile(path, enc, useAsync: true), _formatProvider, _stringPool, _bufferSize);
+            return new FixedWidthAsyncRecordEnumerable<TModel, ReflectionLineParser<TModel>>(
+                new ReflectionLineParser<TModel>(_parser), TextReaderSource.FromFile(path, enc, useAsync: true), _formatProvider, _stringPool, _bufferSize);
         }
     }
 }
