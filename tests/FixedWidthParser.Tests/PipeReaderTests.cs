@@ -234,5 +234,38 @@ namespace FixedWidthParser.Tests
             return Assert.ThrowsAsync<FormatException>(async () =>
                 await CollectAsync(reader.ReadAsync(Pipe("A"))).ConfigureAwait(false));
         }
+
+        [Fact]
+        public async Task ReadAsync_Pipe_CancelPendingRead_ThrowsOperationCanceledException()
+        {
+            var pipe = new Pipe();
+            var reader = new FixedWidthByteReader<CodeModel>();
+
+            var readTask = CollectAsync(reader.ReadAsync(pipe.Reader));
+
+            pipe.Reader.CancelPendingRead();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await readTask.ConfigureAwait(false)).ConfigureAwait(true);
+            await pipe.Writer.CompleteAsync().ConfigureAwait(true);
+        }
+
+        [Fact]
+        public async Task ReadAsync_Pipe_UnparseableLine_WithLeaveOpen_LeavesReaderUsable()
+        {
+            var reader = new FixedWidthByteReader<CodeModel>();
+            var pipe = Pipe("A\nDEF\n");
+
+            var enumerator = reader.ReadAsync(pipe, leaveOpen: true).GetAsyncEnumerator();
+
+            await Assert.ThrowsAsync<FormatException>(async () => await enumerator.MoveNextAsync().ConfigureAwait(false)).ConfigureAwait(true);
+
+            await enumerator.DisposeAsync().ConfigureAwait(true);
+
+            var result = await pipe.ReadAsync().ConfigureAwait(true);
+            var text = Encoding.UTF8.GetString(result.Buffer);
+            Assert.Contains("DEF", text);
+            pipe.AdvanceTo(result.Buffer.End);
+            await pipe.CompleteAsync().ConfigureAwait(true);
+        }
     }
 }

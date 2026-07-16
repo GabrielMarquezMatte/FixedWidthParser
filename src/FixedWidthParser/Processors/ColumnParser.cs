@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.HighPerformance.Buffers;
 
 namespace FixedWidthParser.Processors
@@ -18,15 +17,4 @@ namespace FixedWidthParser.Processors
 #else
         ref TModel model);
 #endif
-
-    /// <summary>
-    /// Parses the (already sliced, not trimmed) text of a single column into a value of type
-    /// <typeparamref name="TValue"/>. This is the unit of extensibility: register one of these per
-    /// type with <see cref="ColumnParserRegistry"/> to teach the parser a new column type without
-    /// implementing a class. Returns <see langword="false"/> when the text is not a valid value.
-    /// </summary>
-    public delegate bool ColumnValueParser<TValue>(
-        ReadOnlySpan<char> span,
-        IFormatProvider? formatProvider,
-        [MaybeNullWhen(false)] out TValue value);
 }

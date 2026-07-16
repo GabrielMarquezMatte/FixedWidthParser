@@ -16,7 +16,7 @@ namespace FixedWidthParser.Readers
         private readonly StringPool? _stringPool;
         private readonly int _bufferSize;
 
-        public FixedWidthReader(IFormatProvider? formatProvider = null, StringPool? stringPool = null, int bufferSize = 4096)
+        public FixedWidthReader(IFormatProvider? formatProvider = null, StringPool? stringPool = null, int bufferSize = 65536)
         {
             ArgumentOutOfRangeException.ThrowIfLessThan(bufferSize, 1);
             _formatProvider = formatProvider;
