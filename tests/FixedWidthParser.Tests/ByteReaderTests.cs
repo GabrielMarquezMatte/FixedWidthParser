@@ -1,8 +1,6 @@
 using System.Globalization;
 using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Attributes;
 using FixedWidthParser.Parsers;
-using FixedWidthParser.Processors;
 using FixedWidthParser.Readers;
 using static FixedWidthParser.Tests.TestHelpers;
 
@@ -273,51 +271,5 @@ namespace FixedWidthParser.Tests
             Assert.Same(first.Code, second.Code);
         }
 
-        // ----------------------- Registry extensibility -----------------------
-
-        /// <summary>A value type that does NOT implement IUtf8SpanParsable, so it can only be parsed
-        /// through a registered <see cref="Utf8ColumnValueParser{TValue}"/>.</summary>
-        public readonly record struct Celsius(int Degrees);
-
-        public readonly record struct TempModel
-        {
-            public TempModel()
-            {
-                Temp = default;
-            }
-
-            [FixedColumn(0, 4)] public Celsius Temp { get; init; }
-        }
-
-        [Fact]
-        public void Registry_RegisteredParser_IsUsedForCustomType()
-        {
-            // Must register before the first construction of the parser for this model: the parser
-            // caches its column parsers in a static constructor.
-            Utf8ColumnParserRegistry.Register<Celsius>(
-                static (span, fp, out value) =>
-                {
-                    if (int.TryParse(span.TrimEnd((byte)' '), fp, out int degrees))
-                    {
-                        value = new Celsius(degrees);
-                        return true;
-                    }
-                    value = default;
-                    return false;
-                });
-            try
-            {
-                var parser = new Utf8FixedWidthParser<TempModel>();
-
-                bool ok = parser.TryParse("  25"u8, Inv, null, out var model);
-
-                Assert.True(ok);
-                Assert.Equal(new Celsius(25), model.Temp);
-            }
-            finally
-            {
-                Assert.True(Utf8ColumnParserRegistry.Unregister<Celsius>());
-            }
-        }
     }
 }

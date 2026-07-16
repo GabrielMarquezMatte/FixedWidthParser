@@ -1,8 +1,95 @@
 using System.Diagnostics.CodeAnalysis;
 using FixedWidthParser.Attributes;
+using FixedWidthParser.Processors;
 
 namespace FixedWidthParser.Tests
 {
+    /// <summary>Custom value type with no ISpanParsable — only parseable via a <c>FixedColumnAttribute.Converter</c>.</summary>
+    public readonly record struct CentsValue(long Cents);
+
+    /// <summary>
+    /// Stateless <see cref="IFixedWidthConverter{T}"/>/<see cref="IUtf8FixedWidthConverter{T}"/> for
+    /// <see cref="CentsValue"/>: stores cents as a plain integer. Implements both directions (parse/format)
+    /// and both element types (char/byte), so one attribute round-trips through every path.
+    /// </summary>
+    public sealed class CentsConverter : IFixedWidthConverter<CentsValue>, IUtf8FixedWidthConverter<CentsValue>
+    {
+        public bool TryParse(ReadOnlySpan<char> field, IFormatProvider? formatProvider, out CentsValue value)
+        {
+            if (!long.TryParse(field, formatProvider, out long cents))
+            {
+                value = default;
+                return false;
+            }
+            value = new CentsValue(cents);
+            return true;
+        }
+
+        public bool TryFormat(CentsValue value, Span<char> destination, IFormatProvider? formatProvider, out int written)
+        {
+            return value.Cents.TryFormat(destination, out written, provider: formatProvider);
+        }
+
+        public bool TryParse(ReadOnlySpan<byte> field, IFormatProvider? formatProvider, out CentsValue value)
+        {
+            if (!long.TryParse(field, formatProvider, out long cents))
+            {
+                value = default;
+                return false;
+            }
+            value = new CentsValue(cents);
+            return true;
+        }
+
+        public bool TryFormat(CentsValue value, Span<byte> destination, IFormatProvider? formatProvider, out int written)
+        {
+            return value.Cents.TryFormat(destination, out written, provider: formatProvider);
+        }
+    }
+
+    /// <summary>Converter that only implements the char-side interface — used to prove a converter can
+    /// support one direction/element type without the other being required.</summary>
+    public sealed class IntOnlyConverter : IFixedWidthConverter<int>
+    {
+        public bool TryParse(ReadOnlySpan<char> field, IFormatProvider? formatProvider, out int value)
+        {
+            return int.TryParse(field, formatProvider, out value);
+        }
+
+        public bool TryFormat(int value, Span<char> destination, IFormatProvider? formatProvider, out int written)
+        {
+            return value.TryFormat(destination, out written, provider: formatProvider);
+        }
+    }
+
+    /// <summary>Single custom-converted column, exercised by both the reflection parser/writer and the generator.</summary>
+    public readonly record struct CentsConverterModel
+    {
+        [FixedColumn(0, 8, Converter = typeof(CentsConverter))] public CentsValue Amount { get; init; }
+    }
+
+    /// <summary>
+    /// Converter (<see cref="IntOnlyConverter"/>, for <c>int</c>) attached to a <c>string</c> column — an
+    /// invalid pairing that must be rejected at build time.
+    /// </summary>
+    public readonly record struct MismatchedConverterModel
+    {
+        [FixedColumn(0, 5, Converter = typeof(IntOnlyConverter))] public string Value { get; init; }
+    }
+
+    /// <summary>Nullable value-type columns (T?): a blank column parses to null / writes as blank.</summary>
+    public readonly record struct NullableModel
+    {
+        [FixedColumn(0, 5)] public int? Age { get; init; }
+        [FixedColumn(5, 10)] public decimal? Amount { get; init; }
+    }
+
+    /// <summary>Nullable value-type column combined with a custom converter (T?, converter targets T).</summary>
+    public readonly record struct NullableConverterModel
+    {
+        [FixedColumn(0, 8, Converter = typeof(CentsConverter))] public CentsValue? Amount { get; init; }
+    }
+
     /// <summary>Property-based model (string + int + double).</summary>
     public readonly record struct PersonModel
     {

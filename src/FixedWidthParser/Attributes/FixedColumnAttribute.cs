@@ -35,5 +35,13 @@ namespace FixedWidthParser.Attributes
 
         /// <summary>Overflow policy when writing. Default: <see cref="OverflowBehavior.Default"/>.</summary>
         public OverflowBehavior Overflow { get; set; } = OverflowBehavior.Default;
+
+        /// <summary>
+        /// A type implementing <c>IFixedWidthConverter&lt;T&gt;</c> (char parser/writer) and/or
+        /// <c>IUtf8FixedWidthConverter&lt;T&gt;</c> (UTF-8 parser/writer), where <c>T</c> is this
+        /// column's member type. When set, it is used instead of the built-in <c>ISpanParsable</c>
+        /// fallback, for both parsing and writing. A single instance is created once per model type.
+        /// </summary>
+        public Type? Converter { get; set; }
     }
 }

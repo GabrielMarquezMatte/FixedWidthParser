@@ -4,45 +4,58 @@ namespace FixedWidthParser.Processors
 {
     /// <summary>
     /// Shared build-time orchestration for <see cref="ColumnParserFactory"/> (char) and
-    /// <see cref="Utf8ColumnParserFactory"/> (byte): the identical "string-special-case → registry
-    /// lookup → <see cref="ISpanParsable{TSelf}"/>/<see cref="IUtf8SpanParsable{TSelf}"/> fallback →
-    /// wrap setter+parser" flow. The element-specific pieces (string builder, registry, the reflected
-    /// build-parsable and wrapper methods) are passed in, so the spans-of-different-element-type closures
-    /// stay in each factory while the reflection plumbing lives in one place.
+    /// <see cref="Utf8ColumnParserFactory"/> (byte): the identical "converter → string special-case →
+    /// double/float (csFastFloat) special-case → <see cref="ISpanParsable{TSelf}"/>/<see cref="IUtf8SpanParsable{TSelf}"/>
+    /// fallback → wrap setter+parser" flow. The element-specific pieces (string/double/float/converter
+    /// builders and the reflected build-parsable method) are passed in, so the spans-of-different-element-type
+    /// closures stay in each factory while the reflection plumbing lives in one place.
     /// </summary>
     internal static class ColumnParserFactoryShared
     {
-        /// <summary>
-        /// <para>
-        /// A registered (custom) value parser is a runtime delegate, so it is wrapped together with the
-        /// setter by <paramref name="buildGenericMethod"/> (closure → value-parser delegate → setter). The
-        /// unregistered fallback, by contrast, calls the static-abstract <c>TryParse</c> directly inside the
-        /// column closure via <paramref name="buildParsableMethod"/> — one fewer indirect call per column
-        /// and no value-parser delegate allocated.
-        /// </para>
-        /// </summary>
         public static TColumnParser Create<TModel, TColumnParser>(
             Type valueType,
             Delegate setter,
-            Func<Type, Delegate?> registryGet,
+            Type? converterType,
+            string memberName,
+            Type converterInterfaceDefinition,
             MethodInfo buildParsableMethod,
-            MethodInfo buildGenericMethod,
+            MethodInfo buildConverterMethod,
+            MethodInfo buildDoubleMethod,
+            MethodInfo buildFloatMethod,
             Func<RefAction<TModel, string>, TColumnParser> buildString)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
             where TColumnParser : Delegate
         {
+            if (converterType is not null)
+            {
+                var requiredInterface = converterInterfaceDefinition.MakeGenericType(valueType);
+                if (!requiredInterface.IsAssignableFrom(converterType))
+                {
+                    throw new InvalidOperationException(
+                        $"Converter '{converterType}' for column '{memberName}' must implement '{requiredInterface}'.");
+                }
+                var converterInstance = Activator.CreateInstance(converterType)
+                    ?? throw new InvalidOperationException($"Could not instantiate converter '{converterType}' for column '{memberName}'.");
+                return (TColumnParser)buildConverterMethod.MakeGenericMethod(typeof(TModel), valueType, converterType)
+                                                          .Invoke(null, [setter, converterInstance])!;
+            }
+
             if (valueType == typeof(string))
             {
                 return buildString((RefAction<TModel, string>)setter);
             }
 
-            var valueParser = registryGet(valueType);
-            if (valueParser is not null)
+            // double/float take the csFastFloat fast path ahead of the ISpanParsable fallback (both
+            // implement ISpanParsable/IUtf8SpanParsable too, but csFastFloat is faster).
+            if (valueType == typeof(double))
             {
-                return (TColumnParser)buildGenericMethod.MakeGenericMethod(typeof(TModel), valueType)
-                                                        .Invoke(null, [setter, valueParser])!;
+                return (TColumnParser)buildDoubleMethod.MakeGenericMethod(typeof(TModel)).Invoke(null, [setter])!;
+            }
+            if (valueType == typeof(float))
+            {
+                return (TColumnParser)buildFloatMethod.MakeGenericMethod(typeof(TModel)).Invoke(null, [setter])!;
             }
 
             return (TColumnParser)buildParsableMethod.MakeGenericMethod(typeof(TModel), valueType)
