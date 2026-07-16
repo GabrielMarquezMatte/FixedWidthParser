@@ -73,9 +73,9 @@ namespace FixedWidthParser.Processors
         }
 
         /// <summary>Parses a (not yet trimmed) column as <see cref="double"/>, honoring <paramref name="formatProvider"/>.</summary>
-        public static bool TryParseDouble(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out double value)
+        public static bool TryParseDouble(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out double value, char trimChar = ' ')
         {
-            var trimmed = column.TrimEnd(' ');
+            var trimmed = column.TrimEnd(trimChar);
             if (GetDecimalSeparator(formatProvider) == '.')
             {
                 return FastDoubleParser.TryParseDouble(trimmed, out int consumed, out value, decimal_separator: '.')
@@ -85,9 +85,9 @@ namespace FixedWidthParser.Processors
         }
 
         /// <summary>Parses a (not yet trimmed) column as <see cref="float"/>, honoring <paramref name="formatProvider"/>.</summary>
-        public static bool TryParseFloat(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out float value)
+        public static bool TryParseFloat(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out float value, char trimChar = ' ')
         {
-            var trimmed = column.TrimEnd(' ');
+            var trimmed = column.TrimEnd(trimChar);
             if (GetDecimalSeparator(formatProvider) == '.')
             {
                 return FastFloatParser.TryParseFloat(trimmed, out int consumed, out value, decimal_separator: '.')
@@ -97,14 +97,14 @@ namespace FixedWidthParser.Processors
         }
 
         /// <summary>
-        /// UTF-8 counterpart of <see cref="TryParseDouble(ReadOnlySpan{char},IFormatProvider?,out double)"/>.
+        /// UTF-8 counterpart of <see cref="TryParseDouble(ReadOnlySpan{char},IFormatProvider?,out double,char)"/>.
         /// A non-ASCII separator still throws (see <see cref="GetDecimalSeparatorByte"/>) — the byte path
         /// only supports separators representable as a single UTF-8 byte.
         /// </summary>
-        public static bool TryParseDouble(ReadOnlySpan<byte> column, IFormatProvider? formatProvider, out double value)
+        public static bool TryParseDouble(ReadOnlySpan<byte> column, IFormatProvider? formatProvider, out double value, byte trimChar = (byte)' ')
         {
             byte separator = GetDecimalSeparatorByte(formatProvider);
-            var trimmed = column.TrimEnd((byte)' ');
+            var trimmed = column.TrimEnd(trimChar);
             if (separator == (byte)'.')
             {
                 return FastDoubleParser.TryParseDouble(trimmed, out int consumed, out value, decimal_separator: separator)
@@ -113,11 +113,11 @@ namespace FixedWidthParser.Processors
             return TryParseDoubleViaTranscode(trimmed, formatProvider, out value);
         }
 
-        /// <summary>UTF-8 counterpart of <see cref="TryParseFloat(ReadOnlySpan{char},IFormatProvider?,out float)"/>.</summary>
-        public static bool TryParseFloat(ReadOnlySpan<byte> column, IFormatProvider? formatProvider, out float value)
+        /// <summary>UTF-8 counterpart of <see cref="TryParseFloat(ReadOnlySpan{char},IFormatProvider?,out float,char)"/>.</summary>
+        public static bool TryParseFloat(ReadOnlySpan<byte> column, IFormatProvider? formatProvider, out float value, byte trimChar = (byte)' ')
         {
             byte separator = GetDecimalSeparatorByte(formatProvider);
-            var trimmed = column.TrimEnd((byte)' ');
+            var trimmed = column.TrimEnd(trimChar);
             if (separator == (byte)'.')
             {
                 return FastFloatParser.TryParseFloat(trimmed, out int consumed, out value, decimal_separator: separator)

@@ -67,6 +67,48 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 8, Converter = typeof(CentsConverter))] public CentsValue? Amount { get; init; }
     }
 
+    /// <summary>Right-aligned integer — mirrors <see cref="RightAlignedModel"/> (write formatting options).</summary>
+    public readonly partial record struct GenRightAlignedModel : IFixedWidthModel<GenRightAlignedModel>, IUtf8FixedWidthModel<GenRightAlignedModel>
+    {
+        [FixedColumn(0, 5, Alignment = Alignment.Right)] public int Value { get; init; }
+    }
+
+    /// <summary>Zero-padded right-aligned integer — mirrors <see cref="ZeroPaddedModel"/>.</summary>
+    public readonly partial record struct GenZeroPaddedModel : IFixedWidthModel<GenZeroPaddedModel>, IUtf8FixedWidthModel<GenZeroPaddedModel>
+    {
+        [FixedColumn(0, 5, Alignment = Alignment.Right, Padding = '0')] public int Value { get; init; }
+    }
+
+    /// <summary>Double with a fixed format string — mirrors <see cref="FormattedModel"/>.</summary>
+    public readonly partial record struct GenFormattedModel : IFixedWidthModel<GenFormattedModel>, IUtf8FixedWidthModel<GenFormattedModel>
+    {
+        [FixedColumn(0, 8, Format = "F2")] public double Amount { get; init; }
+    }
+
+    /// <summary>Narrow numeric column; default overflow (throws) — mirrors <see cref="NarrowModel"/>.</summary>
+    public readonly partial record struct GenNarrowModel : IFixedWidthModel<GenNarrowModel>, IUtf8FixedWidthModel<GenNarrowModel>
+    {
+        [FixedColumn(0, 3)] public int Value { get; init; }
+    }
+
+    /// <summary>'*'-padded integer, read with a matching TrimChar — mirrors <see cref="AsteriskTrimIntModel"/>.</summary>
+    public readonly partial record struct GenAsteriskTrimIntModel : IFixedWidthModel<GenAsteriskTrimIntModel>, IUtf8FixedWidthModel<GenAsteriskTrimIntModel>
+    {
+        [FixedColumn(0, 5, TrimChar = '*')] public int Value { get; init; }
+    }
+
+    /// <summary>'#'-padded string, read with a matching TrimChar — mirrors <see cref="HashTrimStringModel"/>.</summary>
+    public readonly partial record struct GenHashTrimStringModel : IFixedWidthModel<GenHashTrimStringModel>, IUtf8FixedWidthModel<GenHashTrimStringModel>
+    {
+        [FixedColumn(0, 8, TrimChar = '#')] public string Code { get; init; }
+    }
+
+    /// <summary>Non-ASCII TrimChar (U+00A0) — mirrors <see cref="NonAsciiTrimModel"/>; UTF-8 must throw.</summary>
+    public readonly partial record struct GenNonAsciiTrimModel : IFixedWidthModel<GenNonAsciiTrimModel>, IUtf8FixedWidthModel<GenNonAsciiTrimModel>
+    {
+        [FixedColumn(0, 5, TrimChar = ' ')] public int Value { get; init; }
+    }
+
 #if NET9_0_OR_GREATER
     /// <summary>Ref struct model — proves generated parsing works under `allows ref struct`. Mirrors <see cref="RefPersonModel"/>.</summary>
     public ref partial struct GenRefPersonModel : IFixedWidthModel<GenRefPersonModel>, IUtf8FixedWidthModel<GenRefPersonModel>

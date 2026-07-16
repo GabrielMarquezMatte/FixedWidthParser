@@ -17,12 +17,13 @@ namespace FixedWidthParser.Processors
             Delegate setter,
             Type? converterType,
             string memberName,
+            object trimChar,
             Type converterInterfaceDefinition,
             MethodInfo buildParsableMethod,
             MethodInfo buildConverterMethod,
             MethodInfo buildDoubleMethod,
             MethodInfo buildFloatMethod,
-            Func<RefAction<TModel, string>, TColumnParser> buildString)
+            Func<RefAction<TModel, string>, object, TColumnParser> buildString)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
@@ -39,27 +40,27 @@ namespace FixedWidthParser.Processors
                 var converterInstance = Activator.CreateInstance(converterType)
                     ?? throw new InvalidOperationException($"Could not instantiate converter '{converterType}' for column '{memberName}'.");
                 return (TColumnParser)buildConverterMethod.MakeGenericMethod(typeof(TModel), valueType, converterType)
-                                                          .Invoke(null, [setter, converterInstance])!;
+                                                          .Invoke(null, [setter, converterInstance, trimChar])!;
             }
 
             if (valueType == typeof(string))
             {
-                return buildString((RefAction<TModel, string>)setter);
+                return buildString((RefAction<TModel, string>)setter, trimChar);
             }
 
             // double/float take the csFastFloat fast path ahead of the ISpanParsable fallback (both
             // implement ISpanParsable/IUtf8SpanParsable too, but csFastFloat is faster).
             if (valueType == typeof(double))
             {
-                return (TColumnParser)buildDoubleMethod.MakeGenericMethod(typeof(TModel)).Invoke(null, [setter])!;
+                return (TColumnParser)buildDoubleMethod.MakeGenericMethod(typeof(TModel)).Invoke(null, [setter, trimChar])!;
             }
             if (valueType == typeof(float))
             {
-                return (TColumnParser)buildFloatMethod.MakeGenericMethod(typeof(TModel)).Invoke(null, [setter])!;
+                return (TColumnParser)buildFloatMethod.MakeGenericMethod(typeof(TModel)).Invoke(null, [setter, trimChar])!;
             }
 
             return (TColumnParser)buildParsableMethod.MakeGenericMethod(typeof(TModel), valueType)
-                                                     .Invoke(null, [setter])!;
+                                                     .Invoke(null, [setter, trimChar])!;
         }
     }
 }

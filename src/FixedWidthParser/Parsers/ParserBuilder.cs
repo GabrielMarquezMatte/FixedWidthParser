@@ -31,7 +31,7 @@ namespace FixedWidthParser.Parsers
             return lambda.Compile();
         }
 
-        public static ColumnParserInfo<TParser>[] BuildProcessors<TModel, TParser>(Func<Type, Delegate, Type?, string, TParser> createParser)
+        public static ColumnParserInfo<TParser>[] BuildProcessors<TModel, TParser>(Func<Type, Delegate, Type?, string, char, TParser> createParser)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
@@ -43,7 +43,7 @@ namespace FixedWidthParser.Parsers
                 var value = Expression.Parameter(memberType, "value");
                 var actionType = typeof(RefAction<,>).MakeGenericType(typeof(TModel), memberType);
                 var setter = Expression.Lambda(actionType, Expression.Assign(access, value), model, value).Compile();
-                processors.Add(new(attribute.Start, attribute.Length, createParser(memberType, setter, attribute.Converter, member.Name)));
+                processors.Add(new(attribute.Start, attribute.Length, createParser(memberType, setter, attribute.Converter, member.Name, attribute.TrimChar)));
             });
             return [.. processors];
         }
