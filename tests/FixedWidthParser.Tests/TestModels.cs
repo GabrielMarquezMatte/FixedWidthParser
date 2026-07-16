@@ -282,7 +282,7 @@ namespace FixedWidthParser.Tests
     /// <summary>Single column of a value type that can format wider than the stack buffer.</summary>
     public readonly record struct WideValueModel
     {
-        [FixedColumn(0, 4, Overflow = OverflowBehavior.Truncate)] public RepeatedChar Value { get; init; }
+        [FixedColumn(0, 800)] public RepeatedChar Value { get; init; }
     }
 
     /// <summary>Right-aligned column that truncates on overflow (keeps the rightmost characters).</summary>
@@ -300,5 +300,38 @@ namespace FixedWidthParser.Tests
         public const int LineLength = 1208;
         [FixedColumn(0, 1200)] public string Name { get; init; }
         [FixedColumn(1200, 8)] public int Number { get; init; }
+    }
+
+    public readonly record struct DateTimeExactModel
+    {
+        [FixedColumn(0, 8, Format = "yyyyMMdd")] public DateTime Date { get; init; }
+        [FixedColumn(8, 8, Format = "yyyyMMdd")] public DateOnly DateOnlyVal { get; init; }
+    }
+
+    public readonly record struct ZeroPaddedLeadingModel
+    {
+        [FixedColumn(0, 5, TrimChar = '0', TrimMode = TrimMode.Leading)] public int Value { get; init; }
+        [FixedColumn(5, 5, TrimChar = '0', TrimMode = TrimMode.Leading)] public double DoubleValue { get; init; }
+    }
+
+    public readonly record struct ZeroPaddedBothModel
+    {
+        [FixedColumn(0, 5, TrimChar = '0', TrimMode = TrimMode.Both)] public int Value { get; init; }
+    }
+
+    public readonly record struct SignPaddedModel
+    {
+        [FixedColumn(0, 6, Alignment = Alignment.Right, Padding = '0')] public int Value { get; init; }
+    }
+
+    public readonly record struct NullablePaddingModel
+    {
+        [FixedColumn(0, 5, TrimChar = '0')] public int? Value { get; init; }
+        [FixedColumn(5, 5, TrimChar = '*')] public double? DoubleValue { get; init; }
+    }
+
+    public readonly record struct TruncateInvalidModel
+    {
+        [FixedColumn(0, 5, Overflow = OverflowBehavior.Truncate)] public int Value { get; init; }
     }
 }

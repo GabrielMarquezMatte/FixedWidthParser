@@ -118,4 +118,32 @@ namespace FixedWidthParser.Tests
         [FixedColumn(15, 10)] public double Salary { get; set; }
     }
 #endif
+
+    public readonly partial record struct GenDateTimeExactModel : IFixedWidthModel<GenDateTimeExactModel>, IUtf8FixedWidthModel<GenDateTimeExactModel>
+    {
+        [FixedColumn(0, 8, Format = "yyyyMMdd")] public DateTime Date { get; init; }
+        [FixedColumn(8, 8, Format = "yyyyMMdd")] public DateOnly DateOnlyVal { get; init; }
+    }
+
+    public readonly partial record struct GenZeroPaddedLeadingModel : IFixedWidthModel<GenZeroPaddedLeadingModel>, IUtf8FixedWidthModel<GenZeroPaddedLeadingModel>
+    {
+        [FixedColumn(0, 5, TrimChar = '0', TrimMode = TrimMode.Leading)] public int Value { get; init; }
+        [FixedColumn(5, 5, TrimChar = '0', TrimMode = TrimMode.Leading)] public double DoubleValue { get; init; }
+    }
+
+    public readonly partial record struct GenZeroPaddedBothModel : IFixedWidthModel<GenZeroPaddedBothModel>, IUtf8FixedWidthModel<GenZeroPaddedBothModel>
+    {
+        [FixedColumn(0, 5, TrimChar = '0', TrimMode = TrimMode.Both)] public int Value { get; init; }
+    }
+
+    public readonly partial record struct GenSignPaddedModel : IFixedWidthModel<GenSignPaddedModel>, IUtf8FixedWidthModel<GenSignPaddedModel>
+    {
+        [FixedColumn(0, 6, Alignment = Alignment.Right, Padding = '0')] public int Value { get; init; }
+    }
+
+    public readonly partial record struct GenNullablePaddingModel : IFixedWidthModel<GenNullablePaddingModel>, IUtf8FixedWidthModel<GenNullablePaddingModel>
+    {
+        [FixedColumn(0, 5, TrimChar = '0')] public int? Value { get; init; }
+        [FixedColumn(5, 5, TrimChar = '*')] public double? DoubleValue { get; init; }
+    }
 }
