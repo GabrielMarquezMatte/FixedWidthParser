@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Text;
 
 namespace FixedWidthParser.Readers
 {
@@ -15,7 +16,7 @@ namespace FixedWidthParser.Readers
     /// <see langword="struct"/>s so the calls devirtualize inside the generic buffer state, exactly
     /// like the <c>TParser</c> strategy on the enumerator cores.
     /// </summary>
-    internal interface ILineFormat<T> where T : unmanaged
+    public interface ILineFormat<T> where T : unmanaged
     {
         static abstract T Cr { get; }
         static abstract T Lf { get; }
@@ -25,10 +26,13 @@ namespace FixedWidthParser.Readers
         /// Returns <see langword="false"/> when more buffered data is needed to decide.
         /// </summary>
         static abstract bool TrySkipPreamble(ReadOnlySpan<T> data, bool eof, out int skip);
+
+        /// <summary>Formats a line for a parsing exception.</summary>
+        static abstract string FormatForException(ReadOnlySpan<T> line);
     }
 
     /// <summary>Char line format: no preamble — the <see cref="TextReader"/> already handled the BOM.</summary>
-    internal readonly struct CharLineFormat : ILineFormat<char>
+    public readonly struct CharLineFormat : ILineFormat<char>
     {
         public static char Cr => '\r';
         public static char Lf => '\n';
@@ -38,10 +42,15 @@ namespace FixedWidthParser.Readers
             skip = 0;
             return true;
         }
+
+        public static string FormatForException(ReadOnlySpan<char> line)
+        {
+            return line.ToString();
+        }
     }
 
     /// <summary>UTF-8 byte line format: skips a leading byte-order mark (EF BB BF).</summary>
-    internal readonly struct Utf8LineFormat : ILineFormat<byte>
+    public readonly struct Utf8LineFormat : ILineFormat<byte>
     {
         public static byte Cr => (byte)'\r';
         public static byte Lf => (byte)'\n';
@@ -57,6 +66,11 @@ namespace FixedWidthParser.Readers
             }
             skip = 0;
             return eof;
+        }
+
+        public static string FormatForException(ReadOnlySpan<byte> line)
+        {
+            return Encoding.UTF8.GetString(line);
         }
     }
 

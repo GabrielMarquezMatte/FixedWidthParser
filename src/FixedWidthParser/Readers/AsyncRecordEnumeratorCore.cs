@@ -4,78 +4,72 @@ using CommunityToolkit.HighPerformance.Buffers;
 namespace FixedWidthParser.Readers
 {
     /// <summary>
-    /// Shared asynchronous enumerator logic for the record readers, specialized by a
-    /// <see langword="struct"/> <typeparamref name="TParser"/> strategy (devirtualized parse). The
-    /// enumerator is a class (not a struct) because an <c>async</c> method captures <c>this</c> by
-    /// value — a struct enumerator would lose its state between calls. The span scanning happens in
-    /// a synchronous step; only the buffer refill is awaited, using <see cref="Memory{T}"/> (which
-    /// can cross the <c>await</c>). The public reader enumerators derive from this to keep their
-    /// concrete return type while sharing one implementation.
+    /// Shared asynchronous enumerator logic for character and UTF-8 record readers. The span scan
+    /// remains synchronous; only the source refill awaits a <see cref="Memory{T}"/>.
     /// </summary>
-    public sealed class AsyncRecordEnumeratorCore<TModel, TParser> : IAsyncEnumerator<TModel> where TParser : struct, ILineParser<TModel>
+    public sealed class AsyncRecordEnumeratorCore<T, TFormat, TModel, TParser, TSource> : IAsyncEnumerator<TModel>
+        where T : unmanaged, IEquatable<T>
+        where TFormat : struct, ILineFormat<T>
+        where TParser : struct, IRecordLineParser<T, TModel>
+        where TSource : struct, ISource<T>
     {
         private readonly TParser _strategy;
-        private readonly bool _ownsReader;
         private readonly IFormatProvider? _formatProvider;
         private readonly StringPool? _stringPool;
         private readonly CancellationToken _cancellationToken;
-        private TextReader? _reader;
-        private LineBufferState<char, CharLineFormat> _lines;
+        private TSource _source;
+        private LineBufferState<T, TFormat> _lines;
         private TModel _current;
+        private bool _disposed;
 
         internal AsyncRecordEnumeratorCore(
             TParser strategy,
-            TextReader reader,
-            bool ownsReader,
+            TSource source,
             IFormatProvider? formatProvider,
             StringPool? stringPool,
             int bufferSize,
             CancellationToken cancellationToken)
         {
             _strategy = strategy;
-            _reader = reader;
-            _ownsReader = ownsReader;
+            _source = source;
             _formatProvider = formatProvider;
             _stringPool = stringPool;
             _cancellationToken = cancellationToken;
             _lines = default;
             _lines.Rent(bufferSize);
             _current = default!;
+            _disposed = false;
         }
 
+        /// <inheritdoc />
         public TModel Current => _current;
 
+        /// <inheritdoc />
         public ValueTask<bool> MoveNextAsync()
         {
-            ObjectDisposedException.ThrowIf(_reader is null, nameof(AsyncRecordEnumeratorCore<,>));
+            ObjectDisposedException.ThrowIf(_disposed, nameof(AsyncRecordEnumeratorCore<T, TFormat, TModel, TParser, TSource>));
             _cancellationToken.ThrowIfCancellationRequested();
-            // Fast path: the next line is already sitting in the buffer (the dominant case — a
-            // single refill holds ~100+ lines), so most calls never need to touch the async
-            // machinery at all.
             var result = TryReadFromBuffer();
             if (result == LineStatus.Line)
             {
                 return new ValueTask<bool>(true);
             }
-
             if (result == LineStatus.End)
             {
                 return new ValueTask<bool>(false);
             }
 
-            return MoveNextSlowAsync(_reader);
+            return MoveNextSlowAsync();
         }
 
-        private async ValueTask<bool> MoveNextSlowAsync(TextReader reader)
+        private async ValueTask<bool> MoveNextSlowAsync()
         {
             while (true)
             {
                 PrepareRefill();
-                int read = await reader
+                _lines.Advance(await _source
                     .ReadAsync(_lines.Buffer.AsMemory(_lines.End, _lines.Buffer.Length - _lines.End), _cancellationToken)
-                    .ConfigureAwait(false);
-                _lines.Advance(read);
-
+                    .ConfigureAwait(false));
                 _cancellationToken.ThrowIfCancellationRequested();
 
                 var result = TryReadFromBuffer();
@@ -83,7 +77,6 @@ namespace FixedWidthParser.Readers
                 {
                     return true;
                 }
-
                 if (result == LineStatus.End)
                 {
                     return false;
@@ -98,22 +91,17 @@ namespace FixedWidthParser.Readers
             if (status == LineStatus.Line)
             {
                 Parse(line);
-                return LineStatus.Line;
             }
-            if (status == LineStatus.End)
-            {
-                return LineStatus.End;
-            }
-            return LineStatus.NeedData;
+            return status;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void Parse(ReadOnlySpan<char> line)
+        private void Parse(ReadOnlySpan<T> line)
         {
             if (!_strategy.TryParse(line, _formatProvider, _stringPool, out _current))
             {
                 throw new FormatException(
-                    $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{line}\".");
+                    $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{TFormat.FormatForException(line)}\".");
             }
         }
 
@@ -123,16 +111,15 @@ namespace FixedWidthParser.Readers
             _lines.GrowIfFull();
         }
 
+        /// <inheritdoc />
         public ValueTask DisposeAsync()
         {
-            _lines.Return();
-#pragma warning disable IDISP007 // Don't dispose injected
-            if (_ownsReader)
+            if (!_disposed)
             {
-                _reader?.Dispose();
+                _lines.Return();
+                _source.Dispose();
+                _disposed = true;
             }
-#pragma warning restore IDISP007 // Don't dispose injected
-            _reader = null;
             return ValueTask.CompletedTask;
         }
     }
