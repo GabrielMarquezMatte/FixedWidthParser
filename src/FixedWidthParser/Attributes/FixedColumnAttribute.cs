@@ -30,6 +30,14 @@ namespace FixedWidthParser.Attributes
         /// <summary>Padding character when writing (e.g. '0' for zero-padding). Default: space.</summary>
         public char Padding { get; set; } = ' ';
 
+        /// <summary>
+        /// Character trimmed from the end of the column when parsing (e.g. '0' for a zero-padded
+        /// numeric column written by another producer). Ignored for <c>string</c> columns' interning
+        /// identity in the same way as the default — it only changes which character is stripped
+        /// before the value is handed to the parser/converter. Default: space.
+        /// </summary>
+        public char TrimChar { get; set; } = ' ';
+
         /// <summary>Format string passed to <see cref="ISpanFormattable"/> (e.g. "F2", "N0"). Ignored for string.</summary>
         public string? Format { get; set; }
 

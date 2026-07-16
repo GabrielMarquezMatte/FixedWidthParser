@@ -8,9 +8,7 @@ namespace FixedWidthParser.Formatters
     {
         public void Format(in TModel model, Span<char> buffer, IFormatProvider? formatProvider)
         {
-            var slice = buffer.Slice(start, length);
-            var value = getter(in model);
-            options.WriteInto(value.AsSpan(), slice, columnName);
+            FixedWidthRuntime.FormatString(getter(in model), buffer.Slice(start, length), options, columnName);
         }
     }
 }

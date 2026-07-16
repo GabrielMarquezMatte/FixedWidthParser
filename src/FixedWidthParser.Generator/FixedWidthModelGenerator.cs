@@ -21,6 +21,7 @@ namespace FixedWidthParser.Generator
         private const string ColumnAttributeMetadataName = "FixedWidthParser.Attributes.FixedColumnAttribute";
         private const string ConverterInterfaceMetadataName = "FixedWidthParser.Processors.IFixedWidthConverter`1";
         private const string Utf8ConverterInterfaceMetadataName = "FixedWidthParser.Processors.IUtf8FixedWidthConverter`1";
+        private const string SpanFormattableMetadataName = "System.ISpanFormattable";
 
         private static readonly DiagnosticDescriptor MustBePartial = new(
             "FWP001", "Fixed-width model must be partial",
@@ -65,6 +66,11 @@ namespace FixedWidthParser.Generator
         private static readonly DiagnosticDescriptor UnsupportedUtf8ConverterType = new(
             "FWP009", "Converter does not implement IUtf8FixedWidthConverter<T>",
             "Converter '{0}' for column '{1}' does not implement IUtf8FixedWidthConverter<{2}>",
+            "FixedWidthParser", DiagnosticSeverity.Error, isEnabledByDefault: true);
+
+        private static readonly DiagnosticDescriptor UnsupportedWriteColumnType = new(
+            "FWP010", "Unsupported fixed-width column type for writing",
+            "Column '{0}' has type '{1}', which is not string or ISpanFormattable; generated writing cannot handle it",
             "FixedWidthParser", DiagnosticSeverity.Error, isEnabledByDefault: true);
 
         public void Initialize(IncrementalGeneratorInitializationContext context)
@@ -135,16 +141,45 @@ namespace FixedWidthParser.Generator
                 int length = attribute.ConstructorArguments[1].Value is int l ? l : 0;
 
                 ITypeSymbol? converterType = null;
+                int alignment = 0; // Alignment.Left
+                char padding = ' ';
+                string? format = null;
+                int overflow = 0; // OverflowBehavior.Default
+                char trimChar = ' ';
                 foreach (var namedArg in attribute.NamedArguments)
                 {
-                    if (namedArg.Key == "Converter" && namedArg.Value.Value is ITypeSymbol converterSymbol)
+                    switch (namedArg.Key)
                     {
-                        converterType = converterSymbol;
+                        case "Converter" when namedArg.Value.Value is ITypeSymbol converterSymbol:
+                            converterType = converterSymbol;
+                            break;
+                        case "Alignment" when namedArg.Value.Value is int a:
+                            alignment = a;
+                            break;
+                        case "Padding" when namedArg.Value.Value is char p:
+                            padding = p;
+                            break;
+                        case "Format":
+                            format = namedArg.Value.Value as string;
+                            break;
+                        case "Overflow" when namedArg.Value.Value is int o:
+                            overflow = o;
+                            break;
+                        case "TrimChar" when namedArg.Value.Value is char t:
+                            trimChar = t;
+                            break;
                     }
                 }
 
                 var (kind, parsableTypeFqn, converterFqn, isNullable, isCharParsable, isUtf8Parsable) = Classify(memberType, converterType, compilation);
-                columns.Add(new ColumnInfo(member.Name, start, length, kind, parsableTypeFqn, converterFqn, isNullable, isCharParsable, isUtf8Parsable));
+                var (writeKind, isCharFormattable) = ClassifyWrite(memberType, converterType, compilation);
+                // Mirrors FixedWidthWriter.DetermineOverflowBehavior: an explicit Overflow wins; otherwise
+                // string truncates and everything else throws.
+                int resolvedOverflow = overflow != 0 ? overflow : (writeKind == WriteKind.String ? 1 : 2);
+
+                columns.Add(new ColumnInfo(
+                    member.Name, start, length, kind, parsableTypeFqn, converterFqn, isNullable, isCharParsable, isUtf8Parsable,
+                    writeKind, isCharFormattable, alignment, padding, format, resolvedOverflow, trimChar));
             }
 
             string? ns = symbol.ContainingNamespace.IsGlobalNamespace
@@ -216,6 +251,43 @@ namespace FixedWidthParser.Generator
             return (kind, fqn, null, false, isCharParsable, isUtf8Parsable);
         }
 
+        // Classification for the write side: mirrors FixedWidthWriter.CreateFormatter's own resolution
+        // (converter → string → ISpanFormattable fallback), but write has no "primitive" concept —
+        // double/float are ISpanFormattable like everything else, no special-casing.
+        private static (WriteKind Kind, bool IsCharFormattable) ClassifyWrite(ITypeSymbol type, ITypeSymbol? converterType, Compilation compilation)
+        {
+            var underlying = UnwrapNullable(type);
+
+            if (converterType is not null)
+            {
+                bool convertsChar = ImplementsConverter(converterType, underlying, compilation, ConverterInterfaceMetadataName);
+                bool convertsUtf8 = ImplementsConverter(converterType, underlying, compilation, Utf8ConverterInterfaceMetadataName);
+                return (convertsChar || convertsUtf8 ? WriteKind.Converter : WriteKind.Unsupported, false);
+            }
+
+            if (underlying.SpecialType == SpecialType.System_String)
+            {
+                return (WriteKind.String, true);
+            }
+
+            bool isCharFormattable = ImplementsInterface(underlying, compilation, SpanFormattableMetadataName);
+            return (isCharFormattable ? WriteKind.Formattable : WriteKind.Unsupported, isCharFormattable);
+        }
+
+        private static ITypeSymbol UnwrapNullable(ITypeSymbol type)
+        {
+            return type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } named
+                ? named.TypeArguments[0]
+                : type;
+        }
+
+        // Implements the given (non-generic) BCL interface metadata name?
+        private static bool ImplementsInterface(ITypeSymbol type, Compilation compilation, string interfaceMetadataName)
+        {
+            var iface = compilation.GetTypeByMetadataName(interfaceMetadataName);
+            return iface is not null && type.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, iface));
+        }
+
         // Implements I…SpanParsable<ThisType> for the given (open) BCL interface metadata name?
         private static bool ImplementsParsable(ITypeSymbol type, Compilation compilation, string interfaceMetadataName)
         {
@@ -272,11 +344,13 @@ namespace FixedWidthParser.Generator
                 return;
             }
 
-            // Structural errors (geometry) block BOTH generated methods. Per-column-type errors block
-            // only the affected path: FWP003 the char method, FWP007 the byte method.
+            // Structural errors (geometry) block ALL generated methods (parse char/byte + write).
+            // Per-column-type errors block only the affected path: FWP003 the char parse method,
+            // FWP007 the byte parse method, FWP010/FWP008 the write method.
             bool structuralError = false;
             bool charTypeError = false;
             bool utf8TypeError = false;
+            bool writeTypeError = false;
             var columns = model.Columns.AsImmutableArray();
             foreach (var column in columns)
             {
@@ -296,6 +370,23 @@ namespace FixedWidthParser.Generator
                             ? Diagnostic.Create(UnsupportedUtf8ConverterType, model.Location, column.ConverterFqn, column.Name, column.TypeFqn)
                             : Diagnostic.Create(UnsupportedUtf8ColumnType, model.Location, column.Name, column.TypeFqn));
                         utf8TypeError = true;
+                    }
+                }
+                if (model.ImplementsChar)
+                {
+                    bool writeOk = column.WKind switch
+                    {
+                        WriteKind.String => true,
+                        WriteKind.Converter => column.IsCharParsable, // IFixedWidthConverter<T> is symmetric read/write
+                        WriteKind.Formattable => column.IsCharFormattable,
+                        _ => false
+                    };
+                    if (!writeOk)
+                    {
+                        spc.ReportDiagnostic(column.ConverterFqn is not null
+                            ? Diagnostic.Create(UnsupportedConverterType, model.Location, column.ConverterFqn, column.Name, column.TypeFqn)
+                            : Diagnostic.Create(UnsupportedWriteColumnType, model.Location, column.Name, column.TypeFqn));
+                        writeTypeError = true;
                     }
                 }
                 if (column.Start < 0)
@@ -350,19 +441,20 @@ namespace FixedWidthParser.Generator
 
             bool emitChar = model.ImplementsChar && !charTypeError;
             bool emitUtf8 = model.ImplementsUtf8 && !utf8TypeError;
-            if (!emitChar && !emitUtf8)
+            bool emitWrite = model.ImplementsChar && !writeTypeError;
+            if (!emitChar && !emitUtf8 && !emitWrite)
             {
                 return;
             }
 
             string hint = model.FullyQualifiedName.Replace("global::", string.Empty) + ".FixedWidth.g.cs";
-            spc.AddSource(hint, BuildSource(model, emitChar, emitUtf8));
+            spc.AddSource(hint, BuildSource(model, emitChar, emitUtf8, emitWrite));
         }
 
         private const string CharRuntimeFqn = "global::FixedWidthParser.FixedWidthRuntime";
         private const string Utf8RuntimeFqn = "global::FixedWidthParser.Utf8FixedWidthRuntime";
 
-        private static string BuildSource(ModelInfo model, bool emitChar, bool emitUtf8)
+        private static string BuildSource(ModelInfo model, bool emitChar, bool emitUtf8, bool emitWrite)
         {
             var sb = new StringBuilder();
             sb.AppendLine("// <auto-generated/>");
@@ -384,24 +476,38 @@ namespace FixedWidthParser.Generator
             sb.Append(indent).AppendLine("{");
 
             string body = indent + "    ";
-            if (AppendConverterFields(sb, body, model))
+            bool wroteConverterFields = AppendConverterFields(sb, body, model);
+            bool wroteOptionsFields = emitWrite && AppendWriteOptionsFields(sb, body, model);
+            bool wroteTrimFields = emitUtf8 && AppendUtf8TrimFields(sb, body, model);
+            if (wroteConverterFields || wroteOptionsFields || wroteTrimFields)
             {
                 sb.AppendLine();
             }
 
-            // Both TryParse overloads (over char / over byte) coexist in one partial; each static
-            // abstract interface member binds implicitly to its matching span element type.
+            // TryParse (char / byte) and TryFormat (char) coexist in one partial; each static abstract
+            // interface member binds implicitly to its matching span element type.
+            bool wroteMethod = false;
             if (emitChar)
             {
                 AppendMethod(sb, body, model, "char", CharRuntimeFqn);
+                wroteMethod = true;
             }
             if (emitUtf8)
             {
-                if (emitChar)
+                if (wroteMethod)
                 {
                     sb.AppendLine();
                 }
                 AppendMethod(sb, body, model, "byte", Utf8RuntimeFqn);
+                wroteMethod = true;
+            }
+            if (emitWrite)
+            {
+                if (wroteMethod)
+                {
+                    sb.AppendLine();
+                }
+                AppendWriteMethod(sb, body, model);
             }
 
             sb.Append(indent).AppendLine("}");
@@ -430,6 +536,144 @@ namespace FixedWidthParser.Generator
                 any = true;
             }
             return any;
+        }
+
+        // Emits one static readonly byte field per column whose TrimChar isn't the default space,
+        // converting the char to its single-byte ASCII representation once (at type-init) instead of
+        // on every parse call. A non-ASCII TrimChar throws there with a clear message, mirroring how
+        // CultureHelpers rejects a non-ASCII decimal separator on the byte path.
+        private static bool AppendUtf8TrimFields(StringBuilder sb, string body, ModelInfo model)
+        {
+            var columns = model.Columns.AsImmutableArray();
+            bool any = false;
+            for (int i = 0; i < columns.Length; i++)
+            {
+                if (columns[i].TrimChar == ' ')
+                {
+                    continue;
+                }
+                sb.Append(body).Append("private static readonly byte __trim").Append(i)
+                  .Append(" = global::FixedWidthParser.Utf8FixedWidthRuntime.ToAsciiByte(")
+                  .Append(SymbolDisplay.FormatLiteral(columns[i].TrimChar, true)).Append(", ")
+                  .Append(SymbolDisplay.FormatLiteral(columns[i].Name, true)).AppendLine(");");
+                any = true;
+            }
+            return any;
+        }
+
+        // Emits one static readonly ColumnFormatOptions field per column (alignment/padding/format/
+        // overflow, resolved at Extract time), shared by the write method's per-column formatting calls.
+        private static bool AppendWriteOptionsFields(StringBuilder sb, string body, ModelInfo model)
+        {
+            var columns = model.Columns.AsImmutableArray();
+            for (int i = 0; i < columns.Length; i++)
+            {
+                var c = columns[i];
+                sb.Append(body).Append("private static readonly global::FixedWidthParser.Formatters.ColumnFormatOptions __options").Append(i)
+                  .Append(" = new(").Append(AlignmentLiteral(c.Alignment)).Append(", ").Append(SymbolDisplay.FormatLiteral(c.Padding, true))
+                  .Append(", ").Append(c.Format is null ? "null" : SymbolDisplay.FormatLiteral(c.Format, true))
+                  .Append(", ").Append(OverflowLiteral(c.Overflow)).AppendLine(");");
+            }
+            return columns.Length > 0;
+        }
+
+        private static string AlignmentLiteral(int value)
+        {
+            return value == 1
+                ? "global::FixedWidthParser.Attributes.Alignment.Right"
+                : "global::FixedWidthParser.Attributes.Alignment.Left";
+        }
+
+        private static string OverflowLiteral(int resolvedValue)
+        {
+            return resolvedValue switch
+            {
+                1 => "global::FixedWidthParser.Attributes.OverflowBehavior.Truncate",
+                2 => "global::FixedWidthParser.Attributes.OverflowBehavior.Throw",
+                _ => "global::FixedWidthParser.Attributes.OverflowBehavior.Default",
+            };
+        }
+
+        private static void AppendWriteMethod(StringBuilder sb, string body, ModelInfo model)
+        {
+            var columns = model.Columns.AsImmutableArray();
+            int lineLength = 0;
+            foreach (var c in columns)
+            {
+                int end = c.Start + c.Length;
+                if (end > lineLength)
+                {
+                    lineLength = end;
+                }
+            }
+
+            sb.Append(body)
+              .AppendLine("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
+            sb.Append(body)
+              .Append("public static bool TryFormat(in ").Append(model.FullyQualifiedName)
+              .Append(" model, global::System.Span<char> destination, global::System.IFormatProvider? formatProvider, out int charsWritten)").AppendLine();
+            sb.Append(body).AppendLine("{");
+
+            string stmt = body + "    ";
+            sb.Append(stmt).Append("if (destination.Length < ").Append(lineLength).AppendLine(") { charsWritten = 0; return false; }");
+            if (columns.Length > 0)
+            {
+                sb.Append(stmt).Append("var __line = destination[..").Append(lineLength).AppendLine("];");
+                sb.Append(stmt).AppendLine("__line.Fill(' ');");
+                for (int i = 0; i < columns.Length; i++)
+                {
+                    var c = columns[i];
+                    string slice = "__line.Slice(" + c.Start + ", " + c.Length + ")";
+                    AppendColumnWrite(sb, stmt, c, slice, i);
+                }
+            }
+            sb.Append(stmt).Append("charsWritten = ").Append(lineLength).AppendLine(";");
+            sb.Append(stmt).AppendLine("return true;");
+
+            sb.Append(body).AppendLine("}");
+        }
+
+        // Writes one column: a nullable (T?) column fills its slice with the padding character when
+        // null, otherwise formats exactly as the non-nullable case would (via the temp local pattern
+        // variable from the `is { }` check).
+        private static void AppendColumnWrite(StringBuilder sb, string stmt, ColumnInfo c, string slice, int i)
+        {
+            if (!c.IsNullable)
+            {
+                AppendColumnKindWrite(sb, stmt, c, slice, i, "model." + c.Name);
+                return;
+            }
+
+            sb.Append(stmt).Append("if (model.").Append(c.Name).Append(" is { } __u").Append(i).AppendLine(")");
+            sb.Append(stmt).AppendLine("{");
+            AppendColumnKindWrite(sb, stmt + "    ", c, slice, i, "__u" + i);
+            sb.Append(stmt).AppendLine("}");
+            sb.Append(stmt).AppendLine("else");
+            sb.Append(stmt).AppendLine("{");
+            sb.Append(stmt).Append("    ").Append(slice).Append(".Fill(__options").Append(i).AppendLine(".Padding);");
+            sb.Append(stmt).AppendLine("}");
+        }
+
+        private static void AppendColumnKindWrite(StringBuilder sb, string stmt, ColumnInfo c, string slice, int i, string valueExpr)
+        {
+            switch (c.WKind)
+            {
+                case WriteKind.String:
+                    sb.Append(stmt).Append("global::FixedWidthParser.FixedWidthRuntime.FormatString(").Append(valueExpr).Append(", ").Append(slice)
+                      .Append(", __options").Append(i).Append(", \"").Append(c.Name).AppendLine("\");");
+                    break;
+                case WriteKind.Formattable:
+                    sb.Append(stmt).Append("global::FixedWidthParser.FixedWidthRuntime.FormatValue(").Append(valueExpr).Append(", ").Append(slice)
+                      .Append(", formatProvider, __options").Append(i).Append(", \"").Append(c.Name).AppendLine("\");");
+                    break;
+                case WriteKind.Converter:
+                    sb.Append(stmt).Append("global::FixedWidthParser.FixedWidthRuntime.FormatConvert(").Append(valueExpr).Append(", ").Append(slice)
+                      .Append(", formatProvider, __converter").Append(i).Append(", __options").Append(i).Append(", \"").Append(c.Name).AppendLine("\");");
+                    break;
+                default:
+                    // Should not happen, already filtered in Emit with a diagnostic.
+                    break;
+            }
         }
 
         private static void AppendMethod(StringBuilder sb, string body, ModelInfo model, string elementType, string runtimeFqn)
@@ -483,14 +727,16 @@ namespace FixedWidthParser.Generator
 
                 if (!c.IsNullable)
                 {
-                    AppendColumnKindParse(sb, stmt, c, col, runtimeFqn, i, "__v" + i);
+                    AppendColumnKindParse(sb, stmt, c, col, runtimeFqn, elementType, i, "__v" + i);
                     continue;
                 }
 
                 // T?: a blank (trimmed-empty) column assigns null without invoking the underlying
                 // parser; otherwise the underlying T parses into a temp local exactly as it would for
                 // a non-nullable column, then is boxed into the T? local.
-                string trimCall = elementType == "char" ? "TrimEnd(' ')" : "TrimEnd((byte)' ')";
+                string trimCall = elementType == "char"
+                    ? "TrimEnd(" + SymbolDisplay.FormatLiteral(c.TrimChar, true) + ")"
+                    : "TrimEnd(" + (c.TrimChar == ' ' ? "(byte)' '" : "__trim" + i) + ")";
                 sb.Append(stmt).Append(c.TypeFqn).Append("? __v").Append(i).AppendLine(";");
                 sb.Append(stmt).Append("if (").Append(col).Append('.').Append(trimCall).AppendLine(".IsEmpty)");
                 sb.Append(stmt).AppendLine("{");
@@ -498,7 +744,7 @@ namespace FixedWidthParser.Generator
                 sb.Append(stmt).AppendLine("}");
                 sb.Append(stmt).AppendLine("else");
                 sb.Append(stmt).AppendLine("{");
-                AppendColumnKindParse(sb, stmt + "    ", c, col, runtimeFqn, i, "__u" + i);
+                AppendColumnKindParse(sb, stmt + "    ", c, col, runtimeFqn, elementType, i, "__u" + i);
                 sb.Append(stmt).Append("    __v").Append(i).Append(" = __u").Append(i).AppendLine(";");
                 sb.Append(stmt).AppendLine("}");
             }
@@ -517,30 +763,31 @@ namespace FixedWidthParser.Generator
         // name="localName"/>. Shared by the non-nullable case (localName = "__v{i}") and the nullable
         // case (localName = "__u{i}", a temp later boxed into the "__v{i}" nullable local) — the
         // converter field is always "__converter{i}" (keyed by column index, not the local's name).
-        private static void AppendColumnKindParse(StringBuilder sb, string stmt, ColumnInfo c, string col, string runtimeFqn, int i, string localName)
+        private static void AppendColumnKindParse(StringBuilder sb, string stmt, ColumnInfo c, string col, string runtimeFqn, string elementType, int i, string localName)
         {
+            string trimArg = TrimArgSuffix(elementType, c, i);
             switch (c.Kind)
             {
                 case ColumnKind.String:
                     sb.Append(stmt).Append("string ").Append(localName)
-                      .Append(" = ").Append(runtimeFqn).Append(".String(").Append(col).AppendLine(", stringPool);");
+                      .Append(" = ").Append(runtimeFqn).Append(".String(").Append(col).Append(", stringPool").Append(trimArg).AppendLine(");");
                     break;
                 case ColumnKind.Double:
                     sb.Append(stmt).Append("if (!").Append(runtimeFqn).Append(".TryDouble(").Append(col)
-                      .Append(", formatProvider, out double ").Append(localName).AppendLine(")) { model = default!; return false; }");
+                      .Append(", formatProvider, out double ").Append(localName).Append(trimArg).AppendLine(")) { model = default!; return false; }");
                     break;
                 case ColumnKind.Float:
                     sb.Append(stmt).Append("if (!").Append(runtimeFqn).Append(".TryFloat(").Append(col)
-                      .Append(", formatProvider, out float ").Append(localName).AppendLine(")) { model = default!; return false; }");
+                      .Append(", formatProvider, out float ").Append(localName).Append(trimArg).AppendLine(")) { model = default!; return false; }");
                     break;
                 case ColumnKind.SpanParsable:
                     sb.Append(stmt).Append("if (!").Append(runtimeFqn).Append(".TryParse<").Append(c.TypeFqn).Append(">(").Append(col)
-                      .Append(", formatProvider, out ").Append(c.TypeFqn).Append(' ').Append(localName).AppendLine(")) { model = default!; return false; }");
+                      .Append(", formatProvider, out ").Append(c.TypeFqn).Append(' ').Append(localName).Append(trimArg).AppendLine(")) { model = default!; return false; }");
                     break;
                 case ColumnKind.Converter:
                     sb.Append(stmt).Append("if (!").Append(runtimeFqn).Append(".TryConvert<").Append(c.TypeFqn).Append(", ").Append(c.ConverterFqn)
                       .Append(">(").Append(col).Append(", formatProvider, __converter").Append(i).Append(", out ").Append(c.TypeFqn)
-                      .Append(' ').Append(localName).AppendLine(")) { model = default!; return false; }");
+                      .Append(' ').Append(localName).Append(trimArg).AppendLine(")) { model = default!; return false; }");
                     break;
                 default:
                     // Should not happen, already filtered in Emit with a diagnostic.
@@ -548,9 +795,29 @@ namespace FixedWidthParser.Generator
             }
         }
 
+        // Trailing trimChar argument for a runtime parse call: omitted when the column uses the
+        // default (space) trim, so unconfigured columns keep emitting the exact same call shape as
+        // before this option existed. Char columns pass the literal directly; byte columns reference
+        // the precomputed __trim{i} field (AppendUtf8TrimFields) since a non-ASCII char can't be a
+        // byte literal — the field does that conversion once, with a clear throw if it doesn't fit.
+        private static string TrimArgSuffix(string elementType, ColumnInfo c, int i)
+        {
+            if (c.TrimChar == ' ')
+            {
+                return string.Empty;
+            }
+            return elementType == "char"
+                ? ", " + SymbolDisplay.FormatLiteral(c.TrimChar, true)
+                : ", __trim" + i;
+        }
+
         private enum ColumnKind { String, Double, Float, SpanParsable, Converter, Unsupported }
 
-        private readonly struct ColumnInfo(string name, int start, int length, ColumnKind kind, string typeFqn, string? converterFqn, bool isNullable, bool isCharParsable, bool isUtf8Parsable) : IEquatable<ColumnInfo>
+        private enum WriteKind { String, Formattable, Converter, Unsupported }
+
+        private readonly struct ColumnInfo(
+            string name, int start, int length, ColumnKind kind, string typeFqn, string? converterFqn, bool isNullable, bool isCharParsable, bool isUtf8Parsable,
+            WriteKind writeKind, bool isCharFormattable, int alignment, char padding, string? format, int overflow, char trimChar) : IEquatable<ColumnInfo>
         {
             public readonly string Name = name;
             public readonly int Start = start;
@@ -561,6 +828,13 @@ namespace FixedWidthParser.Generator
             public readonly bool IsNullable = isNullable;
             public readonly bool IsCharParsable = isCharParsable;
             public readonly bool IsUtf8Parsable = isUtf8Parsable;
+            public readonly WriteKind WKind = writeKind;
+            public readonly bool IsCharFormattable = isCharFormattable;
+            public readonly int Alignment = alignment;
+            public readonly char Padding = padding;
+            public readonly string? Format = format;
+            public readonly int Overflow = overflow;
+            public readonly char TrimChar = trimChar;
 
             public bool Equals(ColumnInfo other)
             {
@@ -569,6 +843,13 @@ namespace FixedWidthParser.Generator
                        && Kind == other.Kind
                        && IsNullable == other.IsNullable
                        && IsCharParsable == other.IsCharParsable
+                       && WKind == other.WKind
+                       && IsCharFormattable == other.IsCharFormattable
+                       && Alignment == other.Alignment
+                       && Padding == other.Padding
+                       && Overflow == other.Overflow
+                       && TrimChar == other.TrimChar
+                       && string.Equals(Format, other.Format, StringComparison.Ordinal)
                        && IsUtf8Parsable == other.IsUtf8Parsable
                        && string.Equals(Name, other.Name, StringComparison.Ordinal)
                        && string.Equals(TypeFqn, other.TypeFqn, StringComparison.Ordinal)
@@ -596,6 +877,13 @@ namespace FixedWidthParser.Generator
                     hash = hash * 31 + (IsNullable ? 1 : 0);
                     hash = hash * 31 + (IsCharParsable ? 1 : 0);
                     hash = hash * 31 + (IsUtf8Parsable ? 1 : 0);
+                    hash = hash * 31 + (int)WKind;
+                    hash = hash * 31 + (IsCharFormattable ? 1 : 0);
+                    hash = hash * 31 + Alignment;
+                    hash = hash * 31 + Padding;
+                    hash = hash * 31 + Overflow;
+                    hash = hash * 31 + TrimChar;
+                    hash = hash * 31 + (Format is null ? 0 : StringComparer.Ordinal.GetHashCode(Format));
                     return hash;
                 }
             }

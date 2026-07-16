@@ -22,6 +22,17 @@ namespace FixedWidthParser
             return TModel.TryParse(line, formatProvider, stringPool, out model);
         }
 
+        /// <summary>Formats <paramref name="model"/> into <paramref name="destination"/> using its generated writer.</summary>
+        public static bool TryFormat<TModel>(in TModel model, Span<char> destination, IFormatProvider? formatProvider, out int charsWritten)
+#if NET9_0_OR_GREATER
+            where TModel : IFixedWidthModel<TModel>, allows ref struct
+#else
+            where TModel : IFixedWidthModel<TModel>
+#endif
+        {
+            return TModel.TryFormat(in model, destination, formatProvider, out charsWritten);
+        }
+
         /// <summary>Reads source-generated models from an existing <see cref="TextReader"/>.</summary>
         public static GeneratedFixedWidthRecordEnumerable<TModel> Read<TModel>(
             TextReader reader,

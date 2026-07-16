@@ -90,6 +90,28 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 8, Converter = typeof(CentsConverter))] public CentsValue? Amount { get; init; }
     }
 
+    /// <summary>Integer column right-padded with '*' instead of space; read with a matching <c>TrimChar</c>.</summary>
+    public readonly record struct AsteriskTrimIntModel
+    {
+        [FixedColumn(0, 5, TrimChar = '*')] public int Value { get; init; }
+    }
+
+    /// <summary>String column right-padded with '#' instead of space; read with a matching <c>TrimChar</c>.</summary>
+    public readonly record struct HashTrimStringModel
+    {
+        [FixedColumn(0, 8, TrimChar = '#')] public string Code { get; init; }
+    }
+
+    /// <summary>
+    /// UTF-8 byte path only: <c>TrimChar</c> set to a non-ASCII character (U+00A0, no-break space),
+    /// which cannot be represented as a single UTF-8 byte — must throw rather than silently trim the
+    /// wrong byte (mirrors the existing decimal-separator ASCII guard).
+    /// </summary>
+    public readonly record struct NonAsciiTrimModel
+    {
+        [FixedColumn(0, 5, TrimChar = ' ')] public int Value { get; init; }
+    }
+
     /// <summary>Property-based model (string + int + double).</summary>
     public readonly record struct PersonModel
     {

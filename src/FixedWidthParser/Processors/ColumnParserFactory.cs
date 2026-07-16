@@ -31,7 +31,7 @@ namespace FixedWidthParser.Processors
         /// <c>FixedColumnAttribute.Converter</c>), it takes priority over the <see cref="ISpanParsable{TSelf}"/> fallback.
         /// </summary>
         /// <remarks><paramref name="setter"/> must be a <c>RefAction&lt;TModel, valueType&gt;</c> assigning the parsed value to the member.</remarks>
-        public static ColumnParser<TModel> Create<TModel>(Type valueType, Delegate setter, Type? converterType, string memberName)
+        public static ColumnParser<TModel> Create<TModel>(Type valueType, Delegate setter, Type? converterType, string memberName, char trimChar = ' ')
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
@@ -40,11 +40,11 @@ namespace FixedWidthParser.Processors
             if (underlyingType is not null)
             {
                 return (ColumnParser<TModel>)BuildNullableMethod.MakeGenericMethod(typeof(TModel), underlyingType)
-                                                                .Invoke(null, [setter, converterType, memberName])!;
+                                                                .Invoke(null, [setter, converterType, memberName, trimChar])!;
             }
 
             return ColumnParserFactoryShared.Create<TModel, ColumnParser<TModel>>(
-                valueType, setter, converterType, memberName, typeof(IFixedWidthConverter<>),
+                valueType, setter, converterType, memberName, trimChar, typeof(IFixedWidthConverter<>),
                 BuildParsableMethod, BuildConverterMethod, BuildDoubleMethod, BuildFloatMethod, BuildString);
         }
 
@@ -52,7 +52,7 @@ namespace FixedWidthParser.Processors
         // underlying parser. Otherwise, the underlying T resolves exactly as a non-nullable column
         // would (converter → double/float → ISpanParsable fallback), via an adapter setter that boxes
         // the result into the T? setter — no duplicated parse logic per type.
-        private static ColumnParser<TModel> BuildNullable<TModel, TUnderlying>(Delegate setter, Type? converterType, string memberName)
+        private static ColumnParser<TModel> BuildNullable<TModel, TUnderlying>(Delegate setter, Type? converterType, string memberName, char trimChar)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
@@ -62,12 +62,12 @@ namespace FixedWidthParser.Processors
             RefAction<TModel, TUnderlying> adapted = (ref TModel model, TUnderlying value) => nullableSetter(ref model, value);
 
             var inner = ColumnParserFactoryShared.Create<TModel, ColumnParser<TModel>>(
-                typeof(TUnderlying), adapted, converterType, memberName, typeof(IFixedWidthConverter<>),
+                typeof(TUnderlying), adapted, converterType, memberName, trimChar, typeof(IFixedWidthConverter<>),
                 BuildParsableMethod, BuildConverterMethod, BuildDoubleMethod, BuildFloatMethod, BuildString);
 
             return (column, formatProvider, stringPool, ref model) =>
             {
-                if (column.TrimEnd(' ').IsEmpty)
+                if (column.TrimEnd(trimChar).IsEmpty)
                 {
                     nullableSetter(ref model, null);
                     return true;
@@ -80,7 +80,7 @@ namespace FixedWidthParser.Processors
         // directly inside the column closure. This is a constrained call the JIT devirtualizes to the
         // concrete TValue.TryParse (and can inline), saving one indirect call per column and no
         // value-parser delegate allocated.
-        private static ColumnParser<TModel> BuildParsable<TModel, TValue>(RefAction<TModel, TValue> setter)
+        private static ColumnParser<TModel> BuildParsable<TModel, TValue>(RefAction<TModel, TValue> setter, char trimChar)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
@@ -88,7 +88,7 @@ namespace FixedWidthParser.Processors
         {
             return (column, formatProvider, _, ref model) =>
             {
-                if (!TValue.TryParse(column.TrimEnd(' '), formatProvider, out var value))
+                if (!TValue.TryParse(column.TrimEnd(trimChar), formatProvider, out var value))
                 {
                     return false;
                 }
@@ -97,14 +97,14 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildDouble<TModel>(RefAction<TModel, double> setter)
+        private static ColumnParser<TModel> BuildDouble<TModel>(RefAction<TModel, double> setter, char trimChar)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
         {
             return (column, formatProvider, _, ref model) =>
             {
-                if (!CultureHelpers.TryParseDouble(column, formatProvider, out double value))
+                if (!CultureHelpers.TryParseDouble(column, formatProvider, out double value, trimChar))
                 {
                     return false;
                 }
@@ -113,14 +113,14 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildFloat<TModel>(RefAction<TModel, float> setter)
+        private static ColumnParser<TModel> BuildFloat<TModel>(RefAction<TModel, float> setter, char trimChar)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
         {
             return (column, formatProvider, _, ref model) =>
             {
-                if (!CultureHelpers.TryParseFloat(column, formatProvider, out float value))
+                if (!CultureHelpers.TryParseFloat(column, formatProvider, out float value, trimChar))
                 {
                     return false;
                 }
@@ -132,7 +132,7 @@ namespace FixedWidthParser.Processors
         // Attribute-driven custom converter (FixedColumnAttribute.Converter): the instance is created
         // once (by the caller) and reused for every row, so it must be stateless.
         private static ColumnParser<TModel> BuildConverter<TModel, TValue, TConverter>(
-            RefAction<TModel, TValue> setter, TConverter converter)
+            RefAction<TModel, TValue> setter, TConverter converter, char trimChar)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
@@ -140,7 +140,7 @@ namespace FixedWidthParser.Processors
         {
             return (column, formatProvider, _, ref model) =>
             {
-                if (!converter.TryParse(column.TrimEnd(' '), formatProvider, out var value))
+                if (!converter.TryParse(column.TrimEnd(trimChar), formatProvider, out var value))
                 {
                     return false;
                 }
@@ -149,14 +149,15 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildString<TModel>(RefAction<TModel, string> setter)
+        private static ColumnParser<TModel> BuildString<TModel>(RefAction<TModel, string> setter, object trimChar)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
         {
+            char trim = (char)trimChar;
             return (column, _, stringPool, ref model) =>
             {
-                var slice = column.TrimEnd(' ');
+                var slice = column.TrimEnd(trim);
                 setter(ref model, stringPool is null ? slice.ToString() : stringPool.GetOrAdd(slice));
                 return true;
             };

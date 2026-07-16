@@ -24,6 +24,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parses to `null` without invoking the underlying parser/converter, and `null` writes as a blank
   (padding-filled) column. Works across reflection and generated, char and UTF-8, and composes with
   `FixedColumnAttribute.Converter` (the converter always targets the non-nullable `T`).
+- **Source-generated writer**: `IFixedWidthModel<TSelf>` gained a static-abstract `TryFormat(in TSelf,
+  Span<char>, IFormatProvider?, out int)`, implemented by the generator for every model declaring the
+  `char` marker — reflection-free, AOT-safe writing at parity with the existing generated `TryParse`.
+  Mirrors `FixedWidthWriter<TModel>`'s semantics exactly: per-column alignment/padding/format/overflow
+  (resolved at compile time into a `ColumnFormatOptions` per column), nullable columns write blank when
+  `null`, and `FixedColumnAttribute.Converter` columns format through the same converter instance used
+  for parsing. Returns `false` only when the destination span is shorter than the line length; a column
+  that doesn't fit throws or truncates per its `Overflow`, same as reflection. New facade
+  `FixedWidth.TryFormat<TModel>`. New diagnostic `FWP010` when a column's type is neither `string` nor
+  `ISpanFormattable` and has no converter. (UTF-8 byte writing — reflection or generated — remains out of
+  scope: no byte writer of either kind exists yet in this library.)
+- `FixedColumnAttribute.TrimChar`: the character trimmed from the end of a column when **parsing**
+  (previously hardcoded `' '` everywhere — `Padding` was write-only). Threaded through reflection
+  (char/byte) and the source generator (char/byte), including the nullable "blank column is null" check
+  and the `double`/`float` fast path. On the UTF-8 byte path a non-ASCII `TrimChar` throws
+  `NotSupportedException` (reflection: at parser construction; generated: from the column's static
+  `__trim{i}` field, surfacing as `TypeInitializationException` on first use) rather than silently
+  trimming the wrong byte — mirrors the existing decimal-separator ASCII guard. Unconfigured columns
+  (the overwhelming majority) still emit/execute the exact space-trim call they did before; the new
+  argument is only added when `TrimChar` differs from the default.
 
 ### Changed
 - **Breaking:** the internal column formatters `StringColumnFormatter<TModel>` and
@@ -71,6 +91,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `StringPool` (identical to the `char` path); the previous "no pooling" note was inaccurate.
 - Documented that empty lines are skipped (counted but not yielded) while a non-empty line shorter
   than the declared layout is treated as malformed and throws.
+- Reconciled the README's stated requirements with the actual multi-target: the package builds for
+  `net8.0` and `net10.0`, not ".NET 10" only. Added an explicit note (in Requirements and in the
+  `ref struct` Models section) that `ref struct` model support needs .NET 9+, since the `allows ref
+  struct` generic constraint it depends on doesn't exist on `net8.0`.
 
 ## [1.0.0]
 
