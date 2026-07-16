@@ -42,6 +42,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   behavior change for consumers.
 
 ### Fixed
+- **`double`/`float` columns under a non-'.' decimal separator could silently return a truncated,
+  wrong value instead of failing.** csFastFloat's `decimal_separator` override does not fail on
+  trailing content it doesn't recognize — it just stops at the first unrecognized character and
+  reports success with whatever it parsed up to that point. Under `de-DE`/`pt-BR`-style cultures
+  (`.` groups thousands, `,` is the decimal separator), a field like `"1.234,50"` silently became
+  `1.0` instead of `1234.50` (or failing outright). The fast path is now only trusted for the
+  invariant `'.'` separator, and even then only after confirming the whole (trimmed) field was
+  consumed; any other separator falls back to real `NumberFormatInfo`-aware parsing
+  (`double.TryParse`/`float.TryParse` with the actual `IFormatProvider`, which validates the whole
+  input and understands thousands separators correctly). Applies to reflection and generated, char
+  and UTF-8 (the byte path transcodes the — always short — numeric field to a small char buffer
+  when it needs the non-fast-path parse).
+- The decimal-separator cache was a single-entry memo that thrashed (recomputed on every call) when
+  two `IFormatProvider`s were used alternately in the same process (e.g. parsing files in different
+  locales). Replaced with a `ConditionalWeakTable` keyed by provider identity — no thrash, and no
+  unbounded growth if callers pass many distinct providers (entries are reclaimed with their provider).
 - UTF-8 byte parser: a culture whose decimal separator is not a single ASCII character (e.g. the
   Arabic decimal separator U+066B) previously had its separator silently truncated to the wrong
   byte, mis-parsing `double`/`float` columns. Such cultures now throw a clear `NotSupportedException`
