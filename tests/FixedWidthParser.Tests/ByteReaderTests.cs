@@ -176,6 +176,32 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
+        public void Parser_DoubleColumn_DotCultureThousandsSeparator_ParsesFullValue()
+        {
+            var parser = new Utf8FixedWidthParser<PersonModel>();
+
+            bool ok = parser.TryParse("Bob       30    1,234.50 "u8, Inv, null, out var model);
+
+            Assert.True(ok);
+            Assert.Equal(1234.50, model.Salary, 2);
+        }
+
+        // ----- Null provider means invariant for every column type on the byte path too (see
+        // CultureTests.Parse_DecimalColumn_NullProvider_DefaultsToInvariant for the char-path version and
+        // rationale). -----
+
+        [Fact]
+        public void Parser_DecimalColumn_NullProvider_DefaultsToInvariant()
+        {
+            var parser = new Utf8FixedWidthParser<DecimalModel>();
+
+            bool ok = parser.TryParse("1234.56     "u8, null, null, out var model);
+
+            Assert.True(ok);
+            Assert.Equal(1234.56m, model.Amount);
+        }
+
+        [Fact]
         public void Parser_DoubleColumn_TrailingGarbageAfterNumber_Fails()
         {
             var parser = new Utf8FixedWidthParser<PersonModel>();
@@ -183,6 +209,54 @@ namespace FixedWidthParser.Tests
             bool ok = parser.TryParse("Bob       30   12x       "u8, Inv, null, out _);
 
             Assert.False(ok);
+        }
+
+        // ----- Right-aligned (leading-space-padded) numeric columns: same regression as
+        // CultureTests' char-path equivalents — csFastFloat's characters_consumed did not reliably
+        // include skipped leading whitespace across its double/float overloads. -----
+
+        [Fact]
+        public void Parser_DoubleColumn_RightAligned_DotCulture_Parses()
+        {
+            var parser = new Utf8FixedWidthParser<PersonModel>();
+
+            bool ok = parser.TryParse("Bob       30       123.45"u8, Inv, null, out var model);
+
+            Assert.True(ok);
+            Assert.Equal(123.45, model.Salary, 2);
+        }
+
+        [Fact]
+        public void Parser_FloatColumn_RightAligned_DotCulture_Parses()
+        {
+            var parser = new Utf8FixedWidthParser<MeasurementModel>();
+
+            bool ok = parser.TryParse("    3.14"u8, Inv, null, out var model);
+
+            Assert.True(ok);
+            Assert.Equal(3.14f, model.Value, 2);
+        }
+
+        [Fact]
+        public void Parser_DoubleColumn_RightAligned_CommaCulture_Parses()
+        {
+            var parser = new Utf8FixedWidthParser<PersonModel>();
+
+            bool ok = parser.TryParse("Bob       30       123,45"u8, DeDe, null, out var model);
+
+            Assert.True(ok);
+            Assert.Equal(123.45, model.Salary, 2);
+        }
+
+        [Fact]
+        public void Parser_FloatColumn_RightAligned_CommaCulture_Parses()
+        {
+            var parser = new Utf8FixedWidthParser<MeasurementModel>();
+
+            bool ok = parser.TryParse("    3,14"u8, DeDe, null, out var model);
+
+            Assert.True(ok);
+            Assert.Equal(3.14f, model.Value, 2);
         }
 
         [Fact]

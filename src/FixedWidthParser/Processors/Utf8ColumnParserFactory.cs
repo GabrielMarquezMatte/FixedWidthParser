@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 
@@ -92,7 +93,9 @@ namespace FixedWidthParser.Processors
         {
             return (column, formatProvider, _, ref model) =>
             {
-                if (!TValue.TryParse(column.TrimEnd(trimChar), formatProvider, out var value))
+                // Null means invariant (matches Utf8FixedWidthRuntime.TryParse<TValue> and the double/float
+                // columns) rather than the BCL's own CurrentCulture default.
+                if (!TValue.TryParse(column.TrimEnd(trimChar), formatProvider ?? CultureInfo.InvariantCulture, out var value))
                 {
                     return false;
                 }

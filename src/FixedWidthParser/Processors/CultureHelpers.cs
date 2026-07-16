@@ -72,26 +72,49 @@ namespace FixedWidthParser.Processors
             return NumberFormatInfo.GetInstance(formatProvider).NumberDecimalSeparator[0];
         }
 
-        /// <summary>Parses a (not yet trimmed) column as <see cref="double"/>, honoring <paramref name="formatProvider"/>.</summary>
+        /// <summary>
+        /// Parses a (not yet trimmed) column as <see cref="double"/>, honoring <paramref name="formatProvider"/>.
+        /// A <see langword="null"/> provider means <see cref="CultureInfo.InvariantCulture"/> — a fixed-width
+        /// file is a machine layout, not UI text, so a caller that doesn't pass a provider should not be at
+        /// the mercy of the running thread's <see cref="CultureInfo.CurrentCulture"/> (which every other
+        /// column type, and this method's own BCL fallback below, would otherwise resolve to).
+        /// </summary>
         public static bool TryParseDouble(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out double value, char trimChar = ' ')
         {
-            var trimmed = column.TrimEnd(trimChar);
+            // Also trim leading whitespace: csFastFloat's characters_consumed does not reliably include
+            // skipped leading whitespace across its double/float overloads (verified empirically —
+            // FastDoubleParser counts it, FastFloatParser doesn't), so a right-aligned (space-padded)
+            // column would otherwise fail the full-consumption check below even though the BCL fallback
+            // (which does allow leading whitespace) would have accepted it.
+            var trimmed = column.TrimEnd(trimChar).TrimStart();
             if (GetDecimalSeparator(formatProvider) == '.')
             {
-                return FastDoubleParser.TryParseDouble(trimmed, out int consumed, out value, decimal_separator: '.')
-                       && consumed == trimmed.Length;
+                if (FastDoubleParser.TryParseDouble(trimmed, out int consumed, out value, decimal_separator: '.')
+                    && consumed == trimmed.Length)
+                {
+                    return true;
+                }
+                // csFastFloat's single decimal_separator override can't express thousands separators or
+                // sign placement; a dot-culture value using them (e.g. "1,234.56") fails the fast path
+                // above even though it's valid, so fall back to the real NumberFormatInfo-aware parser,
+                // which validates the whole input natively (still rejects genuine garbage like "12x").
+                return double.TryParse(trimmed, NumberStyles.Float | NumberStyles.AllowThousands, formatProvider ?? CultureInfo.InvariantCulture, out value);
             }
             return double.TryParse(trimmed, NumberStyles.Float | NumberStyles.AllowThousands, formatProvider, out value);
         }
 
-        /// <summary>Parses a (not yet trimmed) column as <see cref="float"/>, honoring <paramref name="formatProvider"/>.</summary>
+        /// <summary>Parses a (not yet trimmed) column as <see cref="float"/>, honoring <paramref name="formatProvider"/> (see <see cref="TryParseDouble(ReadOnlySpan{char},IFormatProvider?,out double,char)"/> for the null-provider contract).</summary>
         public static bool TryParseFloat(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out float value, char trimChar = ' ')
         {
-            var trimmed = column.TrimEnd(trimChar);
+            var trimmed = column.TrimEnd(trimChar).TrimStart();
             if (GetDecimalSeparator(formatProvider) == '.')
             {
-                return FastFloatParser.TryParseFloat(trimmed, out int consumed, out value, decimal_separator: '.')
-                       && consumed == trimmed.Length;
+                if (FastFloatParser.TryParseFloat(trimmed, out int consumed, out value, decimal_separator: '.')
+                    && consumed == trimmed.Length)
+                {
+                    return true;
+                }
+                return float.TryParse(trimmed, NumberStyles.Float | NumberStyles.AllowThousands, formatProvider ?? CultureInfo.InvariantCulture, out value);
             }
             return float.TryParse(trimmed, NumberStyles.Float | NumberStyles.AllowThousands, formatProvider, out value);
         }
@@ -104,11 +127,12 @@ namespace FixedWidthParser.Processors
         public static bool TryParseDouble(ReadOnlySpan<byte> column, IFormatProvider? formatProvider, out double value, byte trimChar = (byte)' ')
         {
             byte separator = GetDecimalSeparatorByte(formatProvider);
-            var trimmed = column.TrimEnd(trimChar);
-            if (separator == (byte)'.')
+            var trimmed = column.TrimEnd(trimChar).TrimStart((byte)' ');
+            if (separator == (byte)'.'
+                && FastDoubleParser.TryParseDouble(trimmed, out int consumed, out value, decimal_separator: separator)
+                && consumed == trimmed.Length)
             {
-                return FastDoubleParser.TryParseDouble(trimmed, out int consumed, out value, decimal_separator: separator)
-                       && consumed == trimmed.Length;
+                return true;
             }
             return TryParseDoubleViaTranscode(trimmed, formatProvider, out value);
         }
@@ -117,11 +141,12 @@ namespace FixedWidthParser.Processors
         public static bool TryParseFloat(ReadOnlySpan<byte> column, IFormatProvider? formatProvider, out float value, byte trimChar = (byte)' ')
         {
             byte separator = GetDecimalSeparatorByte(formatProvider);
-            var trimmed = column.TrimEnd(trimChar);
-            if (separator == (byte)'.')
+            var trimmed = column.TrimEnd(trimChar).TrimStart((byte)' ');
+            if (separator == (byte)'.'
+                && FastFloatParser.TryParseFloat(trimmed, out int consumed, out value, decimal_separator: separator)
+                && consumed == trimmed.Length)
             {
-                return FastFloatParser.TryParseFloat(trimmed, out int consumed, out value, decimal_separator: separator)
-                       && consumed == trimmed.Length;
+                return true;
             }
             return TryParseFloatViaTranscode(trimmed, formatProvider, out value);
         }
@@ -129,10 +154,12 @@ namespace FixedWidthParser.Processors
         // Non-dot ASCII separators (e.g. ',') still need NumberFormatInfo-aware parsing (thousands
         // separators, sign placement); there is no BCL span-based double.TryParse that both takes an
         // IFormatProvider and operates on UTF-8 bytes, so the (already-trimmed, always-short) numeric
-        // field is transcoded to a small char buffer first.
+        // field is transcoded to a small char buffer first. Also used as the dot-path's thousands-separator
+        // fallback above, so a null provider is normalized to invariant here too (see TryParseDouble's doc).
         [SkipLocalsInit]
         private static bool TryParseDoubleViaTranscode(ReadOnlySpan<byte> field, IFormatProvider? formatProvider, out double value)
         {
+            formatProvider ??= CultureInfo.InvariantCulture;
             const int stackThreshold = 128;
             if (field.Length <= stackThreshold)
             {
@@ -155,6 +182,7 @@ namespace FixedWidthParser.Processors
         [SkipLocalsInit]
         private static bool TryParseFloatViaTranscode(ReadOnlySpan<byte> field, IFormatProvider? formatProvider, out float value)
         {
+            formatProvider ??= CultureInfo.InvariantCulture;
             const int stackThreshold = 128;
             if (field.Length <= stackThreshold)
             {

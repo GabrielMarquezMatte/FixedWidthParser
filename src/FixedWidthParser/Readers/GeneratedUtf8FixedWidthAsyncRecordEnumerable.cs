@@ -58,7 +58,7 @@ namespace FixedWidthParser.Readers
         public Utf8AsyncRecordEnumeratorCore<TModel, GeneratedUtf8LineParser<TModel>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
 #pragma warning restore HLQ006 // GetEnumerator() or GetAsyncEnumerator() should return a value type
         {
-            var stream = _stream ?? new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, _bufferSize, useAsync: true);
+            var stream = _stream ?? new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.Asynchronous | FileOptions.SequentialScan);
             return new(default, stream, _ownsStream, _formatProvider, _stringPool, _bufferSize, cancellationToken);
         }
 

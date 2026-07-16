@@ -45,14 +45,39 @@ namespace FixedWidthParser.Readers
 
         public TModel Current => _current;
 
-        public async ValueTask<bool> MoveNextAsync()
+        public ValueTask<bool> MoveNextAsync()
         {
-            var reader = _reader ?? throw new ObjectDisposedException(nameof(AsyncRecordEnumeratorCore<,>));
+            ObjectDisposedException.ThrowIf(_reader is null, nameof(AsyncRecordEnumeratorCore<,>));
+            _cancellationToken.ThrowIfCancellationRequested();
+            // Fast path: the next line is already sitting in the buffer (the dominant case — a
+            // single refill holds ~100+ lines), so most calls never need to touch the async
+            // machinery at all.
+            var result = TryReadFromBuffer();
+            if (result == LineStatus.Line)
+            {
+                return new ValueTask<bool>(true);
+            }
+
+            if (result == LineStatus.End)
+            {
+                return new ValueTask<bool>(false);
+            }
+
+            return MoveNextSlowAsync(_reader);
+        }
+
+        private async ValueTask<bool> MoveNextSlowAsync(TextReader reader)
+        {
             while (true)
             {
+                PrepareRefill();
+                int read = await reader
+                    .ReadAsync(_lines.Buffer.AsMemory(_lines.End, _lines.Buffer.Length - _lines.End), _cancellationToken)
+                    .ConfigureAwait(false);
+                _lines.Advance(read);
+
                 _cancellationToken.ThrowIfCancellationRequested();
 
-                // Synchronous step: spans are confined here, never alive across the await.
                 var result = TryReadFromBuffer();
                 if (result == LineStatus.Line)
                 {
@@ -63,12 +88,6 @@ namespace FixedWidthParser.Readers
                 {
                     return false;
                 }
-
-                PrepareRefill();
-                int read = await reader
-                    .ReadAsync(_lines.Buffer.AsMemory(_lines.End, _lines.Buffer.Length - _lines.End), _cancellationToken)
-                    .ConfigureAwait(false);
-                _lines.Advance(read);
             }
         }
 
