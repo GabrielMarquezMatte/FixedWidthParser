@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Benchmarks](https://img.shields.io/badge/benchmarks-GitHub%20Pages-informational)](https://gabrielmarquezmatte.github.io/FixedWidthParser/dev/bench/)
 
-A high-performance, low-allocation library for **parsing and writing fixed-width (flat) files** in .NET 10. Columns are declared with attributes, layouts are validated up front, and the hot paths work over spans so fixed-width records can be parsed, streamed and written without the usual per-line churn.
+A high-performance, low-allocation library for **parsing and writing fixed-width (flat) files** in .NET. Columns are declared with attributes, layouts are validated up front, and the hot paths work over spans so fixed-width records can be parsed, streamed and written without the usual per-line churn.
 
 The package includes both:
 
@@ -27,11 +27,14 @@ The package includes both:
 - **Configurable formatting** per column: alignment, padding character, format string and explicit overflow policy.
 - **Culture-aware** numeric parsing/formatting, including `double`/`float` via csFastFloat and generic `ISpanParsable` / `ISpanFormattable` support.
 - **Layout validation** at construction or generation time: negative `Start`, non-positive `Length` and overlapping columns fail clearly.
-- **`ref struct` model support** on parser/source-generated single-line parsing.
+- **`ref struct` model support** on parser/source-generated single-line parsing (.NET 9+ only, see Requirements).
 
 ## Requirements
 
-- .NET 10 (`net10.0`)
+- `net8.0` or `net10.0` (the package multi-targets both).
+- `ref struct` models (e.g. `RefPersonModel`-style spans-only types) require .NET 9 or later — the
+  `allows ref struct` generic constraint that makes them possible doesn't exist on `net8.0`, so that
+  one feature is compiled out there; everything else behaves identically on both targets.
 
 Dependencies: [CommunityToolkit.HighPerformance](https://www.nuget.org/packages/CommunityToolkit.HighPerformance) (`StringPool`) and [csFastFloat](https://www.nuget.org/packages/csFastFloat) (fast `double`/`float` parsing).
 
@@ -293,6 +296,8 @@ Pooling applies to both the `char` and UTF-8 byte paths (`FixedWidthReader<T>`/`
 Invalid layouts fail fast with an `InvalidOperationException` on the runtime parser/writer paths, or generator diagnostics on generated models. Negative `Start`, `Length < 1`, and overlapping columns are rejected. Adjacent columns are valid.
 
 ## `ref struct` Models
+
+> Requires `net10.0` (or any .NET 9+ target) — the `allows ref struct` constraint doesn't exist on `net8.0`, so this feature is compiled out there.
 
 The parser accepts `ref struct` models (`where TModel : new(), allows ref struct`), useful for stack-only row processing:
 

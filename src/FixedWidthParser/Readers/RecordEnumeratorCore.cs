@@ -48,7 +48,8 @@ namespace FixedWidthParser.Readers
 
         public bool MoveNext()
         {
-            var reader = _reader ?? throw new ObjectDisposedException(nameof(RecordEnumeratorCore<,>));
+            ObjectDisposedException.ThrowIf(_reader is null, nameof(RecordEnumeratorCore<,>));
+            var reader = _reader;
             while (true)
             {
                 var status = _lines.TryGetLine(out var line);

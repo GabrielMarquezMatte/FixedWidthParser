@@ -6,7 +6,6 @@ using FlatFiles;
 using FixedWidthParser;
 using FixedWidthParser.Readers;
 using FixedWidthParser.Writers;
-using RecordParser.Parsers;
 using RecordParser.Builders.Reader;
 using RecordParser.Extensions;
 

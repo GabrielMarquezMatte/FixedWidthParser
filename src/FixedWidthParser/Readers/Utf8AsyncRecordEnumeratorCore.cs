@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
 
@@ -45,14 +46,39 @@ namespace FixedWidthParser.Readers
 
         public TModel Current => _current;
 
-        public async ValueTask<bool> MoveNextAsync()
+        public ValueTask<bool> MoveNextAsync()
         {
-            var stream = _stream ?? throw new ObjectDisposedException(nameof(Utf8AsyncRecordEnumeratorCore<,>));
+            ObjectDisposedException.ThrowIf(_stream is null, nameof(Utf8AsyncRecordEnumeratorCore<,>));
+            _cancellationToken.ThrowIfCancellationRequested();
+            // Fast path: the next line is already sitting in the buffer (the dominant case — a
+            // single refill holds ~100+ lines), so most calls never need to touch the async
+            // machinery at all.
+            var result = TryReadFromBuffer();
+            if (result == LineStatus.Line)
+            {
+                return new ValueTask<bool>(true);
+            }
+
+            if (result == LineStatus.End)
+            {
+                return new ValueTask<bool>(false);
+            }
+
+            return MoveNextSlowAsync(_stream);
+        }
+
+        private async ValueTask<bool> MoveNextSlowAsync(Stream stream)
+        {
             while (true)
             {
+                PrepareRefill();
+                int read = await stream
+                    .ReadAsync(_lines.Buffer.AsMemory(_lines.End, _lines.Buffer.Length - _lines.End), _cancellationToken)
+                    .ConfigureAwait(false);
+                _lines.Advance(read);
+
                 _cancellationToken.ThrowIfCancellationRequested();
 
-                // Synchronous step: spans are confined here, never alive across the await.
                 var result = TryReadFromBuffer();
                 if (result == LineStatus.Line)
                 {
@@ -63,15 +89,10 @@ namespace FixedWidthParser.Readers
                 {
                     return false;
                 }
-
-                PrepareRefill();
-                int read = await stream
-                    .ReadAsync(_lines.Buffer.AsMemory(_lines.End, _lines.Buffer.Length - _lines.End), _cancellationToken)
-                    .ConfigureAwait(false);
-                _lines.Advance(read);
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private LineStatus TryReadFromBuffer()
         {
             var status = _lines.TryGetLine(out var line);
@@ -87,6 +108,7 @@ namespace FixedWidthParser.Readers
             return LineStatus.NeedData;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void Parse(ReadOnlySpan<byte> line)
         {
             if (!_strategy.TryParse(line, _formatProvider, _stringPool, out _current))

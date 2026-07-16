@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.HighPerformance.Buffers;
 
 namespace FixedWidthParser.Processors
@@ -24,17 +23,4 @@ namespace FixedWidthParser.Processors
 #else
         ref TModel model);
 #endif
-
-    /// <summary>
-    /// UTF-8 counterpart of <see cref="ColumnValueParser{TValue}"/>: parses the (already sliced, not
-    /// trimmed) UTF-8 bytes of a single column into a value of type <typeparamref name="TValue"/>.
-    /// This is the unit of extensibility for the byte reader: register one of these per type with
-    /// <see cref="Utf8ColumnParserRegistry"/>. Types not registered fall back to
-    /// <see cref="IUtf8SpanParsable{TSelf}.TryParse"/>. Returns <see langword="false"/> when the bytes
-    /// are not a valid value.
-    /// </summary>
-    public delegate bool Utf8ColumnValueParser<TValue>(
-        ReadOnlySpan<byte> span,
-        IFormatProvider? formatProvider,
-        [MaybeNullWhen(false)] out TValue value);
 }

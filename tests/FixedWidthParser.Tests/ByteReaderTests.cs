@@ -1,8 +1,6 @@
 using System.Globalization;
 using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Attributes;
 using FixedWidthParser.Parsers;
-using FixedWidthParser.Processors;
 using FixedWidthParser.Readers;
 using static FixedWidthParser.Tests.TestHelpers;
 
@@ -164,6 +162,104 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
+        public void Parser_DoubleColumn_DeDeThousandsSeparator_ParsesFullValue()
+        {
+            // de-DE: '.' groups thousands, ',' is the decimal separator — "1.234,50" means 1234.50.
+            // Regression coverage for a bug where csFastFloat silently truncated at the '.' it wasn't
+            // told about and returned 1.0 instead of failing or parsing the full value.
+            var parser = new Utf8FixedWidthParser<PersonModel>();
+
+            bool ok = parser.TryParse("Bob       30   1.234,50  "u8, DeDe, null, out var model);
+
+            Assert.True(ok);
+            Assert.Equal(1234.50, model.Salary, 2);
+        }
+
+        [Fact]
+        public void Parser_DoubleColumn_DotCultureThousandsSeparator_ParsesFullValue()
+        {
+            var parser = new Utf8FixedWidthParser<PersonModel>();
+
+            bool ok = parser.TryParse("Bob       30    1,234.50 "u8, Inv, null, out var model);
+
+            Assert.True(ok);
+            Assert.Equal(1234.50, model.Salary, 2);
+        }
+
+        // ----- Null provider means invariant for every column type on the byte path too (see
+        // CultureTests.Parse_DecimalColumn_NullProvider_DefaultsToInvariant for the char-path version and
+        // rationale). -----
+
+        [Fact]
+        public void Parser_DecimalColumn_NullProvider_DefaultsToInvariant()
+        {
+            var parser = new Utf8FixedWidthParser<DecimalModel>();
+
+            bool ok = parser.TryParse("1234.56     "u8, null, null, out var model);
+
+            Assert.True(ok);
+            Assert.Equal(1234.56m, model.Amount);
+        }
+
+        [Fact]
+        public void Parser_DoubleColumn_TrailingGarbageAfterNumber_Fails()
+        {
+            var parser = new Utf8FixedWidthParser<PersonModel>();
+
+            bool ok = parser.TryParse("Bob       30   12x       "u8, Inv, null, out _);
+
+            Assert.False(ok);
+        }
+
+        // ----- Right-aligned (leading-space-padded) numeric columns: same regression as
+        // CultureTests' char-path equivalents — csFastFloat's characters_consumed did not reliably
+        // include skipped leading whitespace across its double/float overloads. -----
+
+        [Fact]
+        public void Parser_DoubleColumn_RightAligned_DotCulture_Parses()
+        {
+            var parser = new Utf8FixedWidthParser<PersonModel>();
+
+            bool ok = parser.TryParse("Bob       30       123.45"u8, Inv, null, out var model);
+
+            Assert.True(ok);
+            Assert.Equal(123.45, model.Salary, 2);
+        }
+
+        [Fact]
+        public void Parser_FloatColumn_RightAligned_DotCulture_Parses()
+        {
+            var parser = new Utf8FixedWidthParser<MeasurementModel>();
+
+            bool ok = parser.TryParse("    3.14"u8, Inv, null, out var model);
+
+            Assert.True(ok);
+            Assert.Equal(3.14f, model.Value, 2);
+        }
+
+        [Fact]
+        public void Parser_DoubleColumn_RightAligned_CommaCulture_Parses()
+        {
+            var parser = new Utf8FixedWidthParser<PersonModel>();
+
+            bool ok = parser.TryParse("Bob       30       123,45"u8, DeDe, null, out var model);
+
+            Assert.True(ok);
+            Assert.Equal(123.45, model.Salary, 2);
+        }
+
+        [Fact]
+        public void Parser_FloatColumn_RightAligned_CommaCulture_Parses()
+        {
+            var parser = new Utf8FixedWidthParser<MeasurementModel>();
+
+            bool ok = parser.TryParse("    3,14"u8, DeDe, null, out var model);
+
+            Assert.True(ok);
+            Assert.Equal(3.14f, model.Value, 2);
+        }
+
+        [Fact]
         public void Parser_DoubleColumn_NonAsciiSeparatorCulture_Throws()
         {
             // The byte parser matches the decimal separator against raw UTF-8 bytes, so a non-ASCII
@@ -273,51 +369,5 @@ namespace FixedWidthParser.Tests
             Assert.Same(first.Code, second.Code);
         }
 
-        // ----------------------- Registry extensibility -----------------------
-
-        /// <summary>A value type that does NOT implement IUtf8SpanParsable, so it can only be parsed
-        /// through a registered <see cref="Utf8ColumnValueParser{TValue}"/>.</summary>
-        public readonly record struct Celsius(int Degrees);
-
-        public readonly record struct TempModel
-        {
-            public TempModel()
-            {
-                Temp = default;
-            }
-
-            [FixedColumn(0, 4)] public Celsius Temp { get; init; }
-        }
-
-        [Fact]
-        public void Registry_RegisteredParser_IsUsedForCustomType()
-        {
-            // Must register before the first construction of the parser for this model: the parser
-            // caches its column parsers in a static constructor.
-            Utf8ColumnParserRegistry.Register<Celsius>(
-                static (span, fp, out value) =>
-                {
-                    if (int.TryParse(span.TrimEnd((byte)' '), fp, out int degrees))
-                    {
-                        value = new Celsius(degrees);
-                        return true;
-                    }
-                    value = default;
-                    return false;
-                });
-            try
-            {
-                var parser = new Utf8FixedWidthParser<TempModel>();
-
-                bool ok = parser.TryParse("  25"u8, Inv, null, out var model);
-
-                Assert.True(ok);
-                Assert.Equal(new Celsius(25), model.Temp);
-            }
-            finally
-            {
-                Assert.True(Utf8ColumnParserRegistry.Unregister<Celsius>());
-            }
-        }
     }
 }
