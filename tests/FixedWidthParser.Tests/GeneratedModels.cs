@@ -48,6 +48,25 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 3)] public string Code { get; init; }
     }
 
+    /// <summary>Custom-converter column (<see cref="CentsConverter"/>) — mirrors <see cref="CentsConverterModel"/>.</summary>
+    public readonly partial record struct GenCentsConverterModel : IFixedWidthModel<GenCentsConverterModel>, IUtf8FixedWidthModel<GenCentsConverterModel>
+    {
+        [FixedColumn(0, 8, Converter = typeof(CentsConverter))] public CentsValue Amount { get; init; }
+    }
+
+    /// <summary>Nullable value-type columns (T?) — mirrors <see cref="NullableModel"/>.</summary>
+    public readonly partial record struct GenNullableModel : IFixedWidthModel<GenNullableModel>, IUtf8FixedWidthModel<GenNullableModel>
+    {
+        [FixedColumn(0, 5)] public int? Age { get; init; }
+        [FixedColumn(5, 10)] public decimal? Amount { get; init; }
+    }
+
+    /// <summary>Nullable value-type column + converter — mirrors <see cref="NullableConverterModel"/>.</summary>
+    public readonly partial record struct GenNullableConverterModel : IFixedWidthModel<GenNullableConverterModel>, IUtf8FixedWidthModel<GenNullableConverterModel>
+    {
+        [FixedColumn(0, 8, Converter = typeof(CentsConverter))] public CentsValue? Amount { get; init; }
+    }
+
 #if NET9_0_OR_GREATER
     /// <summary>Ref struct model — proves generated parsing works under `allows ref struct`. Mirrors <see cref="RefPersonModel"/>.</summary>
     public ref partial struct GenRefPersonModel : IFixedWidthModel<GenRefPersonModel>, IUtf8FixedWidthModel<GenRefPersonModel>

@@ -48,5 +48,13 @@ namespace FixedWidthParser
             return TValue.TryParse(column.TrimEnd((byte)' '), formatProvider, out value);
         }
 
+        /// <summary>Parses a column via a <c>FixedColumnAttribute.Converter</c> instance, trimming trailing spaces.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryConvert<TValue, TConverter>(
+            ReadOnlySpan<byte> column, IFormatProvider? formatProvider, TConverter converter, [MaybeNullWhen(false)] out TValue value)
+            where TConverter : IUtf8FixedWidthConverter<TValue>
+        {
+            return converter.TryParse(column.TrimEnd((byte)' '), formatProvider, out value);
+        }
     }
 }
