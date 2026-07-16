@@ -44,7 +44,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Read_StructEnumerator_IteratesManually()
         {
-            // Exercises the public struct Enumerator on GeneratedUtf8FixedWidthRecordEnumerable directly
+            // Exercises the public struct core returned by GeneratedUtf8FixedWidthRecordEnumerable directly
             // (GetEnumerator / MoveNext / Current / Dispose) rather than through foreach.
             using var stream = Utf8(TwoPeople);
             var enumerable = FixedWidthUtf8.Read<GenPersonModel>(stream, formatProvider: Inv);
@@ -146,7 +146,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void GetEnumerator_IsStruct_ForAllocationFreeForeach()
         {
-            Assert.True(typeof(GeneratedUtf8FixedWidthRecordEnumerable<GenCodeModel>.Enumerator).IsValueType);
+            Assert.True(typeof(Utf8RecordEnumeratorCore<GenCodeModel, GeneratedUtf8LineParser<GenCodeModel>>).IsValueType);
 
             using var stream = Utf8("ABC\nDEF\n");
             int count = 0;

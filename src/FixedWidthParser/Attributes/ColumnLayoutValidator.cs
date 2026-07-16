@@ -5,7 +5,7 @@ namespace FixedWidthParser.Attributes
     /// columns, negative <c>Start</c>, non-positive <c>Length</c> and overlapping columns — failing
     /// early and with a clear message, instead of producing obscure per-line errors at runtime.
     /// </summary>
-    public static class ColumnLayoutValidator
+    internal static class ColumnLayoutValidator
     {
         public static void Validate(Span<(int Start, int Length, string Name)> columns, Type modelType)
         {

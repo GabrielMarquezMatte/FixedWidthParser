@@ -91,7 +91,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void GetEnumerator_IsStruct_ForAllocationFreeForeach()
         {
-            Assert.True(typeof(FixedWidthRecordEnumerable<CodeModel>.Enumerator).IsValueType);
+            Assert.True(typeof(RecordEnumeratorCore<CodeModel, ReflectionLineParser<CodeModel>>).IsValueType);
 
             var reader = new FixedWidthReader<CodeModel>();
             int count = 0;

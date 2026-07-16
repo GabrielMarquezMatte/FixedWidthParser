@@ -10,10 +10,10 @@ namespace FixedWidthParser.Readers
     /// <see langword="struct"/> <typeparamref name="TParser"/> strategy so the parse call is
     /// devirtualized. Reads lines in blocks into an <see cref="System.Buffers.ArrayPool{T}"/>
     /// buffer and slices them as <see cref="ReadOnlySpan{T}"/> straight into the strategy — no
-    /// string allocated per line. Held by value inside the public reader enumerators, which forward
-    /// to it; being a <see langword="struct"/> keeps <c>foreach</c> allocation-free.
+    /// string allocated per line. Returned directly by the public reader enumerable APIs; being a
+    /// <see langword="struct"/> keeps <c>foreach</c> allocation-free.
     /// </summary>
-    internal struct RecordEnumeratorCore<TModel, TParser> : IEnumerator<TModel>
+    public struct RecordEnumeratorCore<TModel, TParser> : IEnumerator<TModel>
         where TParser : struct, ILineParser<TModel>
     {
         private readonly TParser _strategy;

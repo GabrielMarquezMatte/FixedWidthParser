@@ -8,10 +8,10 @@ namespace FixedWidthParser.Formatters
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes",
         Justification = "Instantiated via reflection (Activator.CreateInstance) in FixedWidthWriter.CreateFormatter.")]
     internal sealed class NullableColumnFormatter<TModel, TUnderlying>(
-        int start, int length, ColumnFormatOptions options, char trimChar, RefGetter<TModel, TUnderlying?> getter, IColumnFormatter<TModel> inner)
+        int start, int length, char trimChar, RefGetter<TModel, TUnderlying?> getter, IColumnFormatter<TModel> inner)
         : IColumnFormatter<TModel> where TUnderlying : struct
     {
-        private readonly char _fillChar = trimChar != ' ' ? trimChar : ' ';
+        private readonly char _fillChar = trimChar;
 
         public void Format(in TModel model, Span<char> buffer, IFormatProvider? formatProvider)
         {

@@ -256,7 +256,7 @@ namespace FixedWidthParser.Generator
             bool isCharParsable = ImplementsParsable(type, compilation, "System.ISpanParsable`1");
             bool isUtf8Parsable = ImplementsParsable(type, compilation, "System.IUtf8SpanParsable`1");
 
-            bool isDateTimeType = fqn is "global::System.DateTime" or "System.DateTime" or "global::System.DateOnly" or "System.DateOnly" or "global::System.TimeOnly" or "System.TimeOnly" or "global::System.DateTimeOffset" or "System.DateTimeOffset";
+            bool isDateTimeType = IsDateTimeType(fqn);
             if (isDateTimeType && format is not null)
             {
                 isCharParsable = true;
@@ -266,6 +266,14 @@ namespace FixedWidthParser.Generator
             // SpanParsable when at least one path can handle it; otherwise unsupported by every path.
             var kind = isCharParsable || isUtf8Parsable ? ColumnKind.SpanParsable : ColumnKind.Unsupported;
             return (kind, fqn, null, false, isCharParsable, isUtf8Parsable);
+        }
+
+        private static bool IsDateTimeType(string fqn)
+        {
+            return fqn is "global::System.DateTime" or "System.DateTime"
+                or "global::System.DateOnly" or "System.DateOnly"
+                or "global::System.TimeOnly" or "System.TimeOnly"
+                or "global::System.DateTimeOffset" or "System.DateTimeOffset";
         }
 
         // Classification for the write side: mirrors FixedWidthWriter.CreateFormatter's own resolution
@@ -789,7 +797,7 @@ namespace FixedWidthParser.Generator
         private static void AppendColumnKindParse(StringBuilder sb, string stmt, ColumnInfo c, string col, string runtimeFqn, string elementType, int i, string localName)
         {
             string trimArg = TrimArgSuffix(elementType, c, i);
-            bool isDateTimeType = c.TypeFqn is "global::System.DateTime" or "System.DateTime" or "global::System.DateOnly" or "System.DateOnly" or "global::System.TimeOnly" or "System.TimeOnly" or "global::System.DateTimeOffset" or "System.DateTimeOffset";
+            bool isDateTimeType = IsDateTimeType(c.TypeFqn);
             if (c.Format is not null && isDateTimeType)
             {
                 string exactHelper = c.TypeFqn.Contains("DateTimeOffset") ? "TryDateTimeOffsetExact"

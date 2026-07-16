@@ -61,10 +61,10 @@ namespace FixedWidthParser.Readers
         }
 
         /// <summary>Struct enumerator: <c>foreach</c> iteration without heap allocation.</summary>
-        public Enumerator GetEnumerator()
+        public Utf8RecordEnumeratorCore<TModel, ReflectionUtf8LineParser<TModel>> GetEnumerator()
         {
             var stream = _stream ?? new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.SequentialScan);
-            return new(_parser, stream, _ownsStream, _formatProvider, _stringPool, _bufferSize);
+            return new(new ReflectionUtf8LineParser<TModel>(_parser), stream, _ownsStream, _formatProvider, _stringPool, _bufferSize);
         }
 
         IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator()
@@ -78,41 +78,5 @@ namespace FixedWidthParser.Readers
             return GetEnumerator();
         }
 
-        /// <summary>Allocation-free <see langword="struct"/> enumerator forwarding to the shared core.</summary>
-        public struct Enumerator : IEnumerator<TModel>
-        {
-            private Utf8RecordEnumeratorCore<TModel, ReflectionUtf8LineParser<TModel>> _core;
-
-            internal Enumerator(
-                Utf8FixedWidthParser<TModel> parser,
-                Stream stream,
-                bool ownsStream,
-                IFormatProvider? formatProvider,
-                StringPool? stringPool,
-                int bufferSize)
-            {
-                _core = new(new ReflectionUtf8LineParser<TModel>(parser), stream, ownsStream, formatProvider, stringPool, bufferSize);
-            }
-
-            public readonly TModel Current => _core.Current;
-            [ExcludeFromCodeCoverage]
-            readonly object IEnumerator.Current => _core.Current!;
-
-            public bool MoveNext()
-            {
-                return _core.MoveNext();
-            }
-
-            public void Dispose()
-            {
-                _core.Dispose();
-            }
-
-            [ExcludeFromCodeCoverage]
-            public readonly void Reset()
-            {
-                _core.Reset();
-            }
-        }
     }
 }
