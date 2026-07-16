@@ -4,6 +4,15 @@ using FixedWidthParser.Parsers;
 namespace FixedWidthParser.Readers
 {
     /// <summary>
+    /// Element-type-generic parser strategy used by the shared record enumerator cores.
+    /// </summary>
+    public interface IRecordLineParser<T, TModel> where T : unmanaged
+    {
+        /// <summary>Parses a buffered line into a model.</summary>
+        bool TryParse(ReadOnlySpan<T> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model);
+    }
+
+    /// <summary>
     /// Strategy that parses a single fixed-width line into a <typeparamref name="TModel"/>.
     /// Implemented by <see langword="struct"/> types so the shared enumerator cores can be
     /// specialized per strategy: a <c>struct</c> type argument lets the JIT monomorphize each
@@ -22,7 +31,7 @@ namespace FixedWidthParser.Readers
     /// <summary>
     /// Reflection-based parse strategy: forwards to a runtime <see cref="FixedWidthParser{TModel}"/>.
     /// </summary>
-    public readonly struct ReflectionLineParser<TModel>(FixedWidthParser<TModel> parser) : ILineParser<TModel> where TModel : new()
+    public readonly struct ReflectionLineParser<TModel>(FixedWidthParser<TModel> parser) : ILineParser<TModel>, IRecordLineParser<char, TModel> where TModel : new()
     {
         public bool TryParse(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
         {
@@ -34,7 +43,7 @@ namespace FixedWidthParser.Readers
     /// Source-generated parse strategy: forwards to the model's static
     /// <see cref="IFixedWidthModel{TSelf}.TryParse"/>, avoiding reflection and delegates.
     /// </summary>
-    public readonly struct GeneratedLineParser<TModel> : ILineParser<TModel> where TModel : IFixedWidthModel<TModel>
+    public readonly struct GeneratedLineParser<TModel> : ILineParser<TModel>, IRecordLineParser<char, TModel> where TModel : IFixedWidthModel<TModel>
     {
         public bool TryParse(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
         {

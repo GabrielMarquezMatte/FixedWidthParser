@@ -7,7 +7,7 @@ namespace FixedWidthParser.Readers
 {
     /// <summary>
     /// <see cref="PipeReader"/>-based counterpart of
-    /// <see cref="Utf8AsyncRecordEnumeratorCore{TModel, TParser}"/>: parses fixed-width records from a
+    /// <see cref="AsyncRecordEnumeratorCore{T, TFormat, TModel, TParser, TSource}"/>: parses fixed-width records from a
     /// <see cref="PipeReader"/>, letting the pipe own buffering and read-ahead instead of the manual
     /// pooled <see cref="LineBufferState{T, TFormat}"/> the stream cores use. Lines are split out of the
     /// <see cref="ReadOnlySequence{T}"/> with a <see cref="SequenceReader{T}"/>; a line is parsed in place

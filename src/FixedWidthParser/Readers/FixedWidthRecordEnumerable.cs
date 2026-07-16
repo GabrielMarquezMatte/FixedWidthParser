@@ -36,9 +36,9 @@ namespace FixedWidthParser.Readers
         }
 
         /// <summary>Struct enumerator: <c>foreach</c> iteration without heap allocation.</summary>
-        public RecordEnumeratorCore<TModel, ReflectionLineParser<TModel>> GetEnumerator()
+        public RecordEnumeratorCore<char, CharLineFormat, TModel, ReflectionLineParser<TModel>, TextReaderSource> GetEnumerator()
         {
-            return new(new ReflectionLineParser<TModel>(_parser), _source.Create(_bufferSize), _source.OwnsReader, _formatProvider, _stringPool, _bufferSize);
+            return new(new ReflectionLineParser<TModel>(_parser), _source.Create(_bufferSize), _formatProvider, _stringPool, _bufferSize);
         }
 
         IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator()

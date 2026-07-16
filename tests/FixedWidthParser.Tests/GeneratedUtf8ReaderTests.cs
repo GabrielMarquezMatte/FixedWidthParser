@@ -146,7 +146,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void GetEnumerator_IsStruct_ForAllocationFreeForeach()
         {
-            Assert.True(typeof(Utf8RecordEnumeratorCore<GenCodeModel, GeneratedUtf8LineParser<GenCodeModel>>).IsValueType);
+            Assert.True(typeof(RecordEnumeratorCore<byte, Utf8LineFormat, GenCodeModel, GeneratedUtf8LineParser<GenCodeModel>, StreamSource>).IsValueType);
 
             using var stream = Utf8("ABC\nDEF\n");
             int count = 0;

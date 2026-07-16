@@ -55,10 +55,10 @@ namespace FixedWidthParser.Readers
         }
 
         /// <summary>Struct enumerator: <c>foreach</c> iteration without heap allocation.</summary>
-        public Utf8RecordEnumeratorCore<TModel, GeneratedUtf8LineParser<TModel>> GetEnumerator()
+        public RecordEnumeratorCore<byte, Utf8LineFormat, TModel, GeneratedUtf8LineParser<TModel>, StreamSource> GetEnumerator()
         {
             var stream = _stream ?? new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.SequentialScan);
-            return new(default, stream, _ownsStream, _formatProvider, _stringPool, _bufferSize);
+            return new(default, new StreamSource(stream, _ownsStream), _formatProvider, _stringPool, _bufferSize);
         }
 
         IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator()

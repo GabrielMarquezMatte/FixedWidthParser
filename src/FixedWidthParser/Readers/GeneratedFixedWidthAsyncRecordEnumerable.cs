@@ -5,7 +5,7 @@ namespace FixedWidthParser.Readers
     /// <summary>
     /// Asynchronous source-generated read path: scans buffered lines and parses them through
     /// <see cref="IFixedWidthModel{TSelf}.TryParse"/> without reflection or delegates. The enumerator
-    /// logic lives in the shared <see cref="AsyncRecordEnumeratorCore{TModel, TParser}"/>, specialized
+    /// logic lives in the shared <see cref="AsyncRecordEnumeratorCore{T, TFormat, TModel, TParser, TSource}"/>, specialized
     /// here with the source-generated <see cref="GeneratedLineParser{TModel}"/> strategy.
     /// </summary>
     public sealed class GeneratedFixedWidthAsyncRecordEnumerable<TModel> : IAsyncEnumerable<TModel>
@@ -29,10 +29,10 @@ namespace FixedWidthParser.Readers
         }
 
 #pragma warning disable HLQ006 // GetEnumerator() or GetAsyncEnumerator() should return a value type
-        public AsyncRecordEnumeratorCore<TModel, GeneratedLineParser<TModel>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+        public AsyncRecordEnumeratorCore<char, CharLineFormat, TModel, GeneratedLineParser<TModel>, TextReaderSource> GetAsyncEnumerator(CancellationToken cancellationToken = default)
 #pragma warning restore HLQ006 // GetEnumerator() or GetAsyncEnumerator() should return a value type
         {
-            return new(default, _source.Create(_bufferSize), _source.OwnsReader, _formatProvider, _stringPool, _bufferSize, cancellationToken);
+            return new(default, _source.Create(_bufferSize), _formatProvider, _stringPool, _bufferSize, cancellationToken);
         }
 
         IAsyncEnumerator<TModel> IAsyncEnumerable<TModel>.GetAsyncEnumerator(CancellationToken cancellationToken)

@@ -7,7 +7,7 @@ namespace FixedWidthParser.Readers
     /// a <see cref="Stream"/> via <c>await foreach</c>, straight from raw bytes (no
     /// <see cref="StreamReader"/>, no transcode, no string per line), parsing each record through
     /// <see cref="IUtf8FixedWidthModel{TSelf}.TryParse"/> without reflection or delegates. The enumerator
-    /// logic lives in the shared <see cref="Utf8AsyncRecordEnumeratorCore{TModel, TParser}"/>, specialized
+    /// logic lives in the shared <see cref="AsyncRecordEnumeratorCore{T, TFormat, TModel, TParser, TSource}"/>, specialized
     /// here with the source-generated <see cref="GeneratedUtf8LineParser{TModel}"/> strategy.
     /// <para>
     /// The source is stored as either a fixed <see cref="Stream"/> (single-pass) or a file path
@@ -55,11 +55,11 @@ namespace FixedWidthParser.Readers
         }
 
 #pragma warning disable HLQ006 // GetEnumerator() or GetAsyncEnumerator() should return a value type
-        public Utf8AsyncRecordEnumeratorCore<TModel, GeneratedUtf8LineParser<TModel>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+        public AsyncRecordEnumeratorCore<byte, Utf8LineFormat, TModel, GeneratedUtf8LineParser<TModel>, StreamSource> GetAsyncEnumerator(CancellationToken cancellationToken = default)
 #pragma warning restore HLQ006 // GetEnumerator() or GetAsyncEnumerator() should return a value type
         {
             var stream = _stream ?? new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.Asynchronous | FileOptions.SequentialScan);
-            return new(default, stream, _ownsStream, _formatProvider, _stringPool, _bufferSize, cancellationToken);
+            return new(default, new StreamSource(stream, _ownsStream), _formatProvider, _stringPool, _bufferSize, cancellationToken);
         }
 
         IAsyncEnumerator<TModel> IAsyncEnumerable<TModel>.GetAsyncEnumerator(CancellationToken cancellationToken)
