@@ -32,7 +32,7 @@ namespace FixedWidthParser.Processors
         /// <c>FixedColumnAttribute.Converter</c>), it takes priority over the <see cref="ISpanParsable{TSelf}"/> fallback.
         /// </summary>
         /// <remarks><paramref name="setter"/> must be a <c>RefAction&lt;TModel, valueType&gt;</c> assigning the parsed value to the member.</remarks>
-        public static ColumnParser<TModel> Create<TModel>(Type valueType, Delegate setter, Type? converterType, string memberName, char trimChar = ' ')
+        public static ColumnParser<TModel> Create<TModel>(Type valueType, Delegate setter, Type? converterType, string memberName, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing, string? format = null)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
@@ -41,19 +41,19 @@ namespace FixedWidthParser.Processors
             if (underlyingType is not null)
             {
                 return (ColumnParser<TModel>)BuildNullableMethod.MakeGenericMethod(typeof(TModel), underlyingType)
-                                                                .Invoke(null, [setter, converterType, memberName, trimChar])!;
+                                                                .Invoke(null, [setter, converterType, memberName, trimChar, trimMode, format])!;
             }
 
             return ColumnParserFactoryShared.Create<TModel, ColumnParser<TModel>>(
-                valueType, setter, converterType, memberName, trimChar, typeof(IFixedWidthConverter<>),
-                BuildParsableMethod, BuildConverterMethod, BuildDoubleMethod, BuildFloatMethod, BuildString);
+                valueType, setter, converterType, memberName, trimChar, trimMode, format, typeof(IFixedWidthConverter<>),
+                BuildParsableMethod, BuildConverterMethod, BuildDoubleMethod, BuildFloatMethod, BuildString, BuildExact<TModel>);
         }
 
         // A nullable column (T?): a blank (trimmed-empty) column assigns null without invoking the
         // underlying parser. Otherwise, the underlying T resolves exactly as a non-nullable column
         // would (converter → double/float → ISpanParsable fallback), via an adapter setter that boxes
         // the result into the T? setter — no duplicated parse logic per type.
-        private static ColumnParser<TModel> BuildNullable<TModel, TUnderlying>(Delegate setter, Type? converterType, string memberName, char trimChar)
+        private static ColumnParser<TModel> BuildNullable<TModel, TUnderlying>(Delegate setter, Type? converterType, string memberName, char trimChar, Attributes.TrimMode trimMode, string? format)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
@@ -63,12 +63,12 @@ namespace FixedWidthParser.Processors
             RefAction<TModel, TUnderlying> adapted = (ref TModel model, TUnderlying value) => nullableSetter(ref model, value);
 
             var inner = ColumnParserFactoryShared.Create<TModel, ColumnParser<TModel>>(
-                typeof(TUnderlying), adapted, converterType, memberName, trimChar, typeof(IFixedWidthConverter<>),
-                BuildParsableMethod, BuildConverterMethod, BuildDoubleMethod, BuildFloatMethod, BuildString);
+                typeof(TUnderlying), adapted, converterType, memberName, trimChar, trimMode, format, typeof(IFixedWidthConverter<>),
+                BuildParsableMethod, BuildConverterMethod, BuildDoubleMethod, BuildFloatMethod, BuildString, BuildExact<TModel>);
 
             return (column, formatProvider, stringPool, ref model) =>
             {
-                if (column.TrimEnd(trimChar).IsEmpty)
+                if (column.Trim(trimChar).Trim(' ').IsEmpty)
                 {
                     nullableSetter(ref model, null);
                     return true;
@@ -81,7 +81,7 @@ namespace FixedWidthParser.Processors
         // directly inside the column closure. This is a constrained call the JIT devirtualizes to the
         // concrete TValue.TryParse (and can inline), saving one indirect call per column and no
         // value-parser delegate allocated.
-        private static ColumnParser<TModel> BuildParsable<TModel, TValue>(RefAction<TModel, TValue> setter, char trimChar)
+        private static ColumnParser<TModel> BuildParsable<TModel, TValue>(RefAction<TModel, TValue> setter, char trimChar, Attributes.TrimMode trimMode)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
@@ -91,7 +91,7 @@ namespace FixedWidthParser.Processors
             {
                 // Null means invariant (matches FixedWidthRuntime.TryParse<TValue> and the double/float
                 // columns) rather than the BCL's own CurrentCulture default.
-                if (!TValue.TryParse(column.TrimEnd(trimChar), formatProvider ?? CultureInfo.InvariantCulture, out var value))
+                if (!TValue.TryParse(FixedWidthRuntime.TrimColumn(column, trimChar, trimMode), formatProvider ?? CultureInfo.InvariantCulture, out var value))
                 {
                     return false;
                 }
@@ -100,14 +100,14 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildDouble<TModel>(RefAction<TModel, double> setter, char trimChar)
+        private static ColumnParser<TModel> BuildDouble<TModel>(RefAction<TModel, double> setter, char trimChar, Attributes.TrimMode trimMode)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
         {
             return (column, formatProvider, _, ref model) =>
             {
-                if (!CultureHelpers.TryParseDouble(column, formatProvider, out double value, trimChar))
+                if (!CultureHelpers.TryParseDouble(column, formatProvider, out double value, trimChar, trimMode))
                 {
                     return false;
                 }
@@ -116,14 +116,14 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildFloat<TModel>(RefAction<TModel, float> setter, char trimChar)
+        private static ColumnParser<TModel> BuildFloat<TModel>(RefAction<TModel, float> setter, char trimChar, Attributes.TrimMode trimMode)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
         {
             return (column, formatProvider, _, ref model) =>
             {
-                if (!CultureHelpers.TryParseFloat(column, formatProvider, out float value, trimChar))
+                if (!CultureHelpers.TryParseFloat(column, formatProvider, out float value, trimChar, trimMode))
                 {
                     return false;
                 }
@@ -135,7 +135,7 @@ namespace FixedWidthParser.Processors
         // Attribute-driven custom converter (FixedColumnAttribute.Converter): the instance is created
         // once (by the caller) and reused for every row, so it must be stateless.
         private static ColumnParser<TModel> BuildConverter<TModel, TValue, TConverter>(
-            RefAction<TModel, TValue> setter, TConverter converter, char trimChar)
+            RefAction<TModel, TValue> setter, TConverter converter, char trimChar, Attributes.TrimMode trimMode)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
@@ -143,7 +143,7 @@ namespace FixedWidthParser.Processors
         {
             return (column, formatProvider, _, ref model) =>
             {
-                if (!converter.TryParse(column.TrimEnd(trimChar), formatProvider, out var value))
+                if (!converter.TryParse(FixedWidthRuntime.TrimColumn(column, trimChar, trimMode), formatProvider, out var value))
                 {
                     return false;
                 }
@@ -152,7 +152,7 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildString<TModel>(RefAction<TModel, string> setter, object trimChar)
+        private static ColumnParser<TModel> BuildString<TModel>(RefAction<TModel, string> setter, object trimChar, Attributes.TrimMode trimMode)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
@@ -160,10 +160,63 @@ namespace FixedWidthParser.Processors
             char trim = (char)trimChar;
             return (column, _, stringPool, ref model) =>
             {
-                var slice = column.TrimEnd(trim);
+                var slice = FixedWidthRuntime.TrimColumn(column, trim, trimMode);
                 setter(ref model, stringPool is null ? slice.ToString() : stringPool.GetOrAdd(slice));
                 return true;
             };
+        }
+
+        private static ColumnParser<TModel> BuildExact<TModel>(Type valueType, Delegate setter, string format, object trimChar, Attributes.TrimMode trimMode)
+#if NET9_0_OR_GREATER
+            where TModel : allows ref struct
+#endif
+        {
+            char trim = (char)trimChar;
+            if (valueType == typeof(DateTime))
+            {
+                var s = (RefAction<TModel, DateTime>)setter;
+                return (column, fp, _, ref model) =>
+                {
+                    var trimmed = FixedWidthRuntime.TrimColumn(column, trim, trimMode);
+                    if (!DateTime.TryParseExact(trimmed, format, fp ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out var val)) return false;
+                    s(ref model, val);
+                    return true;
+                };
+            }
+            if (valueType == typeof(DateOnly))
+            {
+                var s = (RefAction<TModel, DateOnly>)setter;
+                return (column, fp, _, ref model) =>
+                {
+                    var trimmed = FixedWidthRuntime.TrimColumn(column, trim, trimMode);
+                    if (!DateOnly.TryParseExact(trimmed, format, fp ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out var val)) return false;
+                    s(ref model, val);
+                    return true;
+                };
+            }
+            if (valueType == typeof(TimeOnly))
+            {
+                var s = (RefAction<TModel, TimeOnly>)setter;
+                return (column, fp, _, ref model) =>
+                {
+                    var trimmed = FixedWidthRuntime.TrimColumn(column, trim, trimMode);
+                    if (!TimeOnly.TryParseExact(trimmed, format, fp ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out var val)) return false;
+                    s(ref model, val);
+                    return true;
+                };
+            }
+            if (valueType == typeof(DateTimeOffset))
+            {
+                var s = (RefAction<TModel, DateTimeOffset>)setter;
+                return (column, fp, _, ref model) =>
+                {
+                    var trimmed = FixedWidthRuntime.TrimColumn(column, trim, trimMode);
+                    if (!DateTimeOffset.TryParseExact(trimmed, format, fp ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out var val)) return false;
+                    s(ref model, val);
+                    return true;
+                };
+            }
+            throw new InvalidOperationException($"Unsupported TryParseExact type {valueType}");
         }
     }
 }

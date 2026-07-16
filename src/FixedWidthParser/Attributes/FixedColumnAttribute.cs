@@ -7,6 +7,14 @@ namespace FixedWidthParser.Attributes
         Right
     }
 
+    /// <summary>Trim mode when parsing.</summary>
+    public enum TrimMode
+    {
+        Trailing,
+        Leading,
+        Both
+    }
+
     /// <summary>What to do when the formatted value does not fit the column width.</summary>
     public enum OverflowBehavior
     {
@@ -37,6 +45,9 @@ namespace FixedWidthParser.Attributes
         /// before the value is handed to the parser/converter. Default: space.
         /// </summary>
         public char TrimChar { get; set; } = ' ';
+
+        /// <summary>Trim mode for the TrimChar. Default: <see cref="TrimMode.Trailing"/>.</summary>
+        public TrimMode TrimMode { get; set; } = TrimMode.Trailing;
 
         /// <summary>Format string passed to <see cref="ISpanFormattable"/> (e.g. "F2", "N0"). Ignored for string.</summary>
         public string? Format { get; set; }

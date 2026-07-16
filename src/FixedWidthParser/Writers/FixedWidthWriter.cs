@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Formatters;
 using FixedWidthParser.Processors;
@@ -10,23 +11,45 @@ namespace FixedWidthParser.Writers
 {
     public sealed class FixedWidthWriter<TModel>
     {
+        private static readonly IColumnFormatter<TModel>[] _cachedFormatters;
+        private static readonly int _cachedLineLength;
+        private static readonly ExceptionDispatchInfo? _buildError;
+
+        static FixedWidthWriter()
+        {
+            try
+            {
+                var formatters = new List<IColumnFormatter<TModel>>();
+                int maxLen = 0;
+
+                ModelColumns.ForEachColumn(typeof(TModel), (member, attribute) =>
+                {
+                    maxLen = Math.Max(maxLen, attribute.Start + attribute.Length);
+                    formatters.Add(CreateFormatter(member, attribute));
+                });
+
+                _cachedFormatters = formatters.ToArray();
+                _cachedLineLength = maxLen;
+                _buildError = null;
+            }
+            catch (Exception ex)
+            {
+                _cachedFormatters = [];
+                _cachedLineLength = 0;
+                _buildError = ExceptionDispatchInfo.Capture(ex);
+            }
+        }
+
         private readonly IColumnFormatter<TModel>[] _formatters;
         private readonly int _lineLength;
 
         public FixedWidthWriter()
         {
-            var formatters = new List<IColumnFormatter<TModel>>();
-            int maxLen = 0;
-
-            ModelColumns.ForEachColumn(typeof(TModel), (member, attribute) =>
-            {
-                maxLen = Math.Max(maxLen, attribute.Start + attribute.Length);
-                formatters.Add(CreateFormatter(member, attribute));
-            });
-
-            _formatters = formatters.ToArray();
-            _lineLength = maxLen;
+            _buildError?.Throw();
+            _formatters = _cachedFormatters;
+            _lineLength = _cachedLineLength;
         }
+
         private static OverflowBehavior DetermineOverflowBehavior(FixedColumnAttribute attribute, bool isString)
         {
             if (attribute.Overflow != OverflowBehavior.Default)
@@ -41,9 +64,17 @@ namespace FixedWidthParser.Writers
 
             return OverflowBehavior.Throw;
         }
+
         private static IColumnFormatter<TModel> CreateFormatter(MemberInfo member, FixedColumnAttribute attribute)
         {
             var (memberType, model, access) = ModelColumns.MemberAccess(typeof(TModel), member);
+
+            if (attribute.Overflow == OverflowBehavior.Truncate && memberType != typeof(string))
+            {
+                throw new InvalidOperationException(
+                    $"OverflowBehavior.Truncate is not supported for non-string column '{member.Name}' of type '{memberType.Name}'.");
+            }
+
             var delegateType = typeof(RefGetter<,>).MakeGenericType(typeof(TModel), memberType);
             var getter = Expression.Lambda(delegateType, access, model).Compile();
             // Resolve Default overflow per type: string truncates, numeric (incl. T?) throws.
@@ -62,7 +93,7 @@ namespace FixedWidthParser.Writers
             var inner = BuildValueFormatter(member, attribute, underlyingType, options, underlyingGetter);
             var nullableFormatterType = typeof(NullableColumnFormatter<,>).MakeGenericType(typeof(TModel), underlyingType);
             return (IColumnFormatter<TModel>)Activator.CreateInstance(
-                nullableFormatterType, attribute.Start, attribute.Length, options, getter, inner)!;
+                nullableFormatterType, attribute.Start, attribute.Length, options, attribute.TrimChar, getter, inner)!;
         }
 
         // Adapts a RefGetter<TModel, TUnderlying?> into a RefGetter<TModel, TUnderlying> (reads .Value

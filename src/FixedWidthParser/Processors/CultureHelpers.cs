@@ -26,6 +26,18 @@ namespace FixedWidthParser.Processors
         // no thrash when two providers are used alternately in the same process.
         private static readonly ConditionalWeakTable<IFormatProvider, StrongBox<char>> _separatorCache = new();
 
+        private sealed class CacheEntry
+        {
+            public readonly IFormatProvider Provider;
+            public readonly char Separator;
+            public CacheEntry(IFormatProvider provider, char separator)
+            {
+                Provider = provider;
+                Separator = separator;
+            }
+        }
+        private static CacheEntry? _cache;
+
         /// <summary>
         /// Decimal separator derived from the IFormatProvider (dot when null), memoized per provider.
         /// </summary>
@@ -36,7 +48,14 @@ namespace FixedWidthParser.Processors
             {
                 return '.';
             }
-            return _separatorCache.GetValue(formatProvider, static fp => new StrongBox<char>(Resolve(fp))).Value;
+            var cache = _cache;
+            if (cache is not null && ReferenceEquals(formatProvider, cache.Provider))
+            {
+                return cache.Separator;
+            }
+            char separator = _separatorCache.GetValue(formatProvider, static fp => new StrongBox<char>(Resolve(fp))).Value;
+            _cache = new CacheEntry(formatProvider, separator);
+            return separator;
         }
 
         /// <summary>
@@ -79,14 +98,14 @@ namespace FixedWidthParser.Processors
         /// the mercy of the running thread's <see cref="CultureInfo.CurrentCulture"/> (which every other
         /// column type, and this method's own BCL fallback below, would otherwise resolve to).
         /// </summary>
-        public static bool TryParseDouble(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out double value, char trimChar = ' ')
+        public static bool TryParseDouble(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out double value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
         {
             // Also trim leading whitespace: csFastFloat's characters_consumed does not reliably include
             // skipped leading whitespace across its double/float overloads (verified empirically —
             // FastDoubleParser counts it, FastFloatParser doesn't), so a right-aligned (space-padded)
             // column would otherwise fail the full-consumption check below even though the BCL fallback
             // (which does allow leading whitespace) would have accepted it.
-            var trimmed = column.TrimEnd(trimChar).TrimStart();
+            var trimmed = FixedWidthRuntime.TrimColumn(column, trimChar, trimMode).TrimStart();
             if (GetDecimalSeparator(formatProvider) == '.')
             {
                 if (FastDoubleParser.TryParseDouble(trimmed, out int consumed, out value, decimal_separator: '.')
@@ -103,10 +122,10 @@ namespace FixedWidthParser.Processors
             return double.TryParse(trimmed, NumberStyles.Float | NumberStyles.AllowThousands, formatProvider, out value);
         }
 
-        /// <summary>Parses a (not yet trimmed) column as <see cref="float"/>, honoring <paramref name="formatProvider"/> (see <see cref="TryParseDouble(ReadOnlySpan{char},IFormatProvider?,out double,char)"/> for the null-provider contract).</summary>
-        public static bool TryParseFloat(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out float value, char trimChar = ' ')
+        /// <summary>Parses a (not yet trimmed) column as <see cref="float"/>, honoring <paramref name="formatProvider"/> (see <see cref="TryParseDouble(ReadOnlySpan{char},IFormatProvider?,out double,char,Attributes.TrimMode)"/> for the null-provider contract).</summary>
+        public static bool TryParseFloat(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out float value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
         {
-            var trimmed = column.TrimEnd(trimChar).TrimStart();
+            var trimmed = FixedWidthRuntime.TrimColumn(column, trimChar, trimMode).TrimStart();
             if (GetDecimalSeparator(formatProvider) == '.')
             {
                 if (FastFloatParser.TryParseFloat(trimmed, out int consumed, out value, decimal_separator: '.')
@@ -120,14 +139,14 @@ namespace FixedWidthParser.Processors
         }
 
         /// <summary>
-        /// UTF-8 counterpart of <see cref="TryParseDouble(ReadOnlySpan{char},IFormatProvider?,out double,char)"/>.
+        /// UTF-8 counterpart of <see cref="TryParseDouble(ReadOnlySpan{char},IFormatProvider?,out double,char,Attributes.TrimMode)"/>.
         /// A non-ASCII separator still throws (see <see cref="GetDecimalSeparatorByte"/>) — the byte path
         /// only supports separators representable as a single UTF-8 byte.
         /// </summary>
-        public static bool TryParseDouble(ReadOnlySpan<byte> column, IFormatProvider? formatProvider, out double value, byte trimChar = (byte)' ')
+        public static bool TryParseDouble(ReadOnlySpan<byte> column, IFormatProvider? formatProvider, out double value, byte trimChar = (byte)' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
         {
             byte separator = GetDecimalSeparatorByte(formatProvider);
-            var trimmed = column.TrimEnd(trimChar).TrimStart((byte)' ');
+            var trimmed = Utf8FixedWidthRuntime.TrimColumn(column, trimChar, trimMode).TrimStart((byte)' ');
             if (separator == (byte)'.'
                 && FastDoubleParser.TryParseDouble(trimmed, out int consumed, out value, decimal_separator: separator)
                 && consumed == trimmed.Length)
@@ -137,11 +156,11 @@ namespace FixedWidthParser.Processors
             return TryParseDoubleViaTranscode(trimmed, formatProvider, out value);
         }
 
-        /// <summary>UTF-8 counterpart of <see cref="TryParseFloat(ReadOnlySpan{char},IFormatProvider?,out float,char)"/>.</summary>
-        public static bool TryParseFloat(ReadOnlySpan<byte> column, IFormatProvider? formatProvider, out float value, byte trimChar = (byte)' ')
+        /// <summary>UTF-8 counterpart of <see cref="TryParseFloat(ReadOnlySpan{char},IFormatProvider?,out float,char,Attributes.TrimMode)"/>.</summary>
+        public static bool TryParseFloat(ReadOnlySpan<byte> column, IFormatProvider? formatProvider, out float value, byte trimChar = (byte)' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
         {
             byte separator = GetDecimalSeparatorByte(formatProvider);
-            var trimmed = column.TrimEnd(trimChar).TrimStart((byte)' ');
+            var trimmed = Utf8FixedWidthRuntime.TrimColumn(column, trimChar, trimMode).TrimStart((byte)' ');
             if (separator == (byte)'.'
                 && FastFloatParser.TryParseFloat(trimmed, out int consumed, out value, decimal_separator: separator)
                 && consumed == trimmed.Length)

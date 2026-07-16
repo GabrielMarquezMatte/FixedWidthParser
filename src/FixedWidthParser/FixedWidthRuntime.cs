@@ -17,31 +17,42 @@ namespace FixedWidthParser
     /// </summary>
     public static class FixedWidthRuntime
     {
-        /// <summary>Materializes a string column: trims trailing spaces and interns via the pool when supplied.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static string String(ReadOnlySpan<char> column, StringPool? stringPool, char trimChar = ' ')
+        public static ReadOnlySpan<char> TrimColumn(ReadOnlySpan<char> column, char trimChar, Attributes.TrimMode trimMode)
         {
-            var trimmed = column.TrimEnd(trimChar);
+            return trimMode switch
+            {
+                Attributes.TrimMode.Leading => column.TrimStart(trimChar),
+                Attributes.TrimMode.Both => column.Trim(trimChar),
+                _ => column.TrimEnd(trimChar),
+            };
+        }
+
+        /// <summary>Materializes a string column: trims spaces and interns via the pool when supplied.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static string String(ReadOnlySpan<char> column, StringPool? stringPool, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
+        {
+            var trimmed = TrimColumn(column, trimChar, trimMode);
             return stringPool is null ? trimmed.ToString() : stringPool.GetOrAdd(trimmed);
         }
 
         /// <summary>Parses a <see cref="double"/> column, honoring the provider's decimal separator (see <see cref="CultureHelpers"/>).</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryDouble(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out double value, char trimChar = ' ')
+        public static bool TryDouble(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out double value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
         {
-            return CultureHelpers.TryParseDouble(column, formatProvider, out value, trimChar);
+            return CultureHelpers.TryParseDouble(column, formatProvider, out value, trimChar, trimMode);
         }
 
         /// <summary>Parses a <see cref="float"/> column, honoring the provider's decimal separator (see <see cref="CultureHelpers"/>).</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryFloat(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out float value, char trimChar = ' ')
+        public static bool TryFloat(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out float value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
         {
-            return CultureHelpers.TryParseFloat(column, formatProvider, out value, trimChar);
+            return CultureHelpers.TryParseFloat(column, formatProvider, out value, trimChar, trimMode);
         }
 
         /// <summary>
         /// Parses any <see cref="ISpanParsable{TSelf}"/> column (int, decimal, DateTime, …), trimming
-        /// trailing spaces. A <see langword="null"/> <paramref name="formatProvider"/> means
+        /// spaces. A <see langword="null"/> <paramref name="formatProvider"/> means
         /// <see cref="CultureInfo.InvariantCulture"/> (not the BCL's own default of
         /// <see cref="CultureInfo.CurrentCulture"/>) — a fixed-width file is a machine layout, and this
         /// keeps every column type in a record agreeing on what "no provider" means, matching the
@@ -49,19 +60,43 @@ namespace FixedWidthParser
         /// as invariant.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryParse<TValue>(ReadOnlySpan<char> column, IFormatProvider? formatProvider, [MaybeNullWhen(false)] out TValue value, char trimChar = ' ')
+        public static bool TryParse<TValue>(ReadOnlySpan<char> column, IFormatProvider? formatProvider, [MaybeNullWhen(false)] out TValue value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
             where TValue : ISpanParsable<TValue>
         {
-            return TValue.TryParse(column.TrimEnd(trimChar), formatProvider ?? CultureInfo.InvariantCulture, out value);
+            return TValue.TryParse(TrimColumn(column, trimChar, trimMode), formatProvider ?? CultureInfo.InvariantCulture, out value);
         }
 
-        /// <summary>Parses a column via a <c>FixedColumnAttribute.Converter</c> instance, trimming trailing spaces.</summary>
+        /// <summary>Parses a column via a <c>FixedColumnAttribute.Converter</c> instance, trimming spaces.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryConvert<TValue, TConverter>(
-            ReadOnlySpan<char> column, IFormatProvider? formatProvider, TConverter converter, [MaybeNullWhen(false)] out TValue value, char trimChar = ' ')
+            ReadOnlySpan<char> column, IFormatProvider? formatProvider, TConverter converter, [MaybeNullWhen(false)] out TValue value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
             where TConverter : IFixedWidthConverter<TValue>
         {
-            return converter.TryParse(column.TrimEnd(trimChar), formatProvider, out value);
+            return converter.TryParse(TrimColumn(column, trimChar, trimMode), formatProvider, out value);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryDateTimeExact(ReadOnlySpan<char> column, string format, IFormatProvider? formatProvider, out DateTime value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
+        {
+            return DateTime.TryParseExact(TrimColumn(column, trimChar, trimMode), format, formatProvider ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out value);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryDateOnlyExact(ReadOnlySpan<char> column, string format, IFormatProvider? formatProvider, out DateOnly value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
+        {
+            return DateOnly.TryParseExact(TrimColumn(column, trimChar, trimMode), format, formatProvider ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out value);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryTimeOnlyExact(ReadOnlySpan<char> column, string format, IFormatProvider? formatProvider, out TimeOnly value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
+        {
+            return TimeOnly.TryParseExact(TrimColumn(column, trimChar, trimMode), format, formatProvider ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out value);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryDateTimeOffsetExact(ReadOnlySpan<char> column, string format, IFormatProvider? formatProvider, out DateTimeOffset value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
+        {
+            return DateTimeOffset.TryParseExact(TrimColumn(column, trimChar, trimMode), format, formatProvider ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out value);
         }
 
         /// <summary>Formats a string column: fills <paramref name="slice"/> per <paramref name="options"/> (alignment/padding/overflow).</summary>
@@ -91,7 +126,7 @@ namespace FixedWidthParser
                 return;
             }
 
-            const int maxSize = 1 << 20;
+            int maxSize = Math.Max(1024, slice.Length * 16);
             for (int size = 512; size <= maxSize; size *= 2)
             {
                 char[] rented = ArrayPool<char>.Shared.Rent(size);
@@ -130,7 +165,7 @@ namespace FixedWidthParser
                 return;
             }
 
-            const int maxSize = 1 << 20;
+            int maxSize = Math.Max(1024, slice.Length * 16);
             for (int size = 512; size <= maxSize; size *= 2)
             {
                 char[] rented = ArrayPool<char>.Shared.Rent(size);

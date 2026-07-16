@@ -18,12 +18,15 @@ namespace FixedWidthParser.Processors
             Type? converterType,
             string memberName,
             object trimChar,
+            Attributes.TrimMode trimMode,
+            string? format,
             Type converterInterfaceDefinition,
             MethodInfo buildParsableMethod,
             MethodInfo buildConverterMethod,
             MethodInfo buildDoubleMethod,
             MethodInfo buildFloatMethod,
-            Func<RefAction<TModel, string>, object, TColumnParser> buildString)
+            Func<RefAction<TModel, string>, object, Attributes.TrimMode, TColumnParser> buildString,
+            Func<Type, Delegate, string, object, Attributes.TrimMode, TColumnParser> buildExact)
 #if NET9_0_OR_GREATER
             where TModel : allows ref struct
 #endif
@@ -40,27 +43,32 @@ namespace FixedWidthParser.Processors
                 var converterInstance = Activator.CreateInstance(converterType)
                     ?? throw new InvalidOperationException($"Could not instantiate converter '{converterType}' for column '{memberName}'.");
                 return (TColumnParser)buildConverterMethod.MakeGenericMethod(typeof(TModel), valueType, converterType)
-                                                          .Invoke(null, [setter, converterInstance, trimChar])!;
+                                                          .Invoke(null, [setter, converterInstance, trimChar, trimMode])!;
+            }
+
+            if (format is not null && (valueType == typeof(DateTime) || valueType == typeof(DateOnly) || valueType == typeof(TimeOnly) || valueType == typeof(DateTimeOffset)))
+            {
+                return buildExact(valueType, setter, format, trimChar, trimMode);
             }
 
             if (valueType == typeof(string))
             {
-                return buildString((RefAction<TModel, string>)setter, trimChar);
+                return buildString((RefAction<TModel, string>)setter, trimChar, trimMode);
             }
 
             // double/float take the csFastFloat fast path ahead of the ISpanParsable fallback (both
             // implement ISpanParsable/IUtf8SpanParsable too, but csFastFloat is faster).
             if (valueType == typeof(double))
             {
-                return (TColumnParser)buildDoubleMethod.MakeGenericMethod(typeof(TModel)).Invoke(null, [setter, trimChar])!;
+                return (TColumnParser)buildDoubleMethod.MakeGenericMethod(typeof(TModel)).Invoke(null, [setter, trimChar, trimMode])!;
             }
             if (valueType == typeof(float))
             {
-                return (TColumnParser)buildFloatMethod.MakeGenericMethod(typeof(TModel)).Invoke(null, [setter, trimChar])!;
+                return (TColumnParser)buildFloatMethod.MakeGenericMethod(typeof(TModel)).Invoke(null, [setter, trimChar, trimMode])!;
             }
 
             return (TColumnParser)buildParsableMethod.MakeGenericMethod(typeof(TModel), valueType)
-                                                     .Invoke(null, [setter, trimChar])!;
+                                                     .Invoke(null, [setter, trimChar, trimMode])!;
         }
     }
 }
