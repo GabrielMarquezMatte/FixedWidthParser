@@ -63,7 +63,7 @@ namespace FixedWidthParser.Readers
         /// <summary>Struct enumerator: <c>foreach</c> iteration without heap allocation.</summary>
         public Enumerator GetEnumerator()
         {
-            var stream = _stream ?? new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, _bufferSize);
+            var stream = _stream ?? new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.SequentialScan);
             return new(_parser, stream, _ownsStream, _formatProvider, _stringPool, _bufferSize);
         }
 

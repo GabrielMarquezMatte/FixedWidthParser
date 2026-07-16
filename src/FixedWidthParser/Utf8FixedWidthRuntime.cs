@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
@@ -55,12 +56,17 @@ namespace FixedWidthParser
         }
 
 
-        /// <summary>Parses any <see cref="IUtf8SpanParsable{TSelf}"/> column (int, decimal, DateTime, …), trimming trailing spaces.</summary>
+        /// <summary>
+        /// Parses any <see cref="IUtf8SpanParsable{TSelf}"/> column (int, decimal, DateTime, …), trimming
+        /// trailing spaces. A <see langword="null"/> <paramref name="formatProvider"/> means
+        /// <see cref="CultureInfo.InvariantCulture"/> — see <see cref="FixedWidthRuntime.TryParse{TValue}"/>
+        /// for why (same contract on both the char and UTF-8 paths).
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryParse<TValue>(ReadOnlySpan<byte> column, IFormatProvider? formatProvider, [MaybeNullWhen(false)] out TValue value, byte trimChar = (byte)' ')
             where TValue : IUtf8SpanParsable<TValue>
         {
-            return TValue.TryParse(column.TrimEnd(trimChar), formatProvider, out value);
+            return TValue.TryParse(column.TrimEnd(trimChar), formatProvider ?? CultureInfo.InvariantCulture, out value);
         }
 
         /// <summary>Parses a column via a <c>FixedColumnAttribute.Converter</c> instance, trimming trailing spaces.</summary>

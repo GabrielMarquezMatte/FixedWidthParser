@@ -46,6 +46,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   argument is only added when `TrimChar` differs from the default.
 
 ### Changed
+- File-backed readers (`FixedWidthReader<TModel>`, `FixedWidthByteReader<TModel>`, and their UTF-8/generated
+  counterparts) now open the underlying `FileStream` with `FileOptions.SequentialScan` and an internal
+  buffer of 1 byte instead of the configured `bufferSize`: the enumerator core already does its own
+  block buffering into a pooled buffer, so a matching `FileStream` buffer was pure double-buffering
+  (an extra memcpy of most of the file) and dropped the OS's sequential-read prefetch hint on Windows.
+  Async file paths keep `FileOptions.Asynchronous` alongside the new flag. The default `bufferSize` for
+  `FixedWidthReader<TModel>` and `FixedWidthByteReader<TModel>` also increases from 4096 to 65536 bytes,
+  which is a more appropriate default block size for a throughput-oriented parser.
 - **Breaking:** the internal column formatters `StringColumnFormatter<TModel>` and
   `SpanFormattableColumnFormatter<TModel, TProperty>` are now `internal` (they were unintentionally
   `public`). They are implementation details resolved by the writer; the public extension point is the
@@ -62,6 +70,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   behavior change for consumers.
 
 ### Fixed
+- **Right-aligned (leading-space-padded) `double`/`float` columns could fail to parse under the
+  invariant `'.'` fast path** — the single most common numeric layout in fixed-width files. csFastFloat's
+  `characters_consumed` did not consistently include skipped leading whitespace across its `double`/`float`
+  overloads (verified empirically: `FastDoubleParser` counted it, `FastFloatParser` didn't, and vice versa
+  on the UTF-8 overloads), so the full-consumption check used to reject silent truncation could itself
+  reject a perfectly valid right-aligned value depending on the element type. Leading whitespace is now
+  trimmed before the fast path runs, on all four `char`/`byte` × `double`/`float` combinations.
+- **`double`/`float` columns using a thousands separator under the invariant `'.'` decimal separator
+  failed to parse instead of accepting the value** (e.g. `"1,234.56"`) — csFastFloat's single
+  `decimal_separator` override can't express thousands separators, so the fast path's full-consumption
+  check failed even though the value is valid. A failed fast-path attempt now retries via the real
+  `NumberFormatInfo`-aware parser (which still rejects genuine garbage) instead of returning `false`
+  outright.
+- **Breaking:** a `null` `IFormatProvider` now means `CultureInfo.InvariantCulture` for **every** column
+  type, on both parse and write. Previously `double`/`float` columns treated `null` as invariant while
+  every other `ISpanParsable`/`ISpanFormattable` column (`decimal`, `int`, `DateTime`, …) fell through to
+  the BCL's own default of `CurrentCulture` — so on a non-invariant machine, the same line could parse a
+  `double` column and a `decimal` column to different results under one `null`-provider call, and writing
+  with `null` (`CurrentCulture`) could produce output the same `null`-provider parse then rejected. Pass
+  an explicit `IFormatProvider` (e.g. `CultureInfo.CurrentCulture`) if culture-dependent parsing/formatting
+  is what you want; `null` is now deterministic regardless of the running thread's ambient culture.
 - **`double`/`float` columns under a non-'.' decimal separator could silently return a truncated,
   wrong value instead of failing.** csFastFloat's `decimal_separator` override does not fail on
   trailing content it doesn't recognize — it just stops at the first unrecognized character and

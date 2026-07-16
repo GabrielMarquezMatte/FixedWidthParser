@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Formatters;
@@ -38,12 +39,20 @@ namespace FixedWidthParser
             return CultureHelpers.TryParseFloat(column, formatProvider, out value, trimChar);
         }
 
-        /// <summary>Parses any <see cref="ISpanParsable{TSelf}"/> column (int, decimal, DateTime, …), trimming trailing spaces.</summary>
+        /// <summary>
+        /// Parses any <see cref="ISpanParsable{TSelf}"/> column (int, decimal, DateTime, …), trimming
+        /// trailing spaces. A <see langword="null"/> <paramref name="formatProvider"/> means
+        /// <see cref="CultureInfo.InvariantCulture"/> (not the BCL's own default of
+        /// <see cref="CultureInfo.CurrentCulture"/>) — a fixed-width file is a machine layout, and this
+        /// keeps every column type in a record agreeing on what "no provider" means, matching the
+        /// double/float columns (see <see cref="Processors.CultureHelpers"/>), which already treat null
+        /// as invariant.
+        /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryParse<TValue>(ReadOnlySpan<char> column, IFormatProvider? formatProvider, [MaybeNullWhen(false)] out TValue value, char trimChar = ' ')
             where TValue : ISpanParsable<TValue>
         {
-            return TValue.TryParse(column.TrimEnd(trimChar), formatProvider, out value);
+            return TValue.TryParse(column.TrimEnd(trimChar), formatProvider ?? CultureInfo.InvariantCulture, out value);
         }
 
         /// <summary>Parses a column via a <c>FixedColumnAttribute.Converter</c> instance, trimming trailing spaces.</summary>
@@ -71,6 +80,10 @@ namespace FixedWidthParser
         public static void FormatValue<TValue>(TValue value, Span<char> slice, IFormatProvider? formatProvider, ColumnFormatOptions options, string columnName)
             where TValue : ISpanFormattable
         {
+            // Null means invariant here too (see TryParse<TValue> above) — otherwise a null-provider
+            // write would use CurrentCulture while a null-provider parse of that same value uses
+            // invariant, breaking the default round-trip on any non-invariant machine.
+            formatProvider ??= CultureInfo.InvariantCulture;
             Span<char> stack = stackalloc char[64];
             if (value.TryFormat(stack, out int written, options.Format, formatProvider))
             {

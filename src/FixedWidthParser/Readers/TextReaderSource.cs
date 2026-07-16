@@ -69,7 +69,7 @@ namespace FixedWidthParser.Readers
             if (_useAsync)
             {
                 return new StreamReader(
-                    new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize, useAsync: true),
+                    new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.Asynchronous | FileOptions.SequentialScan),
                     _encoding, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize);
             }
             return new StreamReader(_path!, _encoding, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize);
