@@ -213,7 +213,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void GetEnumerator_IsStruct_ForAllocationFreeForeach()
         {
-            Assert.True(typeof(GeneratedFixedWidthRecordEnumerable<GenCodeModel>.Enumerator).IsValueType);
+            Assert.True(typeof(RecordEnumeratorCore<GenCodeModel, GeneratedLineParser<GenCodeModel>>).IsValueType);
 
             int count = 0;
             foreach (var _ in FixedWidth.Read<GenCodeModel>(new StringReader("ABC\nDEF\n")))

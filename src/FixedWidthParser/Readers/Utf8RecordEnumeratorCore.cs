@@ -11,11 +11,10 @@ namespace FixedWidthParser.Readers
     /// bytes from a <see cref="Stream"/> in blocks into an <see cref="System.Buffers.ArrayPool{T}"/>
     /// buffer and slices each line as <see cref="ReadOnlySpan{T}"/> of <see cref="byte"/> straight into
     /// a <see langword="struct"/> <typeparamref name="TParser"/> strategy (devirtualized parse) — no
-    /// <see cref="StreamReader"/>, no transcode, no string per line. Held by value inside the public
-    /// reader enumerator (a <see langword="struct"/>), which forwards to it so <c>foreach</c> stays
-    /// allocation-free.
+    /// <see cref="StreamReader"/>, no transcode, no string per line. Returned directly by the public
+    /// reader enumerable APIs, so <c>foreach</c> stays allocation-free.
     /// </summary>
-    internal struct Utf8RecordEnumeratorCore<TModel, TParser> : IEnumerator<TModel>
+    public struct Utf8RecordEnumeratorCore<TModel, TParser> : IEnumerator<TModel>
         where TParser : struct, IUtf8LineParser<TModel>
     {
         private readonly TParser _strategy;

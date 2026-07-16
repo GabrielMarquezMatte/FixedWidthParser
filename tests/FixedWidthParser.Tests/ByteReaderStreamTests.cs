@@ -135,7 +135,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void GetEnumerator_IsStruct_ForAllocationFreeForeach()
         {
-            Assert.True(typeof(Utf8FixedWidthRecordEnumerable<CodeModel>.Enumerator).IsValueType);
+            Assert.True(typeof(Utf8RecordEnumeratorCore<CodeModel, ReflectionUtf8LineParser<CodeModel>>).IsValueType);
 
             var reader = new FixedWidthByteReader<CodeModel>();
             using var stream = Utf8("ABC\nDEF\n");

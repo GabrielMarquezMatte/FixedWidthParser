@@ -29,9 +29,9 @@ namespace FixedWidthParser.Readers
         }
 
         /// <summary>Struct enumerator: <c>foreach</c> iteration without heap allocation.</summary>
-        public Enumerator GetEnumerator()
+        public RecordEnumeratorCore<TModel, GeneratedLineParser<TModel>> GetEnumerator()
         {
-            return new(_source.Create(_bufferSize), _source.OwnsReader, _formatProvider, _stringPool, _bufferSize);
+            return new(default, _source.Create(_bufferSize), _source.OwnsReader, _formatProvider, _stringPool, _bufferSize);
         }
 
         IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator()
@@ -45,44 +45,5 @@ namespace FixedWidthParser.Readers
             return GetEnumerator();
         }
 
-        /// <summary>
-        /// Allocation-free <see langword="struct"/> enumerator. Forwards to the shared
-        /// <see cref="RecordEnumeratorCore{TModel, TParser}"/>, specialized with the source-generated
-        /// <see cref="GeneratedLineParser{TModel}"/> strategy (devirtualized parse, no extra heap).
-        /// </summary>
-        public struct Enumerator : IEnumerator<TModel>
-        {
-            private RecordEnumeratorCore<TModel, GeneratedLineParser<TModel>> _core;
-
-            internal Enumerator(
-                TextReader reader,
-                bool ownsReader,
-                IFormatProvider? formatProvider,
-                StringPool? stringPool,
-                int bufferSize)
-            {
-                _core = new(default, reader, ownsReader, formatProvider, stringPool, bufferSize);
-            }
-
-            public readonly TModel Current => _core.Current;
-            [ExcludeFromCodeCoverage]
-            readonly object IEnumerator.Current => _core.Current!;
-
-            public bool MoveNext()
-            {
-                return _core.MoveNext();
-            }
-
-            public void Dispose()
-            {
-                _core.Dispose();
-            }
-
-            [ExcludeFromCodeCoverage]
-            public readonly void Reset()
-            {
-                _core.Reset();
-            }
-        }
     }
 }
