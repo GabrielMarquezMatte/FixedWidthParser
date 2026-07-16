@@ -162,6 +162,30 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
+        public void Parser_DoubleColumn_DeDeThousandsSeparator_ParsesFullValue()
+        {
+            // de-DE: '.' groups thousands, ',' is the decimal separator — "1.234,50" means 1234.50.
+            // Regression coverage for a bug where csFastFloat silently truncated at the '.' it wasn't
+            // told about and returned 1.0 instead of failing or parsing the full value.
+            var parser = new Utf8FixedWidthParser<PersonModel>();
+
+            bool ok = parser.TryParse("Bob       30   1.234,50  "u8, DeDe, null, out var model);
+
+            Assert.True(ok);
+            Assert.Equal(1234.50, model.Salary, 2);
+        }
+
+        [Fact]
+        public void Parser_DoubleColumn_TrailingGarbageAfterNumber_Fails()
+        {
+            var parser = new Utf8FixedWidthParser<PersonModel>();
+
+            bool ok = parser.TryParse("Bob       30   12x       "u8, Inv, null, out _);
+
+            Assert.False(ok);
+        }
+
+        [Fact]
         public void Parser_DoubleColumn_NonAsciiSeparatorCulture_Throws()
         {
             // The byte parser matches the decimal separator against raw UTF-8 bytes, so a non-ASCII

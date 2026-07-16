@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Text;
-using csFastFloat;
 
 namespace FixedWidthParser.Processors
 {
@@ -108,7 +107,7 @@ namespace FixedWidthParser.Processors
         {
             return (column, formatProvider, _, ref model) =>
             {
-                if (!FastDoubleParser.TryParseDouble(column.TrimEnd((byte)' '), out double value, decimal_separator: CultureHelpers.GetDecimalSeparatorByte(formatProvider)))
+                if (!CultureHelpers.TryParseDouble(column, formatProvider, out double value))
                 {
                     return false;
                 }
@@ -124,7 +123,7 @@ namespace FixedWidthParser.Processors
         {
             return (column, formatProvider, _, ref model) =>
             {
-                if (!FastFloatParser.TryParseFloat(column.TrimEnd((byte)' '), out float value, decimal_separator: CultureHelpers.GetDecimalSeparatorByte(formatProvider)))
+                if (!CultureHelpers.TryParseFloat(column, formatProvider, out float value))
                 {
                     return false;
                 }

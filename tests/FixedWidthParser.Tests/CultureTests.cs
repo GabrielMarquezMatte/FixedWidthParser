@@ -85,6 +85,64 @@ namespace FixedWidthParser.Tests
             Assert.Equal(3.14f, model.Value, 2);
         }
 
+        // ----- Thousands separators: csFastFloat's decimal_separator override silently truncates at
+        // the first character it doesn't recognize (e.g. a thousands separator) instead of failing
+        // only real NumberFormatInfo-aware parsing (used whenever the separator isn't '.') gets this
+        // right. Regression coverage for a bug where "1.234,50" under de-DE silently became 1.0. -----
+
+        [Fact]
+        public void Parse_DoubleColumn_DeDeThousandsSeparator_ParsesFullValue()
+        {
+            var parser = new FixedWidthParser<PersonModel>();
+
+            // de-DE: '.' groups thousands, ',' is the decimal separator — "1.234,50" means 1234.50.
+            bool ok = parser.TryParse("Bob       30   1.234,50  ", DeDe, null, out var model);
+
+            Assert.True(ok);
+            Assert.Equal(1234.50, model.Salary, 2);
+        }
+
+        // ----- Trailing garbage after a dot-separated number: the fast path must reject it instead of
+        // silently truncating to the leading digits and reporting success. -----
+
+        [Fact]
+        public void Parse_DoubleColumn_TrailingGarbageAfterNumber_Fails()
+        {
+            var parser = new FixedWidthParser<PersonModel>();
+
+            bool ok = parser.TryParse("Bob       30   12x       ", Inv, null, out _);
+
+            Assert.False(ok);
+        }
+
+        [Fact]
+        public void Parse_FloatColumn_TrailingGarbageAfterNumber_Fails()
+        {
+            var parser = new FixedWidthParser<MeasurementModel>();
+
+            bool ok = parser.TryParse("12x     ", Inv, null, out _);
+
+            Assert.False(ok);
+        }
+
+        // ----- Regression guard for the old single-entry decimal-separator memo: alternating between
+        // two providers must not thrash into wrong results for either one. -----
+
+        [Fact]
+        public void Parse_DoubleColumn_AlternatingProviders_BothStayCorrect()
+        {
+            var parser = new FixedWidthParser<PersonModel>();
+
+            for (int i = 0; i < 5; i++)
+            {
+                Assert.True(parser.TryParse("Bob       30   1234.50   ", Inv, null, out var invModel));
+                Assert.Equal(1234.50, invModel.Salary, 2);
+
+                Assert.True(parser.TryParse("Bob       30   1234,50   ", DeDe, null, out var deModel));
+                Assert.Equal(1234.50, deModel.Salary, 2);
+            }
+        }
+
         // ----- Writing: honors the culture (ISpanFormattable) -----
 
         [Fact]

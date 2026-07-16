@@ -1,7 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using CommunityToolkit.HighPerformance.Buffers;
-using csFastFloat;
 using FixedWidthParser.Processors;
 
 namespace FixedWidthParser
@@ -22,18 +21,18 @@ namespace FixedWidthParser
             return stringPool is null ? trimmed.ToString() : stringPool.GetOrAdd(trimmed);
         }
 
-        /// <summary>Parses a <see cref="double"/> column via csFastFloat, honoring the provider's decimal separator.</summary>
+        /// <summary>Parses a <see cref="double"/> column, honoring the provider's decimal separator (see <see cref="CultureHelpers"/>).</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryDouble(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out double value)
         {
-            return FastDoubleParser.TryParseDouble(column, out value, decimal_separator: CultureHelpers.GetDecimalSeparator(formatProvider));
+            return CultureHelpers.TryParseDouble(column, formatProvider, out value);
         }
 
-        /// <summary>Parses a <see cref="float"/> column via csFastFloat, honoring the provider's decimal separator.</summary>
+        /// <summary>Parses a <see cref="float"/> column, honoring the provider's decimal separator (see <see cref="CultureHelpers"/>).</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool TryFloat(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out float value)
         {
-            return FastFloatParser.TryParseFloat(column, out value, decimal_separator: CultureHelpers.GetDecimalSeparator(formatProvider));
+            return CultureHelpers.TryParseFloat(column, formatProvider, out value);
         }
 
         /// <summary>Parses any <see cref="ISpanParsable{TSelf}"/> column (int, decimal, DateTime, …), trimming trailing spaces.</summary>
