@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Processors;
 
@@ -308,28 +309,78 @@ namespace FixedWidthParser.Tests
         [FixedColumn(8, 8, Format = "yyyyMMdd")] public DateOnly DateOnlyVal { get; init; }
     }
 
+    /// <summary>TimeOnly + DateTimeOffset exact-format columns — exercises the two exact-parser
+    /// branches (and the parse-failure path) that <see cref="DateTimeExactModel"/> leaves untouched.</summary>
+    [StructLayout(LayoutKind.Auto)]
+    public readonly record struct TimeExactModel
+    {
+        [FixedColumn(0, 6, Format = "HHmmss")] public TimeOnly Time { get; init; }
+        [FixedColumn(6, 20, Format = "yyyyMMddHHmmsszzz")] public DateTimeOffset Timestamp { get; init; }
+    }
+
+    /// <summary>Double/float columns wide enough that the trimmed field exceeds the 128-char stack
+    /// buffer in the UTF-8 culture-aware parser, forcing its ArrayPool transcode branch.</summary>
+    [StructLayout(LayoutKind.Auto)]
+    public readonly record struct WideUtf8NumericModel
+    {
+        [FixedColumn(0, 200)] public double D { get; init; }
+        [FixedColumn(200, 200)] public float F { get; init; }
+    }
+
+    /// <summary>Value whose converter formats to <see cref="Length"/> repeated chars — used to drive
+    /// <c>FixedWidthRuntime.FormatConvert</c> past its stackalloc buffer into the ArrayPool growth loop.</summary>
+    [StructLayout(LayoutKind.Auto)]
+    public readonly record struct BigValue(int Length);
+
+    /// <summary>Char-side-only converter for <see cref="BigValue"/>; emits N 'x' chars on format.</summary>
+    public sealed class BigConverter : IFixedWidthConverter<BigValue>
+    {
+        public bool TryParse(ReadOnlySpan<char> field, IFormatProvider? formatProvider, out BigValue value)
+        {
+            value = new BigValue(field.Trim().Length);
+            return true;
+        }
+
+        public bool TryFormat(BigValue value, Span<char> destination, IFormatProvider? formatProvider, out int written)
+        {
+            if (destination.Length < value.Length)
+            {
+                written = 0;
+                return false;
+            }
+            destination[..value.Length].Fill('x');
+            written = value.Length;
+            return true;
+        }
+    }
+
+    [StructLayout(LayoutKind.Auto)]
     public readonly record struct ZeroPaddedLeadingModel
     {
         [FixedColumn(0, 5, TrimChar = '0', TrimMode = TrimMode.Leading)] public int Value { get; init; }
         [FixedColumn(5, 5, TrimChar = '0', TrimMode = TrimMode.Leading)] public double DoubleValue { get; init; }
     }
 
+    [StructLayout(LayoutKind.Auto)]
     public readonly record struct ZeroPaddedBothModel
     {
         [FixedColumn(0, 5, TrimChar = '0', TrimMode = TrimMode.Both)] public int Value { get; init; }
     }
 
+    [StructLayout(LayoutKind.Auto)]
     public readonly record struct SignPaddedModel
     {
         [FixedColumn(0, 6, Alignment = Alignment.Right, Padding = '0')] public int Value { get; init; }
     }
 
+    [StructLayout(LayoutKind.Auto)]
     public readonly record struct NullablePaddingModel
     {
         [FixedColumn(0, 5, TrimChar = '0')] public int? Value { get; init; }
         [FixedColumn(5, 5, TrimChar = '*')] public double? DoubleValue { get; init; }
     }
 
+    [StructLayout(LayoutKind.Auto)]
     public readonly record struct TruncateInvalidModel
     {
         [FixedColumn(0, 5, Overflow = OverflowBehavior.Truncate)] public int Value { get; init; }
