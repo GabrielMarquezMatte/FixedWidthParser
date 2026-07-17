@@ -6,49 +6,50 @@ using CommunityToolkit.HighPerformance.Buffers;
 namespace FixedWidthParser.Readers
 {
     /// <summary>
-    /// Shared synchronous enumerator logic for the record readers, specialized by a
-    /// <see langword="struct"/> <typeparamref name="TParser"/> strategy so the parse call is
-    /// devirtualized. Reads lines in blocks into an <see cref="System.Buffers.ArrayPool{T}"/>
-    /// buffer and slices them as <see cref="ReadOnlySpan{T}"/> straight into the strategy — no
-    /// string allocated per line. Held by value inside the public reader enumerators, which forward
-    /// to it; being a <see langword="struct"/> keeps <c>foreach</c> allocation-free.
+    /// Shared synchronous enumerator logic for character and UTF-8 record readers. The element,
+    /// line format, parser, and source strategies are structs, so the JIT specializes every hot-path
+    /// call without allocations or interface dispatch.
     /// </summary>
-    internal struct RecordEnumeratorCore<TModel, TParser> : IEnumerator<TModel>
-        where TParser : struct, ILineParser<TModel>
+    public struct RecordEnumeratorCore<T, TFormat, TModel, TParser, TSource> : IEnumerator<TModel>
+        where T : unmanaged, IEquatable<T>
+        where TFormat : struct, ILineFormat<T>
+        where TParser : struct, IRecordLineParser<T, TModel>
+        where TSource : struct, ISource<T>
     {
         private readonly TParser _strategy;
-        private readonly bool _ownsReader;
         private readonly IFormatProvider? _formatProvider;
         private readonly StringPool? _stringPool;
-        private TextReader? _reader;
-        private LineBufferState<char, CharLineFormat> _lines;
+        private TSource _source;
+        private LineBufferState<T, TFormat> _lines;
         private TModel _current;
+        private bool _disposed;
 
         internal RecordEnumeratorCore(
             TParser strategy,
-            TextReader reader,
-            bool ownsReader,
+            TSource source,
             IFormatProvider? formatProvider,
             StringPool? stringPool,
             int bufferSize)
         {
             _strategy = strategy;
-            _reader = reader;
-            _ownsReader = ownsReader;
+            _source = source;
             _formatProvider = formatProvider;
             _stringPool = stringPool;
             _lines = default;
             _lines.Rent(bufferSize);
             _current = default!;
+            _disposed = false;
         }
 
+        /// <inheritdoc />
         public readonly TModel Current => _current;
         [ExcludeFromCodeCoverage]
         readonly object IEnumerator.Current => _current!;
 
+        /// <inheritdoc />
         public bool MoveNext()
         {
-            var reader = _reader ?? throw new ObjectDisposedException(nameof(RecordEnumeratorCore<,>));
+            ObjectDisposedException.ThrowIf(_disposed, nameof(RecordEnumeratorCore<T, TFormat, TModel, TParser, TSource>));
             while (true)
             {
                 var status = _lines.TryGetLine(out var line);
@@ -62,41 +63,42 @@ namespace FixedWidthParser.Readers
                     return false;
                 }
 
-                Refill(reader);
+                Refill();
             }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void Parse(ReadOnlySpan<char> line)
+        private void Parse(ReadOnlySpan<T> line)
         {
             if (!_strategy.TryParse(line, _formatProvider, _stringPool, out _current))
             {
                 throw new FormatException(
-                    $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{line}\".");
+                    $"Line {_lines.LineNumber} could not be parsed into {typeof(TModel).Name}: \"{TFormat.FormatForException(line)}\".");
             }
         }
 
-        private void Refill(TextReader reader)
+        private void Refill()
         {
             _lines.Compact();
             _lines.GrowIfFull();
-            int read = reader.Read(_lines.Buffer, _lines.End, _lines.Buffer.Length - _lines.End);
-            _lines.Advance(read);
+            _lines.Advance(_source.Read(_lines.Buffer.AsSpan(_lines.End, _lines.Buffer.Length - _lines.End)));
         }
 
+        /// <inheritdoc />
         public void Dispose()
         {
-            _lines.Return();
-#pragma warning disable IDISP007 // Don't dispose injected
-            if (_ownsReader)
+            if (_disposed)
             {
-                _reader?.Dispose();
+                return;
             }
-#pragma warning restore IDISP007 // Don't dispose injected
-            _reader = null;
+
+            _lines.Return();
+            _source.Dispose();
+            _disposed = true;
         }
 
         [ExcludeFromCodeCoverage]
+        /// <inheritdoc />
         public readonly void Reset()
         {
             throw new NotSupportedException("Reading is single-pass.");

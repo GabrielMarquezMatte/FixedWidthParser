@@ -24,8 +24,17 @@ namespace FixedWidthParser.Formatters
                 if (Alignment == Alignment.Right)
                 {
                     int pad = width - length;
-                    slice[..pad].Fill(Padding);
-                    content.CopyTo(slice[pad..]);
+                    if (Padding != ' ' && content.Length > 0 && (content[0] == '-' || content[0] == '+'))
+                    {
+                        slice[0] = content[0];
+                        slice[1..(pad + 1)].Fill(Padding);
+                        content[1..].CopyTo(slice[(pad + 1)..]);
+                    }
+                    else
+                    {
+                        slice[..pad].Fill(Padding);
+                        content.CopyTo(slice[pad..]);
+                    }
                 }
                 else
                 {
