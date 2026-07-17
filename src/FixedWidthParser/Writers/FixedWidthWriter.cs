@@ -2,30 +2,54 @@ using System.Buffers;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Formatters;
+using FixedWidthParser.Processors;
 
 namespace FixedWidthParser.Writers
 {
     public sealed class FixedWidthWriter<TModel>
     {
+        private static readonly IColumnFormatter<TModel>[] _cachedFormatters;
+        private static readonly int _cachedLineLength;
+        private static readonly ExceptionDispatchInfo? _buildError;
+
+        static FixedWidthWriter()
+        {
+            try
+            {
+                var formatters = new List<IColumnFormatter<TModel>>();
+                int maxLen = 0;
+
+                ModelColumns.ForEachColumn(typeof(TModel), (member, attribute) =>
+                {
+                    maxLen = Math.Max(maxLen, attribute.Start + attribute.Length);
+                    formatters.Add(CreateFormatter(member, attribute));
+                });
+
+                _cachedFormatters = formatters.ToArray();
+                _cachedLineLength = maxLen;
+                _buildError = null;
+            }
+            catch (Exception ex)
+            {
+                _cachedFormatters = [];
+                _cachedLineLength = 0;
+                _buildError = ExceptionDispatchInfo.Capture(ex);
+            }
+        }
+
         private readonly IColumnFormatter<TModel>[] _formatters;
         private readonly int _lineLength;
 
         public FixedWidthWriter()
         {
-            var formatters = new List<IColumnFormatter<TModel>>();
-            int maxLen = 0;
-
-            ModelColumns.ForEachColumn(typeof(TModel), (member, attribute) =>
-            {
-                maxLen = Math.Max(maxLen, attribute.Start + attribute.Length);
-                formatters.Add(CreateFormatter(member, attribute));
-            });
-
-            _formatters = formatters.ToArray();
-            _lineLength = maxLen;
+            _buildError?.Throw();
+            _formatters = _cachedFormatters;
+            _lineLength = _cachedLineLength;
         }
+
         private static OverflowBehavior DetermineOverflowBehavior(FixedColumnAttribute attribute, bool isString)
         {
             if (attribute.Overflow != OverflowBehavior.Default)
@@ -40,19 +64,70 @@ namespace FixedWidthParser.Writers
 
             return OverflowBehavior.Throw;
         }
+
         private static IColumnFormatter<TModel> CreateFormatter(MemberInfo member, FixedColumnAttribute attribute)
         {
             var (memberType, model, access) = ModelColumns.MemberAccess(typeof(TModel), member);
+
+            if (attribute.Overflow == OverflowBehavior.Truncate && memberType != typeof(string))
+            {
+                throw new InvalidOperationException(
+                    $"OverflowBehavior.Truncate is not supported for non-string column '{member.Name}' of type '{memberType.Name}'.");
+            }
+
             var delegateType = typeof(RefGetter<,>).MakeGenericType(typeof(TModel), memberType);
             var getter = Expression.Lambda(delegateType, access, model).Compile();
-            bool isString = memberType == typeof(string);
-            // Resolve Default overflow per type: string truncates, numeric throws.
-            var overflow = DetermineOverflowBehavior(attribute, isString);
-
+            // Resolve Default overflow per type: string truncates, numeric (incl. T?) throws.
+            var overflow = DetermineOverflowBehavior(attribute, memberType == typeof(string));
             var options = new ColumnFormatOptions(attribute.Alignment, attribute.Padding, attribute.Format, overflow);
-            var formatterType = isString
+
+            var underlyingType = Nullable.GetUnderlyingType(memberType);
+            if (underlyingType is null)
+            {
+                return BuildValueFormatter(member, attribute, memberType, options, getter);
+            }
+
+            // A null value writes as a blank (padding-filled) column instead of formatting
+            // otherwise the underlying T formats exactly as a non-nullable column would.
+            var underlyingGetter = BuildUnderlyingGetter(underlyingType, getter);
+            var inner = BuildValueFormatter(member, attribute, underlyingType, options, underlyingGetter);
+            var nullableFormatterType = typeof(NullableColumnFormatter<,>).MakeGenericType(typeof(TModel), underlyingType);
+            return (IColumnFormatter<TModel>)Activator.CreateInstance(
+                nullableFormatterType, attribute.Start, attribute.Length, attribute.TrimChar, getter, inner)!;
+        }
+
+        // Adapts a RefGetter<TModel, TUnderlying?> into a RefGetter<TModel, TUnderlying> (reads .Value
+        // only ever invoked by NullableColumnFormatter after it has confirmed HasValue).
+        private static Delegate BuildUnderlyingGetter(Type underlyingType, Delegate nullableGetter)
+        {
+            var modelParam = Expression.Parameter(typeof(TModel).MakeByRefType(), "model");
+            var invoke = Expression.Invoke(Expression.Constant(nullableGetter), modelParam);
+            var value = Expression.Property(invoke, "Value");
+            var adapterType = typeof(RefGetter<,>).MakeGenericType(typeof(TModel), underlyingType);
+            return Expression.Lambda(adapterType, value, modelParam).Compile();
+        }
+
+        private static IColumnFormatter<TModel> BuildValueFormatter(
+            MemberInfo member, FixedColumnAttribute attribute, Type valueType, ColumnFormatOptions options, Delegate getter)
+        {
+            if (attribute.Converter is { } converterType)
+            {
+                var requiredInterface = typeof(IFixedWidthConverter<>).MakeGenericType(valueType);
+                if (!requiredInterface.IsAssignableFrom(converterType))
+                {
+                    throw new InvalidOperationException(
+                        $"Converter '{converterType}' for column '{member.Name}' must implement '{requiredInterface}'.");
+                }
+                var converterInstance = Activator.CreateInstance(converterType)
+                    ?? throw new InvalidOperationException($"Could not instantiate converter '{converterType}' for column '{member.Name}'.");
+                var converterFormatterType = typeof(ConverterColumnFormatter<,,>).MakeGenericType(typeof(TModel), valueType, converterType);
+                return (IColumnFormatter<TModel>)Activator.CreateInstance(
+                    converterFormatterType, attribute.Start, attribute.Length, options, member.Name, getter, converterInstance)!;
+            }
+
+            var formatterType = valueType == typeof(string)
                 ? typeof(StringColumnFormatter<>).MakeGenericType(typeof(TModel))
-                : typeof(SpanFormattableColumnFormatter<,>).MakeGenericType(typeof(TModel), memberType);
+                : typeof(SpanFormattableColumnFormatter<,>).MakeGenericType(typeof(TModel), valueType);
             return (IColumnFormatter<TModel>)Activator.CreateInstance(
                 formatterType, attribute.Start, attribute.Length, options, member.Name, getter)!;
         }

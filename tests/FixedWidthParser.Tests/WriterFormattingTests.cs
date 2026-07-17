@@ -63,12 +63,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Write_NumericOverflow_TruncatesWhenOptedIn()
         {
-            var writer = new FixedWidthWriter<NarrowTruncateModel>();
-
-            string line = WriteOne(writer, new NarrowTruncateModel { Value = 12345 });
-
-            // Left alignment → keeps the first characters.
-            Assert.Equal("123", line);
+            Assert.Throws<InvalidOperationException>(() => new FixedWidthWriter<NarrowTruncateModel>());
         }
 
         [Fact]
@@ -77,10 +72,10 @@ namespace FixedWidthParser.Tests
             var writer = new FixedWidthWriter<WideValueModel>();
 
             // 700 chars > 256 (stack buffer) and > 512 (first rented buffer): exercises the
-            // ArrayPool fallback and its grow (size *= 2) path. Column is 4 wide + Truncate.
+            // ArrayPool fallback and its grow (size *= 2) path.
             string line = WriteOne(writer, new WideValueModel { Value = new RepeatedChar(700) });
 
-            Assert.Equal("XXXX", line);
+            Assert.Equal(new string('X', 700) + new string(' ', 100), line);
         }
 
         [Fact]
@@ -91,7 +86,7 @@ namespace FixedWidthParser.Tests
             // 300 chars > 256 (stack) but <= 512: fallback succeeds on the first rented buffer.
             string line = WriteOne(writer, new WideValueModel { Value = new RepeatedChar(300) });
 
-            Assert.Equal("XXXX", line);
+            Assert.Equal(new string('X', 300) + new string(' ', 500), line);
         }
 
         [Fact]

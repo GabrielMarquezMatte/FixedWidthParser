@@ -9,7 +9,7 @@ namespace FixedWidthParser.Readers
     /// (owned). Stored <b>by value</b> on the record enumerables, so a <c>Read</c> call allocates no
     /// <c>Func&lt;TextReader&gt;</c> delegate or capture — only the enumerable itself.
     /// </summary>
-    internal readonly struct TextReaderSource
+    public readonly struct TextReaderSource : ISource<char>
     {
         private readonly TextReader? _reader;
         private readonly Stream? _stream;
@@ -52,27 +52,50 @@ namespace FixedWidthParser.Readers
         }
 
         /// <summary>
-        /// Materializes the <see cref="TextReader"/>. Returns the injected reader as-is, or allocates a
+        /// Materializes a read source. Returns the injected reader as-is, or allocates a
         /// <see cref="StreamReader"/> (and, for an async file, a <see cref="FileStream"/>) owned by the
-        /// caller. BOM detection mirrors the original reader behavior.
+        /// returned source. BOM detection mirrors the original reader behavior.
         /// </summary>
-        public TextReader Create(int bufferSize)
+        public TextReaderSource Create(int bufferSize)
         {
             if (_reader is not null)
             {
-                return _reader;
+                return new(_reader, null, null, null, leaveOpen: false, useAsync: false, ownsReader: OwnsReader);
             }
             if (_stream is not null)
             {
-                return new StreamReader(_stream, _encoding, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize, leaveOpen: _leaveOpen);
+                return new(new StreamReader(_stream, _encoding, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize, leaveOpen: _leaveOpen), null, null, null, leaveOpen: false, useAsync: false, ownsReader: true);
             }
             if (_useAsync)
             {
-                return new StreamReader(
-                    new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize, useAsync: true),
-                    _encoding, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize);
+                return new(new StreamReader(
+                    new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.Asynchronous | FileOptions.SequentialScan),
+                    _encoding, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize), null, null, null, leaveOpen: false, useAsync: false, ownsReader: true);
             }
-            return new StreamReader(_path!, _encoding, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize);
+            return new(new StreamReader(_path!, _encoding, detectEncodingFromByteOrderMarks: true, bufferSize: bufferSize), null, null, null, leaveOpen: false, useAsync: false, ownsReader: true);
+        }
+
+        /// <inheritdoc />
+        public int Read(Span<char> buffer)
+        {
+            return _reader!.Read(buffer);
+        }
+
+        /// <inheritdoc />
+        public ValueTask<int> ReadAsync(Memory<char> buffer, CancellationToken cancellationToken)
+        {
+            return _reader!.ReadAsync(buffer, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public void Dispose()
+        {
+#pragma warning disable IDISP007 // Don't dispose injected
+            if (OwnsReader)
+            {
+                _reader?.Dispose();
+            }
+#pragma warning restore IDISP007 // Don't dispose injected
         }
     }
 }
