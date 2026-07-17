@@ -93,7 +93,7 @@ namespace FixedWidthParser.Writers
             var inner = BuildValueFormatter(member, attribute, underlyingType, options, underlyingGetter);
             var nullableFormatterType = typeof(NullableColumnFormatter<,>).MakeGenericType(typeof(TModel), underlyingType);
             return (IColumnFormatter<TModel>)Activator.CreateInstance(
-                nullableFormatterType, attribute.Start, attribute.Length, options, attribute.TrimChar, getter, inner)!;
+                nullableFormatterType, attribute.Start, attribute.Length, attribute.TrimChar, getter, inner)!;
         }
 
         // Adapts a RefGetter<TModel, TUnderlying?> into a RefGetter<TModel, TUnderlying> (reads .Value
