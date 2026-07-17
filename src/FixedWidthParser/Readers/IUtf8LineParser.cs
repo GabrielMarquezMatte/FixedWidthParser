@@ -23,7 +23,7 @@ namespace FixedWidthParser.Readers
     /// <summary>
     /// Reflection-based parse strategy: forwards to a runtime <see cref="Utf8FixedWidthParser{TModel}"/>.
     /// </summary>
-    public readonly struct ReflectionUtf8LineParser<TModel>(Utf8FixedWidthParser<TModel> parser) : IUtf8LineParser<TModel> where TModel : new()
+    public readonly struct ReflectionUtf8LineParser<TModel>(Utf8FixedWidthParser<TModel> parser) : IUtf8LineParser<TModel>, IRecordLineParser<byte, TModel> where TModel : new()
     {
         public bool TryParse(ReadOnlySpan<byte> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
         {
@@ -35,7 +35,7 @@ namespace FixedWidthParser.Readers
     /// Source-generated parse strategy: forwards to the model's static
     /// <see cref="IUtf8FixedWidthModel{TSelf}.TryParse"/>, avoiding reflection and delegates.
     /// </summary>
-    public readonly struct GeneratedUtf8LineParser<TModel> : IUtf8LineParser<TModel> where TModel : IUtf8FixedWidthModel<TModel>
+    public readonly struct GeneratedUtf8LineParser<TModel> : IUtf8LineParser<TModel>, IRecordLineParser<byte, TModel> where TModel : IUtf8FixedWidthModel<TModel>
     {
         public bool TryParse(ReadOnlySpan<byte> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
         {
