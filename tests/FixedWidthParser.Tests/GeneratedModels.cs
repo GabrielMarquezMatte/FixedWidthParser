@@ -125,6 +125,14 @@ namespace FixedWidthParser.Tests
         [FixedColumn(8, 8, Format = "yyyyMMdd")] public DateOnly DateOnlyVal { get; init; }
     }
 
+    /// <summary>TimeOnly + DateTimeOffset exact columns — mirrors <see cref="TimeExactModel"/>; drives
+    /// the generated code's <c>TryTimeOnlyExact</c> / <c>TryDateTimeOffsetExact</c> runtime helpers (char and UTF-8).</summary>
+    public readonly partial record struct GenTimeExactModel : IFixedWidthModel<GenTimeExactModel>, IUtf8FixedWidthModel<GenTimeExactModel>
+    {
+        [FixedColumn(0, 6, Format = "HHmmss")] public TimeOnly Time { get; init; }
+        [FixedColumn(6, 20, Format = "yyyyMMddHHmmsszzz")] public DateTimeOffset Timestamp { get; init; }
+    }
+
     public readonly partial record struct GenZeroPaddedLeadingModel : IFixedWidthModel<GenZeroPaddedLeadingModel>, IUtf8FixedWidthModel<GenZeroPaddedLeadingModel>
     {
         [FixedColumn(0, 5, TrimChar = '0', TrimMode = TrimMode.Leading)] public int Value { get; init; }
