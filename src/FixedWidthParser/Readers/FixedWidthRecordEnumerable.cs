@@ -2,7 +2,6 @@ using System.Buffers;
 using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Parsers;
 
 namespace FixedWidthParser.Readers
 {
@@ -13,16 +12,17 @@ namespace FixedWidthParser.Readers
     /// parser. Exposes a <see langword="struct"/> enumerator for allocation-free iteration in
     /// <c>foreach</c>, and implements <see cref="IEnumerable{T}"/> for LINQ interop.
     /// </summary>
-    public sealed class FixedWidthRecordEnumerable<TModel> : IEnumerable<TModel> where TModel : new()
+    public sealed class FixedWidthRecordEnumerable<TModel, TParser> : IEnumerable<TModel>
+        where TParser : struct, IRecordLineParser<char, TModel>
     {
-        private readonly FixedWidthParser<TModel> _parser;
+        private readonly TParser _parser;
         private readonly TextReaderSource _source;
         private readonly IFormatProvider? _formatProvider;
         private readonly StringPool? _stringPool;
         private readonly int _bufferSize;
 
         internal FixedWidthRecordEnumerable(
-            FixedWidthParser<TModel> parser,
+            TParser parser,
             TextReaderSource source,
             IFormatProvider? formatProvider,
             StringPool? stringPool,
@@ -36,9 +36,9 @@ namespace FixedWidthParser.Readers
         }
 
         /// <summary>Struct enumerator: <c>foreach</c> iteration without heap allocation.</summary>
-        public Enumerator GetEnumerator()
+        public RecordEnumeratorCore<char, CharLineFormat, TModel, TParser, TextReaderSource> GetEnumerator()
         {
-            return new(_parser, _source.Create(_bufferSize), _source.OwnsReader, _formatProvider, _stringPool, _bufferSize);
+            return new(_parser, _source.Create(_bufferSize), _formatProvider, _stringPool, _bufferSize);
         }
 
         IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator()
@@ -52,45 +52,5 @@ namespace FixedWidthParser.Readers
             return GetEnumerator();
         }
 
-        /// <summary>
-        /// Allocation-free <see langword="struct"/> enumerator. Forwards to the shared
-        /// <see cref="RecordEnumeratorCore{TModel, TParser}"/>, specialized with the reflection-based
-        /// <see cref="ReflectionLineParser{TModel}"/> strategy (devirtualized parse, no extra heap).
-        /// </summary>
-        public struct Enumerator : IEnumerator<TModel>
-        {
-            private RecordEnumeratorCore<TModel, ReflectionLineParser<TModel>> _core;
-
-            internal Enumerator(
-                FixedWidthParser<TModel> parser,
-                TextReader reader,
-                bool ownsReader,
-                IFormatProvider? formatProvider,
-                StringPool? stringPool,
-                int bufferSize)
-            {
-                _core = new(new ReflectionLineParser<TModel>(parser), reader, ownsReader, formatProvider, stringPool, bufferSize);
-            }
-
-            public readonly TModel Current => _core.Current;
-            [ExcludeFromCodeCoverage]
-            readonly object IEnumerator.Current => _core.Current!;
-
-            public bool MoveNext()
-            {
-                return _core.MoveNext();
-            }
-
-            public void Dispose()
-            {
-                _core.Dispose();
-            }
-
-            [ExcludeFromCodeCoverage]
-            public readonly void Reset()
-            {
-                _core.Reset();
-            }
-        }
     }
 }

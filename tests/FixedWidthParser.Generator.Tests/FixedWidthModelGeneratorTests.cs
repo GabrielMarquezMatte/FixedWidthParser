@@ -37,6 +37,53 @@ namespace FixedWidthParser.Generator.Tests
         }
 
         [Fact]
+        public void ValidModel_GeneratesTryFormat()
+        {
+            var result = Run("""
+                public readonly partial record struct ValidWriteModel : IFixedWidthModel<ValidWriteModel>
+                {
+                    [FixedColumn(0, 5)] public string Code { get; init; }
+                    [FixedColumn(5, 3)] public int Quantity { get; init; }
+                }
+                """);
+
+            Assert.Empty(result.GeneratorDiagnostics);
+            var generated = Assert.Single(result.GeneratedSources);
+            Assert.Contains("public static bool TryFormat", generated, StringComparison.Ordinal);
+            Assert.Contains("if (destination.Length < 8) { charsWritten = 0; return false; }", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.FormatString(model.Code,", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.FormatValue(model.Quantity,", generated, StringComparison.Ordinal);
+            Assert.Contains("ColumnFormatOptions __options0", generated, StringComparison.Ordinal);
+            Assert.Contains("ColumnFormatOptions __options1", generated, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void CharModel_ColumnNotFormattable_EmitsParseOnly_AndReportsFwp010()
+        {
+            // A column type that is ISpanParsable but NOT ISpanFormattable: the read side is unaffected
+            // (FWP010 only blocks the write method), so TryParse is still emitted but TryFormat is not.
+            var result = Run("""
+                public readonly struct ParsableNotFormattable : System.ISpanParsable<ParsableNotFormattable>
+                {
+                    public static ParsableNotFormattable Parse(System.ReadOnlySpan<char> s, System.IFormatProvider? p) => default;
+                    public static bool TryParse(System.ReadOnlySpan<char> s, System.IFormatProvider? p, out ParsableNotFormattable r) { r = default; return true; }
+                    public static ParsableNotFormattable Parse(string s, System.IFormatProvider? p) => default;
+                    public static bool TryParse(string? s, System.IFormatProvider? p, out ParsableNotFormattable r) { r = default; return true; }
+                }
+
+                public readonly partial record struct WriteBadModel : IFixedWidthModel<WriteBadModel>
+                {
+                    [FixedColumn(0, 5)] public ParsableNotFormattable Value { get; init; }
+                }
+                """);
+
+            Assert.Contains(result.GeneratorDiagnostics, d => string.Equals(d.Id, "FWP010", StringComparison.Ordinal));
+            var generated = Assert.Single(result.GeneratedSources);
+            Assert.Contains("public static bool TryParse", generated, StringComparison.Ordinal);
+            Assert.DoesNotContain("public static bool TryFormat", generated, StringComparison.Ordinal);
+        }
+
+        [Fact]
         public void DualMarkerModel_GeneratesBothCharAndByteTryParse()
         {
             var result = Run("""
@@ -321,13 +368,13 @@ namespace FixedWidthParser.Generator.Tests
                 optionsProvider: null,
                 driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
 
-            driver = driver.RunGenerators(compilation);
+            driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
             var first = driver.GetRunResult().Results[0];
 
             // Add an unrelated type (no base list) so the model's own input is unchanged.
             var updated = compilation.AddSyntaxTrees(
-                CSharpSyntaxTree.ParseText("namespace GeneratorSmoke { internal sealed class Unrelated { } }", parseOptions));
-            driver = driver.RunGenerators(updated);
+                CSharpSyntaxTree.ParseText("namespace GeneratorSmoke { internal sealed class Unrelated { } }", parseOptions, cancellationToken: TestContext.Current.CancellationToken));
+            driver = driver.RunGenerators(updated, TestContext.Current.CancellationToken);
             var second = driver.GetRunResult().Results[0];
 
             // Identical output across runs, and the source-output step was served from cache.
@@ -361,7 +408,7 @@ namespace FixedWidthParser.Generator.Tests
                 {
                     [FixedColumn(0, 5)] public string Code { get; init; }
                 }
-                """, parseOptions));
+                """, parseOptions), TestContext.Current.CancellationToken);
             var first = driver.GetRunResult().Results[0].GeneratedSources.Single().SourceText.ToString();
 
             driver = driver.RunGenerators(CreateCompilation("""
@@ -369,7 +416,7 @@ namespace FixedWidthParser.Generator.Tests
                 {
                     [FixedColumn(0, 8)] public string Code { get; init; }
                 }
-                """, parseOptions));
+                """, parseOptions), TestContext.Current.CancellationToken);
             var second = driver.GetRunResult().Results[0].GeneratedSources.Single().SourceText.ToString();
 
             Assert.NotEqual(first, second);
@@ -405,7 +452,7 @@ namespace FixedWidthParser.Generator.Tests
                 """ + modelSource;
 
             var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.Preview);
-            var syntaxTree = CSharpSyntaxTree.ParseText(source, parseOptions);
+            var syntaxTree = CSharpSyntaxTree.ParseText(source, parseOptions, cancellationToken: TestContext.Current.CancellationToken);
             var compilation = CSharpCompilation.Create(
                 "GeneratorSmoke",
                 [syntaxTree],
@@ -418,11 +465,12 @@ namespace FixedWidthParser.Generator.Tests
             driver = driver.RunGeneratorsAndUpdateCompilation(
                 compilation,
                 out _,
-                out var generatorDiagnostics);
+                out var generatorDiagnostics,
+                TestContext.Current.CancellationToken);
 
             var runResult = driver.GetRunResult();
             var generatedSources = runResult.GeneratedTrees
-                .Select(t => t.GetText().ToString())
+                .Select(t => t.GetText(TestContext.Current.CancellationToken).ToString())
                 .ToImmutableArray();
 
             return new GeneratorRunResult(generatorDiagnostics, generatedSources);

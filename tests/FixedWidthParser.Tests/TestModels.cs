@@ -1,8 +1,117 @@
 using System.Diagnostics.CodeAnalysis;
 using FixedWidthParser.Attributes;
+using FixedWidthParser.Processors;
 
 namespace FixedWidthParser.Tests
 {
+    /// <summary>Custom value type with no ISpanParsable — only parseable via a <c>FixedColumnAttribute.Converter</c>.</summary>
+    public readonly record struct CentsValue(long Cents);
+
+    /// <summary>
+    /// Stateless <see cref="IFixedWidthConverter{T}"/>/<see cref="IUtf8FixedWidthConverter{T}"/> for
+    /// <see cref="CentsValue"/>: stores cents as a plain integer. Implements both directions (parse/format)
+    /// and both element types (char/byte), so one attribute round-trips through every path.
+    /// </summary>
+    public sealed class CentsConverter : IFixedWidthConverter<CentsValue>, IUtf8FixedWidthConverter<CentsValue>
+    {
+        public bool TryParse(ReadOnlySpan<char> field, IFormatProvider? formatProvider, out CentsValue value)
+        {
+            if (!long.TryParse(field, formatProvider, out long cents))
+            {
+                value = default;
+                return false;
+            }
+            value = new CentsValue(cents);
+            return true;
+        }
+
+        public bool TryFormat(CentsValue value, Span<char> destination, IFormatProvider? formatProvider, out int written)
+        {
+            return value.Cents.TryFormat(destination, out written, provider: formatProvider);
+        }
+
+        public bool TryParse(ReadOnlySpan<byte> field, IFormatProvider? formatProvider, out CentsValue value)
+        {
+            if (!long.TryParse(field, formatProvider, out long cents))
+            {
+                value = default;
+                return false;
+            }
+            value = new CentsValue(cents);
+            return true;
+        }
+
+        public bool TryFormat(CentsValue value, Span<byte> destination, IFormatProvider? formatProvider, out int written)
+        {
+            return value.Cents.TryFormat(destination, out written, provider: formatProvider);
+        }
+    }
+
+    /// <summary>Converter that only implements the char-side interface — used to prove a converter can
+    /// support one direction/element type without the other being required.</summary>
+    public sealed class IntOnlyConverter : IFixedWidthConverter<int>
+    {
+        public bool TryParse(ReadOnlySpan<char> field, IFormatProvider? formatProvider, out int value)
+        {
+            return int.TryParse(field, formatProvider, out value);
+        }
+
+        public bool TryFormat(int value, Span<char> destination, IFormatProvider? formatProvider, out int written)
+        {
+            return value.TryFormat(destination, out written, provider: formatProvider);
+        }
+    }
+
+    /// <summary>Single custom-converted column, exercised by both the reflection parser/writer and the generator.</summary>
+    public readonly record struct CentsConverterModel
+    {
+        [FixedColumn(0, 8, Converter = typeof(CentsConverter))] public CentsValue Amount { get; init; }
+    }
+
+    /// <summary>
+    /// Converter (<see cref="IntOnlyConverter"/>, for <c>int</c>) attached to a <c>string</c> column — an
+    /// invalid pairing that must be rejected at build time.
+    /// </summary>
+    public readonly record struct MismatchedConverterModel
+    {
+        [FixedColumn(0, 5, Converter = typeof(IntOnlyConverter))] public string Value { get; init; }
+    }
+
+    /// <summary>Nullable value-type columns (T?): a blank column parses to null / writes as blank.</summary>
+    public readonly record struct NullableModel
+    {
+        [FixedColumn(0, 5)] public int? Age { get; init; }
+        [FixedColumn(5, 10)] public decimal? Amount { get; init; }
+    }
+
+    /// <summary>Nullable value-type column combined with a custom converter (T?, converter targets T).</summary>
+    public readonly record struct NullableConverterModel
+    {
+        [FixedColumn(0, 8, Converter = typeof(CentsConverter))] public CentsValue? Amount { get; init; }
+    }
+
+    /// <summary>Integer column right-padded with '*' instead of space; read with a matching <c>TrimChar</c>.</summary>
+    public readonly record struct AsteriskTrimIntModel
+    {
+        [FixedColumn(0, 5, TrimChar = '*')] public int Value { get; init; }
+    }
+
+    /// <summary>String column right-padded with '#' instead of space; read with a matching <c>TrimChar</c>.</summary>
+    public readonly record struct HashTrimStringModel
+    {
+        [FixedColumn(0, 8, TrimChar = '#')] public string Code { get; init; }
+    }
+
+    /// <summary>
+    /// UTF-8 byte path only: <c>TrimChar</c> set to a non-ASCII character (U+00A0, no-break space),
+    /// which cannot be represented as a single UTF-8 byte — must throw rather than silently trim the
+    /// wrong byte (mirrors the existing decimal-separator ASCII guard).
+    /// </summary>
+    public readonly record struct NonAsciiTrimModel
+    {
+        [FixedColumn(0, 5, TrimChar = ' ')] public int Value { get; init; }
+    }
+
     /// <summary>Property-based model (string + int + double).</summary>
     public readonly record struct PersonModel
     {
@@ -173,7 +282,7 @@ namespace FixedWidthParser.Tests
     /// <summary>Single column of a value type that can format wider than the stack buffer.</summary>
     public readonly record struct WideValueModel
     {
-        [FixedColumn(0, 4, Overflow = OverflowBehavior.Truncate)] public RepeatedChar Value { get; init; }
+        [FixedColumn(0, 800)] public RepeatedChar Value { get; init; }
     }
 
     /// <summary>Right-aligned column that truncates on overflow (keeps the rightmost characters).</summary>
@@ -191,5 +300,38 @@ namespace FixedWidthParser.Tests
         public const int LineLength = 1208;
         [FixedColumn(0, 1200)] public string Name { get; init; }
         [FixedColumn(1200, 8)] public int Number { get; init; }
+    }
+
+    public readonly record struct DateTimeExactModel
+    {
+        [FixedColumn(0, 8, Format = "yyyyMMdd")] public DateTime Date { get; init; }
+        [FixedColumn(8, 8, Format = "yyyyMMdd")] public DateOnly DateOnlyVal { get; init; }
+    }
+
+    public readonly record struct ZeroPaddedLeadingModel
+    {
+        [FixedColumn(0, 5, TrimChar = '0', TrimMode = TrimMode.Leading)] public int Value { get; init; }
+        [FixedColumn(5, 5, TrimChar = '0', TrimMode = TrimMode.Leading)] public double DoubleValue { get; init; }
+    }
+
+    public readonly record struct ZeroPaddedBothModel
+    {
+        [FixedColumn(0, 5, TrimChar = '0', TrimMode = TrimMode.Both)] public int Value { get; init; }
+    }
+
+    public readonly record struct SignPaddedModel
+    {
+        [FixedColumn(0, 6, Alignment = Alignment.Right, Padding = '0')] public int Value { get; init; }
+    }
+
+    public readonly record struct NullablePaddingModel
+    {
+        [FixedColumn(0, 5, TrimChar = '0')] public int? Value { get; init; }
+        [FixedColumn(5, 5, TrimChar = '*')] public double? DoubleValue { get; init; }
+    }
+
+    public readonly record struct TruncateInvalidModel
+    {
+        [FixedColumn(0, 5, Overflow = OverflowBehavior.Truncate)] public int Value { get; init; }
     }
 }
