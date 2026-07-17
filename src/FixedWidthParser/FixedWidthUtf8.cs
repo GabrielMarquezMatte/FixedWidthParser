@@ -27,7 +27,7 @@ namespace FixedWidthParser
 
 
         /// <summary>Reads source-generated models from a <see cref="Stream"/> as raw bytes (single pass).</summary>
-        public static GeneratedUtf8FixedWidthRecordEnumerable<TModel> Read<TModel>(
+        public static Utf8FixedWidthRecordEnumerable<TModel, GeneratedUtf8LineParser<TModel>> Read<TModel>(
             Stream stream,
             bool leaveOpen = false,
             IFormatProvider? formatProvider = null,
@@ -37,12 +37,12 @@ namespace FixedWidthParser
         {
             ArgumentNullException.ThrowIfNull(stream);
             ValidateBufferSize(bufferSize);
-            return new GeneratedUtf8FixedWidthRecordEnumerable<TModel>(
-                stream, ownsStream: !leaveOpen, formatProvider, stringPool, bufferSize);
+            return new Utf8FixedWidthRecordEnumerable<TModel, GeneratedUtf8LineParser<TModel>>(
+                default, stream, ownsStream: !leaveOpen, formatProvider, stringPool, bufferSize);
         }
 
         /// <summary>Reads source-generated models from a file as raw bytes, reopening it for each enumeration.</summary>
-        public static GeneratedUtf8FixedWidthRecordEnumerable<TModel> ReadFile<TModel>(
+        public static Utf8FixedWidthRecordEnumerable<TModel, GeneratedUtf8LineParser<TModel>> ReadFile<TModel>(
             string path,
             IFormatProvider? formatProvider = null,
             StringPool? stringPool = null,
@@ -51,12 +51,12 @@ namespace FixedWidthParser
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
             ValidateBufferSize(bufferSize);
-            return new GeneratedUtf8FixedWidthRecordEnumerable<TModel>(
-                path, formatProvider, stringPool, bufferSize);
+            return new Utf8FixedWidthRecordEnumerable<TModel, GeneratedUtf8LineParser<TModel>>(
+                default, path, formatProvider, stringPool, bufferSize);
         }
 
         /// <summary>Reads source-generated models from a <see cref="Stream"/> via <c>await foreach</c> (single pass).</summary>
-        public static GeneratedUtf8FixedWidthAsyncRecordEnumerable<TModel> ReadAsync<TModel>(
+        public static Utf8FixedWidthAsyncRecordEnumerable<TModel, GeneratedUtf8LineParser<TModel>> ReadAsync<TModel>(
             Stream stream,
             bool leaveOpen = false,
             IFormatProvider? formatProvider = null,
@@ -66,12 +66,12 @@ namespace FixedWidthParser
         {
             ArgumentNullException.ThrowIfNull(stream);
             ValidateBufferSize(bufferSize);
-            return new GeneratedUtf8FixedWidthAsyncRecordEnumerable<TModel>(
-                stream, ownsStream: !leaveOpen, formatProvider, stringPool, bufferSize);
+            return new Utf8FixedWidthAsyncRecordEnumerable<TModel, GeneratedUtf8LineParser<TModel>>(
+                default, stream, ownsStream: !leaveOpen, formatProvider, stringPool, bufferSize);
         }
 
         /// <summary>Reads source-generated models from a file via <c>await foreach</c> (true async I/O), reopening it for each enumeration.</summary>
-        public static GeneratedUtf8FixedWidthAsyncRecordEnumerable<TModel> ReadFileAsync<TModel>(
+        public static Utf8FixedWidthAsyncRecordEnumerable<TModel, GeneratedUtf8LineParser<TModel>> ReadFileAsync<TModel>(
             string path,
             IFormatProvider? formatProvider = null,
             StringPool? stringPool = null,
@@ -80,7 +80,7 @@ namespace FixedWidthParser
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
             ValidateBufferSize(bufferSize);
-            return new GeneratedUtf8FixedWidthAsyncRecordEnumerable<TModel>(path, formatProvider, stringPool, bufferSize);
+            return new Utf8FixedWidthAsyncRecordEnumerable<TModel, GeneratedUtf8LineParser<TModel>>(default, path, formatProvider, stringPool, bufferSize);
         }
 
         /// <summary>

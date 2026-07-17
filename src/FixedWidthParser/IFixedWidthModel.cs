@@ -20,5 +20,15 @@ namespace FixedWidthParser
         /// <see langword="false"/> (rejecting the line) when a non-string column fails to parse.
         /// </summary>
         static abstract bool TryParse(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TSelf model);
+
+        /// <summary>
+        /// Formats <paramref name="model"/> into <paramref name="destination"/>, mirroring
+        /// <see cref="Writers.FixedWidthWriter{TModel}"/>: fills unused portions of each column with its
+        /// configured padding character, honors per-column alignment/format/overflow, and returns
+        /// <see langword="false"/> only when <paramref name="destination"/> is shorter than the model's
+        /// fixed-width line length (a column value that doesn't fit throws or truncates per its
+        /// <c>FixedColumnAttribute.Overflow</c>, it does not make this return <see langword="false"/>).
+        /// </summary>
+        static abstract bool TryFormat(in TSelf model, Span<char> destination, IFormatProvider? formatProvider, out int charsWritten);
     }
 }
