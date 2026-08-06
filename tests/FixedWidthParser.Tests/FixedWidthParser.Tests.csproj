@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CsCheck" Version="4.7.0" />
+    <PackageReference Include="CsCheck" Version="4.8.0" />
     <PackageReference Include="System.Linq.Async" Version="7.0.1" Condition="'$(TargetFramework)' == 'net8.0'" />
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.9.0" />
     <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" Version="2.3.3" />
