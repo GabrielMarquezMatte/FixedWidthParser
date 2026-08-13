@@ -49,7 +49,7 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.HighPerformance" Version="8.4.2" />
     <PackageReference Include="csFastFloat" Version="4.1.6" />
-    <PackageReference Include="System.IO.Pipelines" Version="10.0.10" Condition="'$(TargetFramework)' == 'net8.0'" />
+    <PackageReference Include="System.IO.Pipelines" Version="10.0.11" Condition="'$(TargetFramework)' == 'net8.0'" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FixedWidthParser.Generator\FixedWidthParser.Generator.csproj"
