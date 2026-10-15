@@ -26,7 +26,7 @@ namespace FixedWidthParser.Tests
             var original = new PersonModel { Name = name, Age = age, Salary = salary };
 
             string line = WriteOne(writer, original);
-            bool ok = parser.TryParse(line, Inv, null, out var parsed);
+            bool ok = parser.TryParse(Bytes(line), Ctx, out var parsed);
 
             Assert.True(ok);
             Assert.Equal(original.Name, parsed.Name);
@@ -42,7 +42,7 @@ namespace FixedWidthParser.Tests
             var original = new ProductModel { Code = "ABCDE", Quantity = 1234 };
 
             string line = WriteOne(writer, original);
-            bool ok = parser.TryParse(line, Inv, null, out var parsed);
+            bool ok = parser.TryParse(Bytes(line), Ctx, out var parsed);
 
             Assert.True(ok);
             Assert.Equal(original.Code, parsed.Code);

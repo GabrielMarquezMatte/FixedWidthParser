@@ -8,16 +8,12 @@ namespace FixedWidthParser.Tests
     /// <summary>Custom value type with no ISpanParsable — only parseable via a <c>FixedColumnAttribute.Converter</c>.</summary>
     public readonly record struct CentsValue(long Cents);
 
-    /// <summary>
-    /// Stateless <see cref="IFixedWidthConverter{T}"/>/<see cref="IUtf8FixedWidthConverter{T}"/> for
-    /// <see cref="CentsValue"/>: stores cents as a plain integer. Implements both directions (parse/format)
-    /// and both element types (char/byte), so one attribute round-trips through every path.
-    /// </summary>
-    public sealed class CentsConverter : IFixedWidthConverter<CentsValue>, IUtf8FixedWidthConverter<CentsValue>
+    /// <summary>Stateless <see cref="IFixedWidthConverter{T}"/> for <see cref="CentsValue"/>: stores cents as a plain integer.</summary>
+    public sealed class CentsConverter : IFixedWidthConverter<CentsValue>
     {
-        public bool TryParse(ReadOnlySpan<char> field, IFormatProvider? formatProvider, out CentsValue value)
+        public bool TryParse(ReadOnlySpan<byte> field, in FixedWidthContext context, out CentsValue value)
         {
-            if (!long.TryParse(field, formatProvider, out long cents))
+            if (!long.TryParse(field, context.FormatProvider, out long cents))
             {
                 value = default;
                 return false;
@@ -26,43 +22,25 @@ namespace FixedWidthParser.Tests
             return true;
         }
 
-        public bool TryFormat(CentsValue value, Span<char> destination, IFormatProvider? formatProvider, out int written)
+        public bool TryFormat(CentsValue value, Span<byte> destination, in FixedWidthContext context, out int written)
         {
-            return value.Cents.TryFormat(destination, out written, provider: formatProvider);
-        }
-
-        public bool TryParse(ReadOnlySpan<byte> field, IFormatProvider? formatProvider, out CentsValue value)
-        {
-            if (!long.TryParse(field, formatProvider, out long cents))
-            {
-                value = default;
-                return false;
-            }
-            value = new CentsValue(cents);
-            return true;
-        }
-
-        public bool TryFormat(CentsValue value, Span<byte> destination, IFormatProvider? formatProvider, out int written)
-        {
-            return value.Cents.TryFormat(destination, out written, provider: formatProvider);
+            return value.Cents.TryFormat(destination, out written, provider: context.FormatProvider);
         }
     }
 
-    /// <summary>Converter that only implements the char-side interface — used to prove a converter can
-    /// support one direction/element type without the other being required.</summary>
+    /// <summary>Converter for <c>int</c>, attached to a <c>string</c> column to prove the mismatch is rejected.</summary>
     public sealed class IntOnlyConverter : IFixedWidthConverter<int>
     {
-        public bool TryParse(ReadOnlySpan<char> field, IFormatProvider? formatProvider, out int value)
+        public bool TryParse(ReadOnlySpan<byte> field, in FixedWidthContext context, out int value)
         {
-            return int.TryParse(field, formatProvider, out value);
+            return int.TryParse(field, context.FormatProvider, out value);
         }
 
-        public bool TryFormat(int value, Span<char> destination, IFormatProvider? formatProvider, out int written)
+        public bool TryFormat(int value, Span<byte> destination, in FixedWidthContext context, out int written)
         {
-            return value.TryFormat(destination, out written, provider: formatProvider);
+            return value.TryFormat(destination, out written, provider: context.FormatProvider);
         }
     }
-
     /// <summary>Single custom-converted column, exercised by both the reflection parser/writer and the generator.</summary>
     public readonly record struct CentsConverterModel
     {
@@ -332,28 +310,27 @@ namespace FixedWidthParser.Tests
     [StructLayout(LayoutKind.Auto)]
     public readonly record struct BigValue(int Length);
 
-    /// <summary>Char-side-only converter for <see cref="BigValue"/>; emits N 'x' chars on format.</summary>
+    /// <summary>Converter for <see cref="BigValue"/>; emits N 'x' bytes on format.</summary>
     public sealed class BigConverter : IFixedWidthConverter<BigValue>
     {
-        public bool TryParse(ReadOnlySpan<char> field, IFormatProvider? formatProvider, out BigValue value)
+        public bool TryParse(ReadOnlySpan<byte> field, in FixedWidthContext context, out BigValue value)
         {
-            value = new BigValue(field.Trim().Length);
+            value = new BigValue(field.Trim((byte)' ').Length);
             return true;
         }
 
-        public bool TryFormat(BigValue value, Span<char> destination, IFormatProvider? formatProvider, out int written)
+        public bool TryFormat(BigValue value, Span<byte> destination, in FixedWidthContext context, out int written)
         {
             if (destination.Length < value.Length)
             {
                 written = 0;
                 return false;
             }
-            destination[..value.Length].Fill('x');
+            destination[..value.Length].Fill((byte)'x');
             written = value.Length;
             return true;
         }
     }
-
     [StructLayout(LayoutKind.Auto)]
     public readonly record struct ZeroPaddedLeadingModel
     {
@@ -384,5 +361,68 @@ namespace FixedWidthParser.Tests
     public readonly record struct TruncateInvalidModel
     {
         [FixedColumn(0, 5, Overflow = OverflowBehavior.Truncate)] public int Value { get; init; }
+    }
+
+    /// <summary><c>Padding</c> set to a non-ASCII character: the runtime writer must refuse it.</summary>
+    public readonly record struct NonAsciiPaddingModel
+    {
+        [FixedColumn(0, 5, Alignment = Alignment.Right, Padding = 'é')] public int Value { get; init; }
+    }
+
+    /// <summary>A column type with no parser of any kind and no converter.</summary>
+    public readonly record struct UnsupportedTypeModel
+    {
+        [FixedColumn(0, 10)] public Uri? Link { get; init; }
+    }
+
+    /// <summary>Parses only from characters (no <see cref="IUtf8SpanParsable{TSelf}"/>), so the byte path decodes it first.</summary>
+    public readonly record struct Shout(string Text) : ISpanParsable<Shout>, ISpanFormattable
+    {
+        public static Shout Parse(ReadOnlySpan<char> s, IFormatProvider? provider)
+        {
+            return new Shout(s.ToString().ToUpperInvariant());
+        }
+
+        public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out Shout result)
+        {
+            result = Parse(s, provider);
+            return true;
+        }
+
+        [ExcludeFromCodeCoverage]
+        public static Shout Parse(string s, IFormatProvider? provider)
+        {
+            return Parse(s.AsSpan(), provider);
+        }
+
+        [ExcludeFromCodeCoverage]
+        public static bool TryParse(string? s, IFormatProvider? provider, out Shout result)
+        {
+            return TryParse(s.AsSpan(), provider, out result);
+        }
+
+        public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider)
+        {
+            charsWritten = Text.Length;
+            return Text.AsSpan().TryCopyTo(destination);
+        }
+
+        [ExcludeFromCodeCoverage]
+        public string ToString(string? format, IFormatProvider? formatProvider)
+        {
+            return Text;
+        }
+    }
+
+    public readonly record struct ShoutModel
+    {
+        [FixedColumn(0, 6)] public Shout Word { get; init; }
+    }
+
+    /// <summary>A Latin-1 name column followed by a number, to prove positions stay bytes in single-byte encodings.</summary>
+    public readonly record struct NameAgeModel
+    {
+        [FixedColumn(0, 6)] public string Name { get; init; }
+        [FixedColumn(6, 3)] public int Age { get; init; }
     }
 }

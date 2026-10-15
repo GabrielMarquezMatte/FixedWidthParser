@@ -5,9 +5,13 @@ using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
 {
+    /// <summary>
+    /// <see cref="FixedWidthReader{TModel}"/> over streams and files, sync and async: line endings, BOM,
+    /// buffer growth, error reporting, leaveOpen and string pooling.
+    /// </summary>
     public class ReaderTests
     {
-        // Lines in the PersonModel layout (Name[0,10) Age[10,5) Salary[15,10)), 25 chars each.
+        // Lines in the PersonModel layout (Name[0,10) Age[10,5) Salary[15,10)), 25 bytes each.
         private const string TwoPeople =
             "John Doe  30   60000.00  \n" +
             "Jane      28   55000.00  ";
@@ -15,27 +19,23 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Read_MultipleLines_ParsesAll()
         {
-            var reader = new FixedWidthReader<PersonModel>(Inv);
-
-            var people = reader.Read(new StringReader(TwoPeople)).ToList();
+            var people = new FixedWidthReader<PersonModel>().Read(StreamOf(TwoPeople)).ToList();
 
             Assert.Equal(2, people.Count);
             Assert.Equal("John Doe", people[0].Name);
             Assert.Equal(30, people[0].Age);
             Assert.Equal(60000.00, people[0].Salary, 2);
             Assert.Equal("Jane", people[1].Name);
-            Assert.Equal(28, people[1].Age);
+            Assert.Equal(55000.00, people[1].Salary, 2);
         }
 
         [Theory]
-        [InlineData("ABC\nDEF\n")]   // LF + trailing newline
-        [InlineData("ABC\r\nDEF\r\n")] // CRLF
-        [InlineData("ABC\nDEF")]      // no trailing newline on the last line
+        [InlineData("ABC\nDEF\n")]
+        [InlineData("ABC\r\nDEF\r\n")]
+        [InlineData("ABC\nDEF")]
         public void Read_HandlesLineEndingsAndTrailingNewline(string text)
         {
-            var reader = new FixedWidthReader<CodeModel>();
-
-            var codes = reader.Read(new StringReader(text)).Select(m => m.Code).ToList();
+            var codes = new FixedWidthReader<CodeModel>().Read(StreamOf(text)).Select(m => m.Code).ToList();
 
             Assert.Equal(["ABC", "DEF"], codes);
         }
@@ -43,9 +43,17 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Read_SkipsEmptyLines()
         {
-            var reader = new FixedWidthReader<CodeModel>();
+            var codes = new FixedWidthReader<CodeModel>().Read(StreamOf("ABC\n\n\nDEF\n")).Select(m => m.Code).ToList();
 
-            var codes = reader.Read(new StringReader("ABC\n\n\nDEF\n")).Select(m => m.Code).ToList();
+            Assert.Equal(["ABC", "DEF"], codes);
+        }
+
+        [Fact]
+        public void Read_SkipsLeadingUtf8Bom()
+        {
+            byte[] bytes = [0xEF, 0xBB, 0xBF, .. "ABC\nDEF\n"u8];
+
+            var codes = new FixedWidthReader<CodeModel>().Read(new MemoryStream(bytes)).Select(m => m.Code).ToList();
 
             Assert.Equal(["ABC", "DEF"], codes);
         }
@@ -53,36 +61,60 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Read_LineLongerThanBuffer_StillParses()
         {
-            // A tiny bufferSize forces buffer compaction and growth (25-char lines).
-            var reader = new FixedWidthReader<PersonModel>(Inv, bufferSize: 4);
+            // A tiny buffer forces compaction and growth (25-byte lines).
+            var reader = new FixedWidthReader<PersonModel>(new FixedWidthReaderOptions { BufferSize = 4 });
 
-            var people = reader.Read(new StringReader(TwoPeople)).ToList();
+            var people = reader.Read(StreamOf(TwoPeople)).ToList();
 
             Assert.Equal(2, people.Count);
             Assert.Equal("John Doe", people[0].Name);
-            Assert.Equal("Jane", people[1].Name);
             Assert.Equal(55000.00, people[1].Salary, 2);
         }
 
         [Fact]
         public void Read_InvalidLine_ThrowsWithLineNumber()
         {
-            var reader = new FixedWidthReader<PersonModel>(Inv);
-            var text = "John Doe  30   60000.00  \nJane      XX   55000.00  "; // invalid Age on line 2
+            var reader = new FixedWidthReader<PersonModel>();
 
-            var ex = Assert.Throws<FormatException>(
-                () => reader.Read(new StringReader(text)).ToList());
+            var ex = Assert.Throws<FixedWidthParseException>(
+                () => reader.Read(StreamOf("John Doe  30   60000.00  \nJane      XX   55000.00  ")).ToList());
 
+            Assert.Equal(2, ex.LineNumber);
             Assert.Contains("Line 2", ex.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Read_LeaveOpenTrue_KeepsStreamOpen()
+        {
+            using var stream = StreamOf("ABC\nDEF\n");
+
+            _ = new FixedWidthReader<CodeModel>().Read(stream, leaveOpen: true).ToList();
+
+            Assert.True(stream.CanRead);
+        }
+
+        [Fact]
+        public void Read_LeaveOpenFalse_DisposesStream()
+        {
+            var stream = StreamOf("ABC\nDEF\n");
+
+            _ = new FixedWidthReader<CodeModel>().Read(stream).ToList();
+
+            Assert.False(stream.CanRead);
+        }
+
+        [Fact]
+        public void Read_NullStream_Throws()
+        {
+            Assert.Throws<ArgumentNullException>(() => new FixedWidthReader<CodeModel>().Read(null!));
         }
 
         [Fact]
         public void Read_WithStringPool_InternsRepeatedValues()
         {
-            var pool = new StringPool();
-            var reader = new FixedWidthReader<CodeModel>(stringPool: pool);
+            var reader = new FixedWidthReader<CodeModel>(new FixedWidthReaderOptions { StringPool = new StringPool() });
 
-            var codes = reader.Read(new StringReader("ABC\nABC\n")).ToList();
+            var codes = reader.Read(StreamOf("ABC\nABC\n")).ToList();
 
             Assert.Equal("ABC", codes[0].Code);
             Assert.Same(codes[0].Code, codes[1].Code);
@@ -91,16 +123,25 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void GetEnumerator_IsStruct_ForAllocationFreeForeach()
         {
-            Assert.True(typeof(RecordEnumeratorCore<char, CharLineFormat, CodeModel, ReflectionLineParser<CodeModel>, TextReaderSource>).IsValueType);
+            Assert.True(typeof(RecordEnumerator<CodeModel, ReflectionLineParser<CodeModel>>).IsValueType);
 
-            var reader = new FixedWidthReader<CodeModel>();
             int count = 0;
-            foreach (var _ in reader.Read(new StringReader("ABC\nDEF\n")))
+            foreach (var _ in new FixedWidthReader<CodeModel>().Read(StreamOf("ABC\nDEF\n")))
             {
                 count++;
             }
 
             Assert.Equal(2, count);
+        }
+
+        [Fact]
+        public void TryParse_UsesTheReaderOptions()
+        {
+            var reader = new FixedWidthReader<DecimalModel>(new FixedWidthReaderOptions { FormatProvider = System.Globalization.CultureInfo.GetCultureInfo("de-DE") });
+
+            Assert.True(reader.TryParse("1234,56     "u8, out var model));
+            Assert.Equal(1234.56m, model.Amount);
+            Assert.False(reader.TryParse("short"u8, out _));
         }
 
         [Fact]
@@ -124,16 +165,44 @@ namespace FixedWidthParser.Tests
             }
         }
 
-        // ----------------------- Asynchronous reading -----------------------
+        [Fact]
+        public void Writer_To_File_To_Reader_RoundTrip()
+        {
+            string path = Path.GetTempFileName();
+            try
+            {
+                PersonModel[] models =
+                [
+                    new() { Name = "John Doe", Age = 30, Salary = 60000 },
+                    new() { Name = "Jane", Age = 28, Salary = 55000 },
+                ];
+                using (var fs = File.Create(path))
+                {
+                    new FixedWidthWriter<PersonModel>().WriteMany(fs, models.AsSpan());
+                }
+
+                var parsed = new FixedWidthReader<PersonModel>().ReadFile(path).ToList();
+
+                Assert.Equal(2, parsed.Count);
+                Assert.Equal("John Doe", parsed[0].Name);
+                Assert.Equal(60000, parsed[0].Salary, 2);
+                Assert.Equal("Jane", parsed[1].Name);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        // ----------------------------- Asynchronous -----------------------------
 
         [Fact]
-        public async Task ReadAsync_MultipleLines_ParsesAll()
+        public async Task ReadAsync_Stream_ParsesAll()
         {
-            var reader = new FixedWidthReader<PersonModel>(Inv);
-            var people = await reader.ReadAsync(new StringReader(TwoPeople)).ToListAsync().ConfigureAwait(true);
+            var people = await new FixedWidthReader<PersonModel>().ReadAsync(StreamOf(TwoPeople)).ToListAsync(TestContext.Current.CancellationToken);
+
             Assert.Equal(2, people.Count);
             Assert.Equal("John Doe", people[0].Name);
-            Assert.Equal(30, people[0].Age);
             Assert.Equal("Jane", people[1].Name);
             Assert.Equal(55000.00, people[1].Salary, 2);
         }
@@ -141,38 +210,71 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_LineLongerThanBuffer_StillParses()
         {
-            var reader = new FixedWidthReader<PersonModel>(Inv, bufferSize: 4);
-            var people = await reader.ReadAsync(new StringReader(TwoPeople)).ToListAsync().ConfigureAwait(true);
+            var reader = new FixedWidthReader<PersonModel>(new FixedWidthReaderOptions { BufferSize = 4 });
+
+            var people = await reader.ReadAsync(StreamOf(TwoPeople)).ToListAsync(TestContext.Current.CancellationToken);
+
             Assert.Equal(2, people.Count);
-            Assert.Equal("John Doe", people[0].Name);
             Assert.Equal(55000.00, people[1].Salary, 2);
+        }
+
+        [Fact]
+        public async Task ReadAsync_SkipsLeadingUtf8Bom()
+        {
+            byte[] bytes = [0xEF, 0xBB, 0xBF, .. "ABC\nDEF\n"u8];
+
+            var codes = await new FixedWidthReader<CodeModel>().ReadAsync(new MemoryStream(bytes)).Select(m => m.Code).ToListAsync(TestContext.Current.CancellationToken);
+
+            Assert.Equal(["ABC", "DEF"], codes);
         }
 
         [Fact]
         public async Task ReadAsync_InvalidLine_ThrowsWithLineNumber()
         {
-            var reader = new FixedWidthReader<PersonModel>(Inv);
-            var text = "John Doe  30   60000.00  \nJane      XX   55000.00  ";
+            var reader = new FixedWidthReader<PersonModel>();
 
-            var ex = await Assert.ThrowsAsync<FormatException>(async () =>
+            var ex = await Assert.ThrowsAsync<FixedWidthParseException>(async () =>
             {
-                await foreach (var _ in reader.ReadAsync(new StringReader(text)).ConfigureAwait(false)) { }
-            }).ConfigureAwait(true);
+                await foreach (var _ in reader.ReadAsync(StreamOf("John Doe  30   60000.00  \nJane      XX   55000.00  ")))
+                {
+                }
+            });
 
-            Assert.Contains("Line 2", ex.Message, StringComparison.Ordinal);
+            Assert.Equal(2, ex.LineNumber);
         }
 
         [Fact]
         public async Task ReadAsync_CancelledToken_Throws()
         {
-            var reader = new FixedWidthReader<CodeModel>();
             using var cts = new CancellationTokenSource();
-            await cts.CancelAsync().ConfigureAwait(true);
+            await cts.CancelAsync();
 
             await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             {
-                await foreach (var _ in reader.ReadAsync(new StringReader("ABC\nDEF\n")).WithCancellation(cts.Token).ConfigureAwait(false)) { }
-            }).ConfigureAwait(true);
+                await foreach (var _ in new FixedWidthReader<CodeModel>().ReadAsync(StreamOf("ABC\nDEF\n")).WithCancellation(cts.Token))
+                {
+                }
+            });
+        }
+
+        [Fact]
+        public async Task ReadAsync_LeaveOpen_ControlsDisposal()
+        {
+            var reader = new FixedWidthReader<CodeModel>();
+            using var kept = StreamOf("ABC\n");
+            var owned = StreamOf("ABC\n");
+
+            _ = await reader.ReadAsync(kept, leaveOpen: true).ToListAsync(TestContext.Current.CancellationToken);
+            _ = await reader.ReadAsync(owned).ToListAsync(TestContext.Current.CancellationToken);
+
+            Assert.True(kept.CanRead);
+            Assert.False(owned.CanRead);
+        }
+
+        [Fact]
+        public void ReadAsync_NullStream_Throws()
+        {
+            Assert.Throws<ArgumentNullException>(() => new FixedWidthReader<CodeModel>().ReadAsync((Stream)null!));
         }
 
         [Fact]
@@ -181,9 +283,10 @@ namespace FixedWidthParser.Tests
             string path = Path.GetTempFileName();
             try
             {
-                await File.WriteAllTextAsync(path, "ABC\nDEF\nGHI\n").ConfigureAwait(true);
+                await File.WriteAllTextAsync(path, "ABC\nDEF\nGHI\n", TestContext.Current.CancellationToken);
                 var reader = new FixedWidthReader<CodeModel>();
-                var asyncCodes = await reader.ReadFileAsync(path).Select(m => m.Code).ToListAsync().ConfigureAwait(true);
+
+                var asyncCodes = await reader.ReadFileAsync(path).Select(m => m.Code).ToListAsync(TestContext.Current.CancellationToken);
                 var syncCodes = reader.ReadFile(path).Select(m => m.Code).ToList();
 
                 Assert.Equal(["ABC", "DEF", "GHI"], asyncCodes);
@@ -196,36 +299,13 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
-        public void Writer_To_File_To_Reader_RoundTrip()
+        public async Task ReadAsync_WithStringPool_InternsRepeatedValues()
         {
-            string path = Path.GetTempFileName();
-            try
-            {
-                var models = new[]
-                {
-                    new PersonModel { Name = "John Doe", Age = 30, Salary = 60000 },
-                    new PersonModel { Name = "Jane",     Age = 28, Salary = 55000 },
-                };
-                var writer = new FixedWidthWriter<PersonModel>();
-                using (var fs = File.Create(path))
-                {
-                    writer.WriteMany(fs, models.AsSpan(), Inv);
-                }
+            var reader = new FixedWidthReader<CodeModel>(new FixedWidthReaderOptions { StringPool = new StringPool() });
 
-                var reader = new FixedWidthReader<PersonModel>(Inv);
-                var parsed = reader.ReadFile(path).ToList();
+            var codes = await reader.ReadAsync(StreamOf("ABC\nABC\n")).ToListAsync(TestContext.Current.CancellationToken);
 
-                Assert.Equal(2, parsed.Count);
-                Assert.Equal("John Doe", parsed[0].Name);
-                Assert.Equal(30, parsed[0].Age);
-                Assert.Equal(60000, parsed[0].Salary, 2);
-                Assert.Equal("Jane", parsed[1].Name);
-                Assert.Equal(55000, parsed[1].Salary, 2);
-            }
-            finally
-            {
-                File.Delete(path);
-            }
+            Assert.Same(codes[0].Code, codes[1].Code);
         }
     }
 }

@@ -1,135 +1,71 @@
-using CommunityToolkit.HighPerformance.Buffers;
+using System.IO.Pipelines;
 using FixedWidthParser.Readers;
-using System.Text;
 
 namespace FixedWidthParser
 {
     /// <summary>
-    /// Entry points for the source-generated, reflection-free parse path. Dispatches to the model's
-    /// generated <see cref="IFixedWidthModel{TSelf}.TryParse"/> through the type parameter, so the call
-    /// is statically resolved (no reflection, no delegates, JIT-devirtualized).
+    /// Entry points for source-generated models. Dispatches to the model's generated
+    /// <see cref="IFixedWidthModel{TSelf}.TryParse"/> and <see cref="IFixedWidthModel{TSelf}.TryFormat"/>
+    /// through the type parameter, so the call is statically resolved (no reflection, no delegates).
+    /// <para><b>Column positions are bytes.</b></para>
     /// </summary>
     public static class FixedWidth
     {
-        /// <summary>Parses a single fixed-width line into <typeparamref name="TModel"/> using its generated parser.</summary>
-        public static bool TryParse<TModel>(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
-#if NET9_0_OR_GREATER
+        /// <summary>Parses a single line, without its line break, into <typeparamref name="TModel"/>.</summary>
+        public static bool TryParse<TModel>(ReadOnlySpan<byte> line, in FixedWidthContext context, out TModel model)
             where TModel : IFixedWidthModel<TModel>, allows ref struct
-#else
-            where TModel : IFixedWidthModel<TModel>
-#endif
         {
-            return TModel.TryParse(line, formatProvider, stringPool, out model);
+            return TModel.TryParse(line, in context, out model);
         }
 
-        /// <summary>Formats <paramref name="model"/> into <paramref name="destination"/> using its generated writer.</summary>
-        public static bool TryFormat<TModel>(in TModel model, Span<char> destination, IFormatProvider? formatProvider, out int charsWritten)
-#if NET9_0_OR_GREATER
+        /// <summary>Formats <paramref name="model"/> into <paramref name="destination"/>, without a line break.</summary>
+        public static bool TryFormat<TModel>(in TModel model, Span<byte> destination, in FixedWidthContext context, out int bytesWritten)
             where TModel : IFixedWidthModel<TModel>, allows ref struct
-#else
-            where TModel : IFixedWidthModel<TModel>
-#endif
         {
-            return TModel.TryFormat(in model, destination, formatProvider, out charsWritten);
+            return TModel.TryFormat(in model, destination, in context, out bytesWritten);
         }
 
-        /// <summary>Reads source-generated models from an existing <see cref="TextReader"/>.</summary>
-        public static FixedWidthRecordEnumerable<TModel, GeneratedLineParser<TModel>> Read<TModel>(
-            TextReader reader,
-            IFormatProvider? formatProvider = null,
-            StringPool? stringPool = null,
-            int bufferSize = 4096)
-            where TModel : IFixedWidthModel<TModel>
-        {
-            ArgumentNullException.ThrowIfNull(reader);
-            ValidateBufferSize(bufferSize);
-            return new FixedWidthRecordEnumerable<TModel, GeneratedLineParser<TModel>>(
-                default, TextReaderSource.FromReader(reader), formatProvider, stringPool, bufferSize);
-        }
-
-        /// <summary>Reads source-generated models from a <see cref="Stream"/>.</summary>
-        public static FixedWidthRecordEnumerable<TModel, GeneratedLineParser<TModel>> Read<TModel>(
-            Stream stream,
-            Encoding? encoding = null,
-            bool leaveOpen = false,
-            IFormatProvider? formatProvider = null,
-            StringPool? stringPool = null,
-            int bufferSize = 4096)
+        /// <summary>Reads from a stream, once. <paramref name="leaveOpen"/> controls whether the stream is disposed when iteration ends.</summary>
+        public static FixedWidthRecordEnumerable<TModel, GeneratedLineParser<TModel>> Read<TModel>(Stream stream, bool leaveOpen = false, FixedWidthReaderOptions? options = null)
             where TModel : IFixedWidthModel<TModel>
         {
             ArgumentNullException.ThrowIfNull(stream);
-            ValidateBufferSize(bufferSize);
-            var enc = encoding ?? Encoding.UTF8;
-            return new FixedWidthRecordEnumerable<TModel, GeneratedLineParser<TModel>>(
-                default, TextReaderSource.FromStream(stream, enc, leaveOpen), formatProvider, stringPool, bufferSize);
+            return new(default, stream, ownsStream: !leaveOpen, FixedWidthReaderOptions.Validate(options));
         }
 
-        /// <summary>Reads source-generated models from a file, reopening it for each enumeration.</summary>
-        public static FixedWidthRecordEnumerable<TModel, GeneratedLineParser<TModel>> ReadFile<TModel>(
-            string path,
-            Encoding? encoding = null,
-            IFormatProvider? formatProvider = null,
-            StringPool? stringPool = null,
-            int bufferSize = 4096)
+        /// <summary>Reads from a file, reopening it on each enumeration.</summary>
+        public static FixedWidthRecordEnumerable<TModel, GeneratedLineParser<TModel>> ReadFile<TModel>(string path, FixedWidthReaderOptions? options = null)
             where TModel : IFixedWidthModel<TModel>
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
-            ValidateBufferSize(bufferSize);
-            var enc = encoding ?? Encoding.UTF8;
-            return new FixedWidthRecordEnumerable<TModel, GeneratedLineParser<TModel>>(
-                default, TextReaderSource.FromFile(path, enc, useAsync: false), formatProvider, stringPool, bufferSize);
+            return new(default, path, FixedWidthReaderOptions.Validate(options));
         }
 
-        /// <summary>Reads source-generated models from an existing <see cref="TextReader"/> via <c>await foreach</c>.</summary>
-        public static FixedWidthAsyncRecordEnumerable<TModel, GeneratedLineParser<TModel>> ReadAsync<TModel>(
-            TextReader reader,
-            IFormatProvider? formatProvider = null,
-            StringPool? stringPool = null,
-            int bufferSize = 4096)
-            where TModel : IFixedWidthModel<TModel>
-        {
-            ArgumentNullException.ThrowIfNull(reader);
-            ValidateBufferSize(bufferSize);
-            return new FixedWidthAsyncRecordEnumerable<TModel, GeneratedLineParser<TModel>>(
-                default, TextReaderSource.FromReader(reader), formatProvider, stringPool, bufferSize);
-        }
-
-        /// <summary>Reads source-generated models from a <see cref="Stream"/> via <c>await foreach</c>.</summary>
-        public static FixedWidthAsyncRecordEnumerable<TModel, GeneratedLineParser<TModel>> ReadAsync<TModel>(
-            Stream stream,
-            Encoding? encoding = null,
-            bool leaveOpen = false,
-            IFormatProvider? formatProvider = null,
-            StringPool? stringPool = null,
-            int bufferSize = 4096)
+        /// <summary>Reads from a stream via <c>await foreach</c>, once. <paramref name="leaveOpen"/> controls whether the stream is disposed when iteration ends.</summary>
+        public static FixedWidthAsyncRecordEnumerable<TModel, GeneratedLineParser<TModel>> ReadAsync<TModel>(Stream stream, bool leaveOpen = false, FixedWidthReaderOptions? options = null)
             where TModel : IFixedWidthModel<TModel>
         {
             ArgumentNullException.ThrowIfNull(stream);
-            ValidateBufferSize(bufferSize);
-            var enc = encoding ?? Encoding.UTF8;
-            return new FixedWidthAsyncRecordEnumerable<TModel, GeneratedLineParser<TModel>>(
-                default, TextReaderSource.FromStream(stream, enc, leaveOpen), formatProvider, stringPool, bufferSize);
+            return new(default, stream, ownsStream: !leaveOpen, FixedWidthReaderOptions.Validate(options));
         }
 
-        /// <summary>Reads source-generated models from a file asynchronously, reopening it for each enumeration.</summary>
-        public static FixedWidthAsyncRecordEnumerable<TModel, GeneratedLineParser<TModel>> ReadFileAsync<TModel>(
-            string path,
-            Encoding? encoding = null,
-            IFormatProvider? formatProvider = null,
-            StringPool? stringPool = null,
-            int bufferSize = 4096)
+        /// <summary>
+        /// Reads from a <see cref="PipeReader"/> via <c>await foreach</c>, letting the pipe own buffering.
+        /// <paramref name="leaveOpen"/> controls whether the reader is completed when iteration ends.
+        /// </summary>
+        public static FixedWidthPipeRecordEnumerable<TModel, GeneratedLineParser<TModel>> ReadAsync<TModel>(PipeReader reader, bool leaveOpen = false, FixedWidthReaderOptions? options = null)
+            where TModel : IFixedWidthModel<TModel>
+        {
+            ArgumentNullException.ThrowIfNull(reader);
+            return new(default, reader, completeReader: !leaveOpen, FixedWidthReaderOptions.Validate(options));
+        }
+
+        /// <summary>Reads from a file via <c>await foreach</c> with asynchronous I/O, reopening it on each enumeration.</summary>
+        public static FixedWidthAsyncRecordEnumerable<TModel, GeneratedLineParser<TModel>> ReadFileAsync<TModel>(string path, FixedWidthReaderOptions? options = null)
             where TModel : IFixedWidthModel<TModel>
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
-            ValidateBufferSize(bufferSize);
-            var enc = encoding ?? Encoding.UTF8;
-            return new FixedWidthAsyncRecordEnumerable<TModel, GeneratedLineParser<TModel>>(
-                default, TextReaderSource.FromFile(path, enc, useAsync: true), formatProvider, stringPool, bufferSize);
-        }
-
-        private static void ValidateBufferSize(int bufferSize)
-        {
-            ArgumentOutOfRangeException.ThrowIfLessThan(bufferSize, 1);
+            return new(default, path, FixedWidthReaderOptions.Validate(options));
         }
     }
 }

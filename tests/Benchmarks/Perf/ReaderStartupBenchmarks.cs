@@ -1,4 +1,3 @@
-using System.Globalization;
 using BenchmarkDotNet.Attributes;
 using FixedWidthParser;
 using FixedWidthParser.Readers;
@@ -13,16 +12,13 @@ namespace Benchmarks.Perf
     [Config(typeof(RegressionConfig))]
     public class ReaderStartupBenchmarks
     {
-        private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
-        private const string Text = "John Doe  30   60000.00  \n";
+        private static readonly byte[] Text = "John Doe  30   60000.00  \n"u8.ToArray();
 
         [Benchmark(Baseline = true)]
         public int ReflectionReader_ConstructAndReadOne()
         {
-            var fixedWidthReader = new FixedWidthReader<SampleModel>(Culture);
-            using var reader = new StringReader(Text);
             int sum = 0;
-            foreach (var model in fixedWidthReader.Read(reader))
+            foreach (var model in new FixedWidthReader<SampleModel>().Read(new MemoryStream(Text, writable: false)))
             {
                 sum += model.Age;
             }
@@ -32,9 +28,8 @@ namespace Benchmarks.Perf
         [Benchmark]
         public int GeneratedReader_ReadOne()
         {
-            using var reader = new StringReader(Text);
             int sum = 0;
-            foreach (var model in FixedWidth.Read<GenSampleModel>(reader, formatProvider: Culture))
+            foreach (var model in FixedWidth.Read<GenSampleModel>(new MemoryStream(Text, writable: false)))
             {
                 sum += model.Age;
             }

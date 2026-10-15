@@ -1,63 +1,45 @@
 using System.Linq.Expressions;
 using System.Runtime.InteropServices;
 using FixedWidthParser.Attributes;
+using FixedWidthParser.Processors;
 
 namespace FixedWidthParser.Parsers
 {
-    /// <summary>
-    /// One column of a built parser layout: the column's range plus the compiled parse-and-assign
-    /// delegate (<typeparamref name="TParser"/> is <see cref="Processors.ColumnParser{TModel}"/> for
-    /// the char parser or <see cref="Processors.Utf8ColumnParser{TModel}"/> for the byte parser).
-    /// </summary>
+    /// <summary>One column of a built parser layout: the column's range and name plus its compiled parse-and-assign delegate.</summary>
     [StructLayout(LayoutKind.Auto)]
-    internal readonly record struct ColumnParserInfo<TParser>(int Start, int Length, TParser Parse);
+    internal readonly record struct ColumnParserInfo<TModel>(int Start, int Length, string Name, ColumnParser<TModel> Parse)
+        where TModel : allows ref struct;
 
-    /// <summary>
-    /// Shared static-build logic for <see cref="FixedWidthParser{TModel}"/> and
-    /// <see cref="Utf8FixedWidthParser{TModel}"/>: the compiled model factory, the per-column setter
-    /// compilation, and the required line length. The two parsers differ only in the factory that
-    /// turns a (member type, compiled setter) pair into a column parser delegate, so that factory is
-    /// passed into <see cref="BuildProcessors{TModel, TParser}"/> as a delegate.
-    /// </summary>
+    /// <summary>Static-build logic for <see cref="FixedWidthParser{TModel}"/>: the compiled model factory, the per-column setters and the required line length.</summary>
     internal static class ParserBuilder
     {
-#if NET9_0_OR_GREATER
         public static Func<TModel> BuildModelFactory<TModel>() where TModel : new(), allows ref struct
-#else
-        public static Func<TModel> BuildModelFactory<TModel>() where TModel : new()
-#endif
         {
             var lambda = Expression.Lambda<Func<TModel>>(Expression.New(typeof(TModel)));
             return lambda.Compile();
         }
 
-        public static ColumnParserInfo<TParser>[] BuildProcessors<TModel, TParser>(Func<Type, Delegate, Type?, string, char, Attributes.TrimMode, string?, TParser> createParser)
-#if NET9_0_OR_GREATER
-            where TModel : allows ref struct
-#endif
+        public static ColumnParserInfo<TModel>[] BuildProcessors<TModel>() where TModel : allows ref struct
         {
-            List<ColumnParserInfo<TParser>> processors = [];
+            List<ColumnParserInfo<TModel>> processors = [];
             ModelColumns.ForEachColumn(typeof(TModel), (member, attribute) =>
             {
                 var (memberType, model, access) = ModelColumns.MemberAccess(typeof(TModel), member);
                 var value = Expression.Parameter(memberType, "value");
                 var actionType = typeof(RefAction<,>).MakeGenericType(typeof(TModel), memberType);
                 var setter = Expression.Lambda(actionType, Expression.Assign(access, value), model, value).Compile();
-                processors.Add(new(attribute.Start, attribute.Length, createParser(memberType, setter, attribute.Converter, member.Name, attribute.TrimChar, attribute.TrimMode, attribute.Format)));
+                var parse = ColumnParserFactory.Create<TModel>(memberType, setter, attribute.Converter, member.Name, attribute.TrimChar, attribute.TrimMode, attribute.Format);
+                processors.Add(new(attribute.Start, attribute.Length, member.Name, parse));
             });
             return [.. processors];
         }
 
-        public static int ComputeRequiredLineLength<TParser>(ReadOnlySpan<ColumnParserInfo<TParser>> processors)
+        public static int ComputeRequiredLineLength<TModel>(ReadOnlySpan<ColumnParserInfo<TModel>> processors) where TModel : allows ref struct
         {
             int required = 0;
             foreach (ref readonly var processor in processors)
             {
-                int end = processor.Start + processor.Length;
-                if (end > required)
-                {
-                    required = end;
-                }
+                required = Math.Max(required, processor.Start + processor.Length);
             }
             return required;
         }

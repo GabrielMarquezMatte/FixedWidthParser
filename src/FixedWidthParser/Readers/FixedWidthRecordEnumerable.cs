@@ -1,44 +1,46 @@
-using System.Buffers;
 using System.Collections;
 using System.Diagnostics.CodeAnalysis;
-using CommunityToolkit.HighPerformance.Buffers;
 
 namespace FixedWidthParser.Readers
 {
     /// <summary>
-    /// A lazily-read sequence of models from a <see cref="TextReader"/>, <b>without allocating a
-    /// string per line</b>: lines are read in blocks into a character buffer rented from the
-    /// <see cref="ArrayPool{T}"/> and sliced as <see cref="ReadOnlySpan{T}"/> straight into the
-    /// parser. Exposes a <see langword="struct"/> enumerator for allocation-free iteration in
-    /// <c>foreach</c>, and implements <see cref="IEnumerable{T}"/> for LINQ interop.
+    /// A lazily-read sequence of models from a stream or a file, without a string per line: bytes are
+    /// read in blocks into a pooled buffer and each line is parsed in place. Exposes a
+    /// <see langword="struct"/> enumerator for allocation-free <c>foreach</c>. A stream is read once; a
+    /// file is reopened on each enumeration.
     /// </summary>
     public sealed class FixedWidthRecordEnumerable<TModel, TParser> : IEnumerable<TModel>
-        where TParser : struct, IRecordLineParser<char, TModel>
+        where TParser : struct, IRecordLineParser<TModel>
     {
         private readonly TParser _parser;
-        private readonly TextReaderSource _source;
-        private readonly IFormatProvider? _formatProvider;
-        private readonly StringPool? _stringPool;
-        private readonly int _bufferSize;
+        private readonly Stream? _stream;
+        private readonly string? _path;
+        private readonly bool _ownsStream;
+        private readonly FixedWidthReaderOptions _options;
 
-        internal FixedWidthRecordEnumerable(
-            TParser parser,
-            TextReaderSource source,
-            IFormatProvider? formatProvider,
-            StringPool? stringPool,
-            int bufferSize)
+        internal FixedWidthRecordEnumerable(TParser parser, Stream stream, bool ownsStream, FixedWidthReaderOptions options)
         {
             _parser = parser;
-            _source = source;
-            _formatProvider = formatProvider;
-            _stringPool = stringPool;
-            _bufferSize = bufferSize;
+            _stream = stream;
+            _ownsStream = ownsStream;
+            _options = options;
+        }
+
+        internal FixedWidthRecordEnumerable(TParser parser, string path, FixedWidthReaderOptions options)
+        {
+            _parser = parser;
+            _path = path;
+            _ownsStream = true;
+            _options = options;
         }
 
         /// <summary>Struct enumerator: <c>foreach</c> iteration without heap allocation.</summary>
-        public RecordEnumeratorCore<char, CharLineFormat, TModel, TParser, TextReaderSource> GetEnumerator()
+        public RecordEnumerator<TModel, TParser> GetEnumerator()
         {
-            return new(_parser, _source.Create(_bufferSize), _formatProvider, _stringPool, _bufferSize);
+#pragma warning disable CA2000, IDISP001 // The enumerator owns and disposes the file stream.
+            var stream = _stream ?? new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.SequentialScan);
+#pragma warning restore CA2000, IDISP001
+            return new(_parser, stream, _ownsStream, _options);
         }
 
         IEnumerator<TModel> IEnumerable<TModel>.GetEnumerator()
@@ -51,6 +53,5 @@ namespace FixedWidthParser.Readers
         {
             return GetEnumerator();
         }
-
     }
 }

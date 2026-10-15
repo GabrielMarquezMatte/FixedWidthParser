@@ -1,4 +1,3 @@
-using System.Text;
 using CsCheck;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Parsers;
@@ -37,7 +36,7 @@ namespace FixedWidthParser.Tests
             GenTextNumber.Sample(original =>
             {
                 string line = WriteOne(writer, original);
-                bool ok = parser.TryParse(line, Inv, null, out var parsed);
+                bool ok = parser.TryParse(Bytes(line), Ctx, out var parsed);
 
                 Assert.True(ok);
                 Assert.Equal(original.Text, parsed.Text);
@@ -55,7 +54,7 @@ namespace FixedWidthParser.Tests
             {
                 var original = new MoneyModel { Amount = amount };
                 string line = WriteOne(writer, original);
-                bool ok = parser.TryParse(line, Inv, null, out var parsed);
+                bool ok = parser.TryParse(Bytes(line), Ctx, out var parsed);
 
                 Assert.True(ok);
                 Assert.Equal(original.Amount, parsed.Amount);
@@ -73,33 +72,10 @@ namespace FixedWidthParser.Tests
             {
                 var original = new DoubleF2Model { Value = value };
                 string line = WriteOne(writer, original);
-                bool ok = parser.TryParse(line, Inv, null, out var parsed);
+                bool ok = parser.TryParse(Bytes(line), Ctx, out var parsed);
 
                 Assert.True(ok);
                 Assert.Equal(original.Value, parsed.Value, 2);
-            });
-        }
-
-        [Fact]
-        public void CharAndByteParsers_AgreeOnSameLine()
-        {
-            // The char writer emits ASCII (letters + digits), so byte offsets equal char offsets and the
-            // UTF-8 byte parser must produce exactly what the char parser does for the same line.
-            var writer = new FixedWidthWriter<TextNumberModel>();
-            var charParser = new FixedWidthParser<TextNumberModel>();
-            var byteParser = new Utf8FixedWidthParser<TextNumberModel>();
-
-            GenTextNumber.Sample(original =>
-            {
-                string line = WriteOne(writer, original);
-
-                bool charOk = charParser.TryParse(line, Inv, null, out var fromChar);
-                bool byteOk = byteParser.TryParse(Encoding.UTF8.GetBytes(line), Inv, null, out var fromByte);
-
-                Assert.True(charOk);
-                Assert.True(byteOk);
-                Assert.Equal(fromChar.Text, fromByte.Text);
-                Assert.Equal(fromChar.Number, fromByte.Number);
             });
         }
     }

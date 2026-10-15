@@ -1,23 +1,20 @@
+using System.Globalization;
 using FixedWidthParser.Writers;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
 {
     /// <summary>
-    /// Covers the source-generated <c>TryFormat</c> (via <see cref="FixedWidth.TryFormat{TModel}"/>):
-    /// parity against the reflection-based <see cref="FixedWidthWriter{TModel}"/>, round-tripping
-    /// through the generated <c>TryParse</c>, formatting options (alignment/padding/format/overflow),
-    /// nullable columns, custom converters, culture, and the destination-too-small case.
+    /// The source-generated <c>TryFormat</c> (via <see cref="FixedWidth.TryFormat{TModel}"/>): parity
+    /// with <see cref="FixedWidthWriter{TModel}"/>, round-tripping through the generated <c>TryParse</c>,
+    /// formatting options, nullable columns, converters, culture, and a destination that is too small.
     /// </summary>
     public class GeneratedWriterTests
     {
         private static string WriteGenerated<TModel>(in TModel model, IFormatProvider? formatProvider = null)
             where TModel : IFixedWidthModel<TModel>
         {
-            Span<char> buffer = stackalloc char[256];
-            bool ok = FixedWidth.TryFormat(in model, buffer, formatProvider ?? Inv, out int written);
-            Assert.True(ok);
-            return new string(buffer[..written]);
+            return Format(in model, CtxWith(formatProvider));
         }
 
         [Theory]
@@ -27,13 +24,10 @@ namespace FixedWidthParser.Tests
         public void Person_MatchesReflection(string name, int age, double salary)
         {
             var writer = new FixedWidthWriter<PersonModel>();
-            var reflectionModel = new PersonModel { Name = name, Age = age, Salary = salary };
-            var generatedModel = new GenPersonModel { Name = name, Age = age, Salary = salary };
 
-            string reflectionLine = WriteOne(writer, reflectionModel);
-            string generatedLine = WriteGenerated(generatedModel);
-
-            Assert.Equal(reflectionLine, generatedLine);
+            Assert.Equal(
+                WriteOne(writer, new PersonModel { Name = name, Age = age, Salary = salary }),
+                WriteGenerated(new GenPersonModel { Name = name, Age = age, Salary = salary }));
         }
 
         [Fact]
@@ -42,9 +36,8 @@ namespace FixedWidthParser.Tests
             var original = new GenPersonModel { Name = "Bob", Age = 42, Salary = 999.5 };
 
             string line = WriteGenerated(original);
-            bool ok = FixedWidth.TryParse<GenPersonModel>(line, Inv, null, out var parsed);
 
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse<GenPersonModel>(Bytes(line), Ctx, out var parsed));
             Assert.Equal(original.Name, parsed.Name);
             Assert.Equal(original.Age, parsed.Age);
             Assert.Equal(original.Salary, parsed.Salary, 2);
@@ -53,152 +46,127 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void FieldModel_MatchesReflection()
         {
-            var writer = new FixedWidthWriter<ProductModel>();
-            var reflectionModel = new ProductModel { Code = "ABCDE", Quantity = 1234 };
-            var generatedModel = new GenProductModel { Code = "ABCDE", Quantity = 1234 };
-
-            Assert.Equal(WriteOne(writer, reflectionModel), WriteGenerated(generatedModel));
+            Assert.Equal(
+                WriteOne(new FixedWidthWriter<ProductModel>(), new ProductModel { Code = "ABCDE", Quantity = 1234 }),
+                WriteGenerated(new GenProductModel { Code = "ABCDE", Quantity = 1234 }));
         }
 
         [Fact]
         public void FloatColumn_MatchesReflection()
         {
-            var writer = new FixedWidthWriter<MeasurementModel>();
-            var reflectionModel = new MeasurementModel { Value = 3.14f };
-            var generatedModel = new GenMeasurementModel { Value = 3.14f };
-
-            Assert.Equal(WriteOne(writer, reflectionModel), WriteGenerated(generatedModel));
+            Assert.Equal(
+                WriteOne(new FixedWidthWriter<MeasurementModel>(), new MeasurementModel { Value = 3.14f }),
+                WriteGenerated(new GenMeasurementModel { Value = 3.14f }));
         }
 
         [Fact]
         public void DecimalColumn_MatchesReflection()
         {
-            var writer = new FixedWidthWriter<DecimalModel>();
-            var reflectionModel = new DecimalModel { Amount = 1234.56m };
-            var generatedModel = new GenDecimalModel { Amount = 1234.56m };
-
-            Assert.Equal(WriteOne(writer, reflectionModel), WriteGenerated(generatedModel));
+            Assert.Equal(
+                WriteOne(new FixedWidthWriter<DecimalModel>(), new DecimalModel { Amount = 1234.56m }),
+                WriteGenerated(new GenDecimalModel { Amount = 1234.56m }));
         }
 
         [Fact]
         public void RightAligned_MatchesReflection()
         {
-            var writer = new FixedWidthWriter<RightAlignedModel>();
-
             Assert.Equal(
-                WriteOne(writer, new RightAlignedModel { Value = 30 }),
+                WriteOne(new FixedWidthWriter<RightAlignedModel>(), new RightAlignedModel { Value = 30 }),
                 WriteGenerated(new GenRightAlignedModel { Value = 30 }));
         }
 
         [Fact]
         public void ZeroPadded_MatchesReflection()
         {
-            var writer = new FixedWidthWriter<ZeroPaddedModel>();
-
             Assert.Equal(
-                WriteOne(writer, new ZeroPaddedModel { Value = 30 }),
+                WriteOne(new FixedWidthWriter<ZeroPaddedModel>(), new ZeroPaddedModel { Value = 30 }),
                 WriteGenerated(new GenZeroPaddedModel { Value = 30 }));
         }
 
         [Fact]
         public void FormatString_MatchesReflection()
         {
-            var writer = new FixedWidthWriter<FormattedModel>();
-
             Assert.Equal(
-                WriteOne(writer, new FormattedModel { Amount = 1234.5 }),
+                WriteOne(new FixedWidthWriter<FormattedModel>(), new FormattedModel { Amount = 1234.5 }),
                 WriteGenerated(new GenFormattedModel { Amount = 1234.5 }));
         }
 
         [Fact]
         public void Overflow_Throws_MatchesReflection()
         {
-            var writer = new FixedWidthWriter<NarrowModel>();
+            Assert.Throws<InvalidOperationException>(() => WriteOne(new FixedWidthWriter<NarrowModel>(), new NarrowModel { Value = 12345 }));
 
-            Assert.Throws<InvalidOperationException>(() => WriteOne(writer, new NarrowModel { Value = 12345 }));
-
-            var buffer = new char[16];
+            var buffer = new byte[16];
             var generatedModel = new GenNarrowModel { Value = 12345 };
-            Assert.Throws<InvalidOperationException>(() => FixedWidth.TryFormat(in generatedModel, buffer, Inv, out _));
+            Assert.Throws<InvalidOperationException>(() => FixedWidth.TryFormat(in generatedModel, buffer, Ctx, out _));
         }
 
         [Fact]
-        public void DestinationTooSmall_ReturnsFalseWithZeroCharsWritten()
+        public void DestinationTooSmall_ReturnsFalseWithZeroBytesWritten()
         {
             var model = new GenPersonModel { Name = "Bob", Age = 1, Salary = 1 };
-            Span<char> tooSmall = stackalloc char[10];
+            Span<byte> tooSmall = stackalloc byte[10];
 
-            bool ok = FixedWidth.TryFormat(in model, tooSmall, Inv, out int charsWritten);
+            bool ok = FixedWidth.TryFormat(in model, tooSmall, Ctx, out int bytesWritten);
 
             Assert.False(ok);
-            Assert.Equal(0, charsWritten);
+            Assert.Equal(0, bytesWritten);
         }
-
-        // ----- Nullable columns -----
 
         [Fact]
         public void Nullable_Null_MatchesReflection()
         {
-            var writer = new FixedWidthWriter<NullableModel>();
-            var reflectionModel = new NullableModel { Age = null, Amount = null };
-            var generatedModel = new GenNullableModel { Age = null, Amount = null };
-
-            Assert.Equal(WriteOne(writer, reflectionModel), WriteGenerated(generatedModel));
+            Assert.Equal(
+                WriteOne(new FixedWidthWriter<NullableModel>(), new NullableModel { Age = null, Amount = null }),
+                WriteGenerated(new GenNullableModel { Age = null, Amount = null }));
         }
 
         [Fact]
         public void Nullable_Value_MatchesReflection()
         {
-            var writer = new FixedWidthWriter<NullableModel>();
-            var reflectionModel = new NullableModel { Age = 42, Amount = 123.45m };
-            var generatedModel = new GenNullableModel { Age = 42, Amount = 123.45m };
-
-            Assert.Equal(WriteOne(writer, reflectionModel), WriteGenerated(generatedModel));
+            Assert.Equal(
+                WriteOne(new FixedWidthWriter<NullableModel>(), new NullableModel { Age = 42, Amount = 123.45m }),
+                WriteGenerated(new GenNullableModel { Age = 42, Amount = 123.45m }));
         }
-
-        // ----- Custom converter -----
 
         [Fact]
         public void Converter_MatchesReflection()
         {
-            var writer = new FixedWidthWriter<CentsConverterModel>();
-            var reflectionModel = new CentsConverterModel { Amount = new CentsValue(12345) };
-            var generatedModel = new GenCentsConverterModel { Amount = new CentsValue(12345) };
-
-            Assert.Equal(WriteOne(writer, reflectionModel), WriteGenerated(generatedModel));
+            Assert.Equal(
+                WriteOne(new FixedWidthWriter<CentsConverterModel>(), new CentsConverterModel { Amount = new CentsValue(12345) }),
+                WriteGenerated(new GenCentsConverterModel { Amount = new CentsValue(12345) }));
         }
 
         [Fact]
-        public void NullableConverter_Null_MatchesReflection()
+        public void NullableConverter_MatchesReflection()
         {
             var writer = new FixedWidthWriter<NullableConverterModel>();
-            var reflectionModel = new NullableConverterModel { Amount = null };
-            var generatedModel = new GenNullableConverterModel { Amount = null };
 
-            Assert.Equal(WriteOne(writer, reflectionModel), WriteGenerated(generatedModel));
+            Assert.Equal(
+                WriteOne(writer, new NullableConverterModel { Amount = null }),
+                WriteGenerated(new GenNullableConverterModel { Amount = null }));
+            Assert.Equal(
+                WriteOne(writer, new NullableConverterModel { Amount = new CentsValue(999) }),
+                WriteGenerated(new GenNullableConverterModel { Amount = new CentsValue(999) }));
         }
 
         [Fact]
-        public void NullableConverter_Value_MatchesReflection()
+        public void DecodedParsable_MatchesReflection()
         {
-            var writer = new FixedWidthWriter<NullableConverterModel>();
-            var reflectionModel = new NullableConverterModel { Amount = new CentsValue(999) };
-            var generatedModel = new GenNullableConverterModel { Amount = new CentsValue(999) };
-
-            Assert.Equal(WriteOne(writer, reflectionModel), WriteGenerated(generatedModel));
+            Assert.Equal(
+                WriteOne(new FixedWidthWriter<ShoutModel>(), new ShoutModel { Word = new Shout("HEY") }),
+                WriteGenerated(new GenShoutModel { Word = new Shout("HEY") }));
         }
-
-        // ----- Culture -----
 
         [Fact]
         public void Culture_HonorsDecimalSeparator_MatchesReflection()
         {
-            var deDe = System.Globalization.CultureInfo.GetCultureInfo("de-DE");
-            var writer = new FixedWidthWriter<PersonModel>();
-            var reflectionModel = new PersonModel { Name = "Bob", Age = 30, Salary = 1234.5 };
-            var generatedModel = new GenPersonModel { Name = "Bob", Age = 30, Salary = 1234.5 };
+            var deDe = CultureInfo.GetCultureInfo("de-DE");
+            var writer = new FixedWidthWriter<PersonModel>(new FixedWidthWriterOptions { FormatProvider = deDe });
 
-            Assert.Equal(WriteOne(writer, reflectionModel, deDe), WriteGenerated(generatedModel, deDe));
+            Assert.Equal(
+                WriteOne(writer, new PersonModel { Name = "Bob", Age = 30, Salary = 1234.5 }),
+                WriteGenerated(new GenPersonModel { Name = "Bob", Age = 30, Salary = 1234.5 }, deDe));
         }
     }
 }

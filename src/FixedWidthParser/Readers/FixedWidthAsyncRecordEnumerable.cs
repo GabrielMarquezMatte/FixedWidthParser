@@ -1,43 +1,43 @@
-using System.Buffers;
-using CommunityToolkit.HighPerformance.Buffers;
-
 namespace FixedWidthParser.Readers
 {
     /// <summary>
-    /// Asynchronous version of <see cref="FixedWidthRecordEnumerable{TModel, TParser}"/>: reads from a
-    /// <see cref="TextReader"/> via <c>await foreach</c>, also <b>without allocating a string per
-    /// line</b> (<see cref="ArrayPool{T}"/> buffer + <see cref="ReadOnlySpan{T}"/> slices). The
-    /// enumerator logic lives in the shared <see cref="AsyncRecordEnumeratorCore{T, TFormat, TModel, TParser, TSource}"/>,
-    /// specialized by <typeparamref name="TParser"/>.
+    /// Asynchronous version of <see cref="FixedWidthRecordEnumerable{TModel, TParser}"/> for
+    /// <c>await foreach</c>. A stream is read once; a file is reopened, with asynchronous I/O, on each
+    /// enumeration.
     /// </summary>
     public sealed class FixedWidthAsyncRecordEnumerable<TModel, TParser> : IAsyncEnumerable<TModel>
-        where TParser : struct, IRecordLineParser<char, TModel>
+        where TParser : struct, IRecordLineParser<TModel>
     {
         private readonly TParser _parser;
-        private readonly TextReaderSource _source;
-        private readonly IFormatProvider? _formatProvider;
-        private readonly StringPool? _stringPool;
-        private readonly int _bufferSize;
+        private readonly Stream? _stream;
+        private readonly string? _path;
+        private readonly bool _ownsStream;
+        private readonly FixedWidthReaderOptions _options;
 
-        internal FixedWidthAsyncRecordEnumerable(
-            TParser parser,
-            TextReaderSource source,
-            IFormatProvider? formatProvider,
-            StringPool? stringPool,
-            int bufferSize)
+        internal FixedWidthAsyncRecordEnumerable(TParser parser, Stream stream, bool ownsStream, FixedWidthReaderOptions options)
         {
             _parser = parser;
-            _source = source;
-            _formatProvider = formatProvider;
-            _stringPool = stringPool;
-            _bufferSize = bufferSize;
+            _stream = stream;
+            _ownsStream = ownsStream;
+            _options = options;
+        }
+
+        internal FixedWidthAsyncRecordEnumerable(TParser parser, string path, FixedWidthReaderOptions options)
+        {
+            _parser = parser;
+            _path = path;
+            _ownsStream = true;
+            _options = options;
         }
 
 #pragma warning disable HLQ006 // GetEnumerator() or GetAsyncEnumerator() should return a value type
-        public AsyncRecordEnumeratorCore<char, CharLineFormat, TModel, TParser, TextReaderSource> GetAsyncEnumerator(CancellationToken cancellationToken = default)
-#pragma warning restore HLQ006 // GetEnumerator() or GetAsyncEnumerator() should return a value type
+        public AsyncRecordEnumerator<TModel, TParser> GetAsyncEnumerator(CancellationToken cancellationToken = default)
+#pragma warning restore HLQ006
         {
-            return new(_parser, _source.Create(_bufferSize), _formatProvider, _stringPool, _bufferSize, cancellationToken);
+#pragma warning disable CA2000, IDISP001 // The enumerator owns and disposes the file stream.
+            var stream = _stream ?? new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.Asynchronous | FileOptions.SequentialScan);
+#pragma warning restore CA2000, IDISP001
+            return new(_parser, stream, _ownsStream, _options, cancellationToken);
         }
 
         IAsyncEnumerator<TModel> IAsyncEnumerable<TModel>.GetAsyncEnumerator(CancellationToken cancellationToken)

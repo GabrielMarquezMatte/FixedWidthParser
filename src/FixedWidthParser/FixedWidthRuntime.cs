@@ -2,7 +2,8 @@ using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
-using CommunityToolkit.HighPerformance.Buffers;
+using System.Text;
+using FixedWidthParser.Attributes;
 using FixedWidthParser.Formatters;
 using FixedWidthParser.Processors;
 
@@ -10,100 +11,161 @@ namespace FixedWidthParser
 {
     /// <summary>
     /// Low-level helpers called by the source-generated <see cref="IFixedWidthModel{TSelf}.TryParse"/>
-    /// and <see cref="IFixedWidthModel{TSelf}.TryFormat"/> implementations. They centralize the column
-    /// slicing, string pooling, numeric parsing/formatting so the generated code stays small and
-    /// matches the runtime parser/writer's semantics exactly.
+    /// and <see cref="IFixedWidthModel{TSelf}.TryFormat"/> implementations, and by the runtime parser
+    /// and writer, so both paths share one set of semantics.
     /// <para>Public because the generated code lives in the consumer assembly; not intended for direct use.</para>
     /// </summary>
     public static class FixedWidthRuntime
     {
+        private const int StackBufferSize = 256;
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ReadOnlySpan<char> TrimColumn(ReadOnlySpan<char> column, char trimChar, Attributes.TrimMode trimMode)
+        public static ReadOnlySpan<byte> TrimColumn(ReadOnlySpan<byte> column, byte trimChar, TrimMode trimMode)
         {
             return trimMode switch
             {
-                Attributes.TrimMode.Leading => column.TrimStart(trimChar),
-                Attributes.TrimMode.Both => column.Trim(trimChar),
+                TrimMode.Leading => column.TrimStart(trimChar),
+                TrimMode.Both => column.Trim(trimChar),
                 _ => column.TrimEnd(trimChar),
             };
         }
 
-        /// <summary>Materializes a string column: trims spaces and interns via the pool when supplied.</summary>
+        /// <summary>True when the column holds only <paramref name="trimChar"/> and spaces, so a nullable column reads as <see langword="null"/>.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static string String(ReadOnlySpan<char> column, StringPool? stringPool, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
+        public static bool IsBlank(ReadOnlySpan<byte> column, byte trimChar)
+        {
+            return column.Trim(trimChar).Trim((byte)' ').IsEmpty;
+        }
+
+        /// <summary>Decodes a string column with the context's encoding, interning it through the context's pool when there is one.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static string String(ReadOnlySpan<byte> column, in FixedWidthContext context, byte trimChar = (byte)' ', TrimMode trimMode = TrimMode.Trailing)
         {
             var trimmed = TrimColumn(column, trimChar, trimMode);
-            return stringPool is null ? trimmed.ToString() : stringPool.GetOrAdd(trimmed);
+            return context.StringPool is { } pool ? pool.GetOrAdd(trimmed, context.Encoding) : context.Encoding.GetString(trimmed);
         }
 
-        /// <summary>Parses a <see cref="double"/> column, honoring the provider's decimal separator (see <see cref="CultureHelpers"/>).</summary>
+        /// <summary>Parses a <see cref="double"/> column, honoring the provider's decimal separator.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryDouble(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out double value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
+        public static bool TryDouble(ReadOnlySpan<byte> column, in FixedWidthContext context, out double value, byte trimChar = (byte)' ', TrimMode trimMode = TrimMode.Trailing)
         {
-            return CultureHelpers.TryParseDouble(column, formatProvider, out value, trimChar, trimMode);
+            return CultureHelpers.TryParseDouble(column, in context, out value, trimChar, trimMode);
         }
 
-        /// <summary>Parses a <see cref="float"/> column, honoring the provider's decimal separator (see <see cref="CultureHelpers"/>).</summary>
+        /// <summary>Parses a <see cref="float"/> column, honoring the provider's decimal separator.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryFloat(ReadOnlySpan<char> column, IFormatProvider? formatProvider, out float value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
+        public static bool TryFloat(ReadOnlySpan<byte> column, in FixedWidthContext context, out float value, byte trimChar = (byte)' ', TrimMode trimMode = TrimMode.Trailing)
         {
-            return CultureHelpers.TryParseFloat(column, formatProvider, out value, trimChar, trimMode);
+            return CultureHelpers.TryParseFloat(column, in context, out value, trimChar, trimMode);
+        }
+
+        /// <summary>Parses an <see cref="IUtf8SpanParsable{TSelf}"/> column straight from its bytes.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryParse<TValue>(ReadOnlySpan<byte> column, in FixedWidthContext context, [MaybeNullWhen(false)] out TValue value, byte trimChar = (byte)' ', TrimMode trimMode = TrimMode.Trailing)
+            where TValue : IUtf8SpanParsable<TValue>
+        {
+            return TValue.TryParse(TrimColumn(column, trimChar, trimMode), context.FormatProvider, out value);
+        }
+
+        /// <summary>Parses an <see cref="ISpanParsable{TSelf}"/> column that has no UTF-8 parser, decoding it with the context's encoding first.</summary>
+        [SkipLocalsInit]
+        public static bool TryParseDecoded<TValue>(ReadOnlySpan<byte> column, in FixedWidthContext context, [MaybeNullWhen(false)] out TValue value, byte trimChar = (byte)' ', TrimMode trimMode = TrimMode.Trailing)
+            where TValue : ISpanParsable<TValue>
+        {
+            Span<char> stack = stackalloc char[StackBufferSize];
+            var text = Decode(TrimColumn(column, trimChar, trimMode), context.Encoding, stack, out char[]? rented);
+            try
+            {
+                return TValue.TryParse(text, context.FormatProvider, out value);
+            }
+            finally
+            {
+                Return(rented);
+            }
+        }
+
+        /// <summary>Parses a column via a <c>FixedColumnAttribute.Converter</c> instance.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryConvert<TValue, TConverter>(
+            ReadOnlySpan<byte> column, in FixedWidthContext context, TConverter converter, [MaybeNullWhen(false)] out TValue value, byte trimChar = (byte)' ', TrimMode trimMode = TrimMode.Trailing)
+            where TConverter : IFixedWidthConverter<TValue>
+        {
+            return converter.TryParse(TrimColumn(column, trimChar, trimMode), in context, out value);
+        }
+
+        [SkipLocalsInit]
+        public static bool TryDateTimeExact(ReadOnlySpan<byte> column, string format, in FixedWidthContext context, out DateTime value, byte trimChar = (byte)' ', TrimMode trimMode = TrimMode.Trailing)
+        {
+            Span<char> stack = stackalloc char[StackBufferSize];
+            var text = Decode(TrimColumn(column, trimChar, trimMode), context.Encoding, stack, out char[]? rented);
+            try
+            {
+                return DateTime.TryParseExact(text, format, context.FormatProvider, DateTimeStyles.None, out value);
+            }
+            finally
+            {
+                Return(rented);
+            }
+        }
+
+        [SkipLocalsInit]
+        public static bool TryDateOnlyExact(ReadOnlySpan<byte> column, string format, in FixedWidthContext context, out DateOnly value, byte trimChar = (byte)' ', TrimMode trimMode = TrimMode.Trailing)
+        {
+            Span<char> stack = stackalloc char[StackBufferSize];
+            var text = Decode(TrimColumn(column, trimChar, trimMode), context.Encoding, stack, out char[]? rented);
+            try
+            {
+                return DateOnly.TryParseExact(text, format, context.FormatProvider, DateTimeStyles.None, out value);
+            }
+            finally
+            {
+                Return(rented);
+            }
+        }
+
+        [SkipLocalsInit]
+        public static bool TryTimeOnlyExact(ReadOnlySpan<byte> column, string format, in FixedWidthContext context, out TimeOnly value, byte trimChar = (byte)' ', TrimMode trimMode = TrimMode.Trailing)
+        {
+            Span<char> stack = stackalloc char[StackBufferSize];
+            var text = Decode(TrimColumn(column, trimChar, trimMode), context.Encoding, stack, out char[]? rented);
+            try
+            {
+                return TimeOnly.TryParseExact(text, format, context.FormatProvider, DateTimeStyles.None, out value);
+            }
+            finally
+            {
+                Return(rented);
+            }
+        }
+
+        [SkipLocalsInit]
+        public static bool TryDateTimeOffsetExact(ReadOnlySpan<byte> column, string format, in FixedWidthContext context, out DateTimeOffset value, byte trimChar = (byte)' ', TrimMode trimMode = TrimMode.Trailing)
+        {
+            Span<char> stack = stackalloc char[StackBufferSize];
+            var text = Decode(TrimColumn(column, trimChar, trimMode), context.Encoding, stack, out char[]? rented);
+            try
+            {
+                return DateTimeOffset.TryParseExact(text, format, context.FormatProvider, DateTimeStyles.None, out value);
+            }
+            finally
+            {
+                Return(rented);
+            }
         }
 
         /// <summary>
-        /// Parses any <see cref="ISpanParsable{TSelf}"/> column (int, decimal, DateTime, …), trimming
-        /// spaces. A <see langword="null"/> <paramref name="formatProvider"/> means
-        /// <see cref="CultureInfo.InvariantCulture"/> (not the BCL's own default of
-        /// <see cref="CultureInfo.CurrentCulture"/>) — a fixed-width file is a machine layout, and this
-        /// keeps every column type in a record agreeing on what "no provider" means, matching the
-        /// double/float columns (see <see cref="Processors.CultureHelpers"/>), which already treat null
-        /// as invariant.
+        /// Encodes a string column into <paramref name="slice"/> per <paramref name="options"/>. A string
+        /// truncated to fit keeps whole characters, so a multi-byte character is never split.
         /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryParse<TValue>(ReadOnlySpan<char> column, IFormatProvider? formatProvider, [MaybeNullWhen(false)] out TValue value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
-            where TValue : ISpanParsable<TValue>
+        public static void FormatString(string value, Span<byte> slice, in FixedWidthContext context, ColumnFormatOptions options, string columnName)
         {
-            return TValue.TryParse(TrimColumn(column, trimChar, trimMode), formatProvider ?? CultureInfo.InvariantCulture, out value);
-        }
-
-        /// <summary>Parses a column via a <c>FixedColumnAttribute.Converter</c> instance, trimming spaces.</summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryConvert<TValue, TConverter>(
-            ReadOnlySpan<char> column, IFormatProvider? formatProvider, TConverter converter, [MaybeNullWhen(false)] out TValue value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
-            where TConverter : IFixedWidthConverter<TValue>
-        {
-            return converter.TryParse(TrimColumn(column, trimChar, trimMode), formatProvider, out value);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryDateTimeExact(ReadOnlySpan<char> column, string format, IFormatProvider? formatProvider, out DateTime value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
-        {
-            return DateTime.TryParseExact(TrimColumn(column, trimChar, trimMode), format, formatProvider ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out value);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryDateOnlyExact(ReadOnlySpan<char> column, string format, IFormatProvider? formatProvider, out DateOnly value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
-        {
-            return DateOnly.TryParseExact(TrimColumn(column, trimChar, trimMode), format, formatProvider ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out value);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryTimeOnlyExact(ReadOnlySpan<char> column, string format, IFormatProvider? formatProvider, out TimeOnly value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
-        {
-            return TimeOnly.TryParseExact(TrimColumn(column, trimChar, trimMode), format, formatProvider ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out value);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool TryDateTimeOffsetExact(ReadOnlySpan<char> column, string format, IFormatProvider? formatProvider, out DateTimeOffset value, char trimChar = ' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
-        {
-            return DateTimeOffset.TryParseExact(TrimColumn(column, trimChar, trimMode), format, formatProvider ?? CultureInfo.InvariantCulture, DateTimeStyles.None, out value);
-        }
-
-        /// <summary>Formats a string column: fills <paramref name="slice"/> per <paramref name="options"/> (alignment/padding/overflow).</summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void FormatString(string value, Span<char> slice, ColumnFormatOptions options, string columnName)
-        {
-            options.WriteInto(value.AsSpan(), slice, columnName);
+            ReadOnlySpan<char> text = value;
+            var encoding = context.Encoding;
+            if (options.Overflow == OverflowBehavior.Truncate && encoding.GetByteCount(text) > slice.Length)
+            {
+                text = FitText(text, slice.Length, encoding, options.Alignment);
+            }
+            WriteText(text, slice, encoding, options, columnName);
         }
 
         /// <summary>
@@ -112,17 +174,14 @@ namespace FixedWidthParser
         /// <see cref="ArrayPool{T}"/> loop for the rare value that needs more room.
         /// </summary>
         [SkipLocalsInit]
-        public static void FormatValue<TValue>(TValue value, Span<char> slice, IFormatProvider? formatProvider, ColumnFormatOptions options, string columnName)
+        public static void FormatValue<TValue>(TValue value, Span<byte> slice, in FixedWidthContext context, ColumnFormatOptions options, string columnName)
             where TValue : ISpanFormattable
         {
-            // Null means invariant here too (see TryParse<TValue> above) — otherwise a null-provider
-            // write would use CurrentCulture while a null-provider parse of that same value uses
-            // invariant, breaking the default round-trip on any non-invariant machine.
-            formatProvider ??= CultureInfo.InvariantCulture;
+            var formatProvider = context.FormatProvider;
             Span<char> stack = stackalloc char[64];
             if (value.TryFormat(stack, out int written, options.Format, formatProvider))
             {
-                options.WriteInto(stack[..written], slice, columnName);
+                WriteText(stack[..written], slice, context.Encoding, options, columnName);
                 return;
             }
 
@@ -134,7 +193,7 @@ namespace FixedWidthParser
                 {
                     if (value.TryFormat(rented, out int w, options.Format, formatProvider))
                     {
-                        options.WriteInto(rented.AsSpan(0, w), slice, columnName);
+                        WriteText(rented.AsSpan(0, w), slice, context.Encoding, options, columnName);
                         return;
                     }
                 }
@@ -155,23 +214,23 @@ namespace FixedWidthParser
         /// </summary>
         [SkipLocalsInit]
         public static void FormatConvert<TValue, TConverter>(
-            TValue value, Span<char> slice, IFormatProvider? formatProvider, TConverter converter, ColumnFormatOptions options, string columnName)
+            TValue value, Span<byte> slice, in FixedWidthContext context, TConverter converter, ColumnFormatOptions options, string columnName)
             where TConverter : IFixedWidthConverter<TValue>
         {
-            Span<char> stack = stackalloc char[64];
-            if (converter.TryFormat(value, stack, formatProvider, out int written))
+            Span<byte> stack = stackalloc byte[StackBufferSize];
+            if (converter.TryFormat(value, stack, in context, out int written))
             {
                 options.WriteInto(stack[..written], slice, columnName);
                 return;
             }
 
-            int maxSize = Math.Max(1024, slice.Length * 16);
-            for (int size = 512; size <= maxSize; size *= 2)
+            int maxSize = Math.Max(4096, slice.Length * 16);
+            for (int size = 1024; size <= maxSize; size *= 2)
             {
-                char[] rented = ArrayPool<char>.Shared.Rent(size);
+                byte[] rented = ArrayPool<byte>.Shared.Rent(size);
                 try
                 {
-                    if (converter.TryFormat(value, rented, formatProvider, out int w))
+                    if (converter.TryFormat(value, rented, in context, out int w))
                     {
                         options.WriteInto(rented.AsSpan(0, w), slice, columnName);
                         return;
@@ -179,13 +238,112 @@ namespace FixedWidthParser
                 }
                 finally
                 {
-                    ArrayPool<char>.Shared.Return(rented);
+                    ArrayPool<byte>.Shared.Return(rented);
                 }
             }
 
             throw new InvalidOperationException(
                 $"Value of type \"{typeof(TValue)}\" for column \"{columnName}\" could not be formatted by " +
-                $"converter \"{typeof(TConverter)}\" within {maxSize} characters.");
+                $"converter \"{typeof(TConverter)}\" within {maxSize} bytes.");
+        }
+
+        internal static byte ToAsciiByte(char value, string columnName, string setting)
+        {
+            if (value > '\x7F')
+            {
+                throw new InvalidOperationException(
+                    $"The {setting} '{value}' (U+{(int)value:X4}) of column \"{columnName}\" is not an ASCII character; column positions are bytes, so it must be one byte in every supported encoding.");
+            }
+            return (byte)value;
+        }
+
+        // Numbers and dates are ASCII in almost every culture, so they narrow straight into bytes;
+        // anything else goes through the encoding.
+        [SkipLocalsInit]
+        private static void WriteText(ReadOnlySpan<char> text, Span<byte> slice, Encoding encoding, ColumnFormatOptions options, string columnName)
+        {
+            bool ascii = System.Text.Ascii.IsValid(text);
+            int byteCount = ascii ? text.Length : encoding.GetByteCount(text);
+            byte[]? rented = byteCount <= StackBufferSize ? null : ArrayPool<byte>.Shared.Rent(byteCount);
+            Span<byte> bytes = rented is null ? stackalloc byte[StackBufferSize] : rented;
+            try
+            {
+                int written = ascii
+                    ? NarrowAscii(text, bytes)
+                    : encoding.GetBytes(text, bytes);
+                options.WriteInto(bytes[..written], slice, columnName);
+            }
+            finally
+            {
+                if (rented is not null)
+                {
+                    ArrayPool<byte>.Shared.Return(rented);
+                }
+            }
+        }
+
+        private static int NarrowAscii(ReadOnlySpan<char> text, Span<byte> bytes)
+        {
+            System.Text.Ascii.FromUtf16(text, bytes, out int written);
+            return written;
+        }
+
+        // The longest run of whole characters, from the alignment side, whose encoding fits in width bytes.
+        private static ReadOnlySpan<char> FitText(ReadOnlySpan<char> text, int width, Encoding encoding, Alignment alignment)
+        {
+            int bytes = 0;
+            if (alignment == Alignment.Right)
+            {
+                int start = text.Length;
+                while (start > 0)
+                {
+                    Rune.DecodeLastFromUtf16(text[..start], out _, out int consumed);
+                    int size = encoding.GetByteCount(text.Slice(start - consumed, consumed));
+                    if (bytes + size > width)
+                    {
+                        break;
+                    }
+                    bytes += size;
+                    start -= consumed;
+                }
+                return text[start..];
+            }
+
+            int end = 0;
+            while (end < text.Length)
+            {
+                Rune.DecodeFromUtf16(text[end..], out _, out int consumed);
+                int size = encoding.GetByteCount(text.Slice(end, consumed));
+                if (bytes + size > width)
+                {
+                    break;
+                }
+                bytes += size;
+                end += consumed;
+            }
+            return text[..end];
+        }
+
+        private static ReadOnlySpan<char> Decode(ReadOnlySpan<byte> bytes, Encoding encoding, Span<char> stack, out char[]? rented)
+        {
+            rented = null;
+            Span<char> chars = stack;
+            int max = encoding.GetMaxCharCount(bytes.Length);
+            if (max > stack.Length)
+            {
+                rented = ArrayPool<char>.Shared.Rent(max);
+                chars = rented;
+            }
+            int written = encoding.GetChars(bytes, chars);
+            return chars[..written];
+        }
+
+        private static void Return(char[]? rented)
+        {
+            if (rented is not null)
+            {
+                ArrayPool<char>.Shared.Return(rented);
+            }
         }
     }
 }

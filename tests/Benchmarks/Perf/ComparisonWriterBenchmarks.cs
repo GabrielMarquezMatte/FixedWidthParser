@@ -1,4 +1,3 @@
-using System.Globalization;
 using BenchmarkDotNet.Attributes;
 using FileHelpers;
 using FlatFiles;
@@ -19,12 +18,12 @@ namespace Benchmarks.Perf
 
     /// <summary>
     /// Cross-library comparison of fixed-width writing: FileHelpers and FlatFiles against
-    /// FixedWidthParser. All writes target Stream.Null to isolate formatting from I/O.
+    /// FixedWidthParser. All writes target Stream.Null to isolate formatting from I/O; the others go
+    /// through a StreamWriter because they write text, FixedWidthParser writes bytes straight to the stream.
     /// </summary>
     [Config(typeof(RegressionConfig))]
     public class ComparisonWriterBenchmarks : IDisposable
     {
-        private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
         private static readonly FixedLengthOptions FlatFilesOptions = new();
         private readonly FixedWidthWriter<SampleModel> _writer = new();
         private readonly FileHelperEngine<FileHelpersRecord> _engine = new();
@@ -101,7 +100,7 @@ namespace Benchmarks.Perf
         [Benchmark]
         public void FixedWidthParser_Write()
         {
-            _writer.WriteMany(_sink, _models.AsSpan(), Culture);
+            _writer.WriteMany(Stream.Null, _models.AsSpan());
         }
 
         public virtual void Dispose()
