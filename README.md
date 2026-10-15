@@ -8,33 +8,32 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Benchmarks](https://img.shields.io/badge/benchmarks-GitHub%20Pages-informational)](https://gabrielmarquezmatte.github.io/FixedWidthParser/dev/bench/)
 
-A high-performance, low-allocation library for **parsing and writing fixed-width (flat) files** in .NET. Columns are declared with attributes, layouts are validated up front, and the hot paths work over spans so fixed-width records can be parsed, streamed and written without the usual per-line churn.
+A high-performance, low-allocation library for **parsing and writing fixed-width (flat) files** in .NET. Columns are declared with attributes, layouts are validated up front, and lines are parsed straight from the file's bytes, without a string per line.
 
 The package includes both:
 
-- a runtime parser/writer API for regular attribute-mapped models; and
-- a bundled Roslyn source generator for reflection-free `TryParse` implementations, including a UTF-8 byte path.
+- a runtime parser, reader and writer for regular attribute-mapped models; and
+- a bundled Roslyn source generator for reflection-free `TryParse` and `TryFormat` implementations.
+
+Upgrading from 1.x? See [the 2.0 entry in the changelog](CHANGELOG.md#200).
 
 ## Features
 
 - **Attribute-driven** column mapping (`[FixedColumn(start, length)]`) on properties and public fields.
-- **Runtime parsing** for single lines and lazy batch reading from a `TextReader`, `Stream` or file.
-- **Source-generated parsing** for `partial` models implementing `IFixedWidthModel<TSelf>`.
-- **UTF-8 byte parsing** via `Utf8FixedWidthParser<T>`, `FixedWidthByteReader<T>` and generated `IUtf8FixedWidthModel<TSelf>` models, avoiding `StreamReader` and UTF-16 transcoding for ASCII-style flat files.
-- **Synchronous and asynchronous readers** (`IEnumerable<T>` / `IAsyncEnumerable<T>`) with struct enumerators on the synchronous path.
-- **`System.IO.Pipelines` support** on the byte path: read records straight from a `PipeReader` (`FixedWidthByteReader<T>.ReadAsync(PipeReader)` / `FixedWidthUtf8.ReadAsync<T>(PipeReader)`).
-- **Writing** for single records and batches, synchronous and asynchronous, with `StreamWriter` reuse and `ReadOnlySpan<T>` overloads for zero-allocation output.
+- **Byte positions.** Lines are read and written as bytes, with no transcoding to UTF-16. Text columns are decoded with the file's encoding: UTF-8 by default, or any ASCII-compatible encoding such as Latin-1 or Windows-1252.
+- **Lazy reading** from a `Stream`, a file or a `System.IO.Pipelines` `PipeReader`, synchronous (`IEnumerable<T>` with a struct enumerator) and asynchronous (`IAsyncEnumerable<T>`).
+- **Source-generated parsing and writing** for `partial` models implementing `IFixedWidthModel<TSelf>`.
+- **Errors that name the column**: a `FixedWidthParseException` with the line number, column, position and raw text, and an `OnParseError` callback to skip bad lines.
+- **Bounded memory on untrusted input**: `MaxLineLength` stops a source without line breaks from growing the buffer.
+- **Writing** of single records and batches, synchronous and asynchronous, batched into one pooled buffer.
 - **Configurable formatting** per column: alignment, padding character, format string and explicit overflow policy.
-- **Culture-aware** numeric parsing/formatting, including `double`/`float` via csFastFloat and generic `ISpanParsable` / `ISpanFormattable` support.
-- **Layout validation** at construction or generation time: negative `Start`, non-positive `Length` and overlapping columns fail clearly.
-- **`ref struct` model support** on parser/source-generated single-line parsing (.NET 9+ only, see Requirements).
+- **Culture-aware** numbers and dates, including `double`/`float` via csFastFloat and any `IUtf8SpanParsable`/`ISpanParsable` type.
+- **Layout validation** at construction or generation time: negative `Start`, non-positive `Length`, overlapping columns and non-ASCII padding fail clearly.
+- **`ref struct` model support** on single-line parsing.
 
 ## Requirements
 
-- `net8.0` or `net10.0` (the package multi-targets both).
-- `ref struct` models (e.g. `RefPersonModel`-style spans-only types) require .NET 9 or later — the
-  `allows ref struct` generic constraint that makes them possible doesn't exist on `net8.0`, so that
-  one feature is compiled out there; everything else behaves identically on both targets.
+- `net10.0`.
 
 Dependencies: [CommunityToolkit.HighPerformance](https://www.nuget.org/packages/CommunityToolkit.HighPerformance) (`StringPool`) and [csFastFloat](https://www.nuget.org/packages/csFastFloat) (fast `double`/`float` parsing).
 
@@ -44,13 +43,7 @@ Dependencies: [CommunityToolkit.HighPerformance](https://www.nuget.org/packages/
 dotnet add package FixedWidthParser.NET
 ```
 
-Or as a `<PackageReference>`:
-
-```xml
-<PackageReference Include="FixedWidthParser.NET" Version="1.0.0" />
-```
-
-The package ships the Roslyn source generator bundled as an analyzer. Models that implement `IFixedWidthModel<TSelf>` or `IUtf8FixedWidthModel<TSelf>` get generated parsers automatically; no extra package or setup is required.
+The package ships the Roslyn source generator bundled as an analyzer. Models that implement `IFixedWidthModel<TSelf>` get a generated parser and writer automatically; no extra package or setup is required.
 
 ## Defining a Model
 
@@ -64,8 +57,6 @@ public readonly record struct Person
     public Person()
     {
         Name = string.Empty;
-        Age = 0;
-        Salary = 0.0;
     }
 
     [FixedColumn(0, 10)] public string Name { get; init; }
@@ -74,17 +65,15 @@ public readonly record struct Person
 }
 ```
 
-`start` is the 0-based offset and `length` is the column width.
+`start` is the 0-based offset and `length` is the column width, both **in bytes**. In UTF-8 a character such as `é` takes two bytes, so a layout that counts characters only matches a UTF-8 file whose text is ASCII; for accented text, read the file in the single-byte encoding it was written in (see [Encodings](#encodings)).
 
-For source generation, make the model `partial` and implement one or both marker interfaces:
+For source generation, make the model `partial` and implement the marker interface:
 
 ```csharp
 using FixedWidthParser;
 using FixedWidthParser.Attributes;
 
-public readonly partial record struct GeneratedPerson :
-    IFixedWidthModel<GeneratedPerson>,
-    IUtf8FixedWidthModel<GeneratedPerson>
+public readonly partial record struct GeneratedPerson : IFixedWidthModel<GeneratedPerson>
 {
     [FixedColumn(0, 10)] public string Name { get; init; }
     [FixedColumn(10, 5)] public int Age { get; init; }
@@ -92,49 +81,12 @@ public readonly partial record struct GeneratedPerson :
 }
 ```
 
-The generator emits distinct `TryParse` overloads for `ReadOnlySpan<char>` and `ReadOnlySpan<byte>` when both interfaces are present.
-
-## Parsing
-
-### Runtime Single-Line Parsing
+## Reading
 
 ```csharp
-using System.Globalization;
-using FixedWidthParser.Parsers;
-
-var parser = new FixedWidthParser<Person>();
-
-if (parser.TryParse("John Doe  30   60000.00  ", CultureInfo.InvariantCulture, stringPool: null, out var person))
-{
-    // person.Name == "John Doe"
-    // person.Age == 30
-    // person.Salary == 60000.0
-}
-```
-
-### Source-Generated Single-Line Parsing
-
-```csharp
-using System.Globalization;
-using FixedWidthParser;
-
-if (FixedWidth.TryParse<GeneratedPerson>(
-        "John Doe  30   60000.00  ",
-        CultureInfo.InvariantCulture,
-        stringPool: null,
-        out var person))
-{
-    // reflection-free generated parser
-}
-```
-
-### Reading Text Files
-
-```csharp
-using System.Globalization;
 using FixedWidthParser.Readers;
 
-var reader = new FixedWidthReader<Person>(CultureInfo.InvariantCulture);
+var reader = new FixedWidthReader<Person>();
 
 foreach (var person in reader.ReadFile("people.txt"))
 {
@@ -142,20 +94,22 @@ foreach (var person in reader.ReadFile("people.txt"))
 }
 ```
 
-`Read(TextReader)` and `Read(Stream, encoding, leaveOpen)` are also available. Reading is lazy and reuses a pooled buffer; lines are sliced directly from the buffer, so the reader does not allocate a string per line. A malformed line throws a `FormatException` carrying the line number.
+`Read(Stream, leaveOpen)` reads a stream once; `ReadFile` reopens the file on each enumeration. Reading is lazy and reuses a pooled buffer; each line is parsed in place, without a string per line.
 
-Empty lines (including a trailing newline at end of file) are skipped: they are counted toward the line number but not yielded as records. A line that is non-empty but shorter than the declared layout is treated as malformed and throws.
+Empty lines (including a trailing newline at end of file) are skipped: they are counted toward the line number but not yielded. Lines end at `\n`, with a preceding `\r` dropped, and a leading UTF-8 byte order mark is skipped.
 
-The source-generated facade has matching overloads:
+The source-generated facade has the same methods:
 
 ```csharp
-foreach (var person in FixedWidth.ReadFile<GeneratedPerson>("people.txt", formatProvider: CultureInfo.InvariantCulture))
+using FixedWidthParser;
+
+foreach (var person in FixedWidth.ReadFile<GeneratedPerson>("people.txt"))
 {
     // generated TryParse for each line
 }
 ```
 
-### Async Reading
+### Async and pipes
 
 ```csharp
 await foreach (var person in reader.ReadFileAsync("people.txt"))
@@ -164,82 +118,61 @@ await foreach (var person in reader.ReadFileAsync("people.txt"))
 }
 ```
 
-`ReadAsync(TextReader)` and `ReadAsync(Stream, encoding, leaveOpen)` mirror the synchronous overloads; `ReadFileAsync` uses true async file I/O. Cancellation is honored via `WithCancellation`.
+`ReadAsync(Stream, leaveOpen)` mirrors the synchronous overload, and cancellation is honored via `WithCancellation`. When the source is already a [`PipeReader`](https://learn.microsoft.com/dotnet/standard/io/pipelines) — a Kestrel request body, a socket, an upstream pipeline stage — `ReadAsync(PipeReader, leaveOpen)` parses straight off it and lets the pipe own buffering. For plain files and streams the `Stream` overloads are the faster default.
 
-## UTF-8 Byte Parsing
+### Options
 
-For ASCII/single-byte fixed-width files, the UTF-8 APIs parse directly from bytes. This avoids `StreamReader`, avoids UTF-8 to UTF-16 transcoding, and keeps offsets measured in bytes.
-
-```csharp
-using System.Globalization;
-using FixedWidthParser.Readers;
-
-var reader = new FixedWidthByteReader<Person>(CultureInfo.InvariantCulture);
-
-foreach (var person in reader.ReadFile("people.txt"))
-{
-    // parsed from raw UTF-8 bytes
-}
-```
-
-Generated UTF-8 models use `FixedWidthUtf8`:
+Every read takes an optional `FixedWidthReaderOptions`:
 
 ```csharp
-using System.Globalization;
-using FixedWidthParser;
-
-if (FixedWidthUtf8.TryParse<GeneratedPerson>(
-        "John Doe  30   60000.00  "u8,
-        CultureInfo.InvariantCulture,
-        stringPool: null,
-        out var person))
+var reader = new FixedWidthReader<Person>(new FixedWidthReaderOptions
 {
-    // generated byte parser
-}
-
-await using var stream = File.OpenRead("people.txt");
-await foreach (var person in FixedWidthUtf8.ReadAsync<GeneratedPerson>(stream, formatProvider: CultureInfo.InvariantCulture))
-{
-    // async raw-byte streaming
-}
+    FormatProvider = CultureInfo.GetCultureInfo("pt-BR"),
+    Encoding = Encoding.Latin1,
+    StringPool = new StringPool(),
+    BufferSize = 64 * 1024,
+    MaxLineLength = 4096,
+    OnParseError = ex => { log.Warning(ex.Message); return true; }, // skip the line
+});
 ```
 
-Column offsets on the UTF-8 path are byte offsets. That is ideal for the ASCII-style payloads common in flat files; with multi-byte UTF-8 characters, byte offsets and character offsets are not the same.
+| Option | Default | Meaning |
+|---|---|---|
+| `FormatProvider` | invariant culture | Numbers and dates. |
+| `Encoding` | UTF-8 | Text columns. Must be ASCII-compatible. |
+| `StringPool` | none | Interns repeated string values. |
+| `BufferSize` | 65,536 | Bytes read from the source at a time. |
+| `MaxLineLength` | 1,048,576 | Longest line accepted; a longer one throws `InvalidDataException`. |
+| `OnParseError` | throw | Return `true` to skip a line that fails to parse. |
 
-The byte path supports the same `StringPool` interning as the char path: pass a pool to `FixedWidthByteReader<T>` / the `FixedWidthUtf8` methods (the `stringPool` argument above) and string columns are interned through it; pass `null` to decode a fresh string per value.
+### Errors
 
-### Reading from a PipeReader
+A line that fails to parse throws `FixedWidthParseException`, a `FormatException` that says where:
 
-When the source is already a [`System.IO.Pipelines.PipeReader`](https://learn.microsoft.com/dotnet/standard/io/pipelines) — a Kestrel request body, a socket, a named pipe, or an upstream pipeline stage — you can parse straight off it, letting the pipe own buffering and read-ahead. Both the reflection reader and the generated facade expose a `PipeReader` overload of `ReadAsync`:
+```text
+Line 2 could not be parsed into Person: column 'Age' (start 10, length 5) holds "XX   ".
+```
+
+`LineNumber`, `ColumnName`, `ColumnStart`, `ColumnLength` and `RawValue` carry the same information. A line shorter than the layout reports how long it is and how long the layout needs it to be. The parser pays nothing for this on lines that parse: a failed line is parsed a second time to find the column.
+
+### Untrusted input
+
+A reader buffers a line until it finds its line break. `MaxLineLength` bounds that buffer, so a request body or file without line breaks throws `InvalidDataException` instead of growing the buffer until memory runs out. Set it close to your layout's line length when the source is untrusted.
+
+## Single Lines
 
 ```csharp
-using System.IO.Pipelines;
-using System.Globalization;
-using FixedWidthParser;
-using FixedWidthParser.Readers;
+var parser = new FixedWidthParser<Person>();
+parser.TryParse("John Doe  30   60000.00  "u8, default, out var person);
 
-// Reflection reader:
-var reader = new FixedWidthByteReader<Person>(CultureInfo.InvariantCulture);
-await foreach (var person in reader.ReadAsync(pipeReader))
-{
-    // parsed from the pipe
-}
-
-// Source-generated facade:
-await foreach (var person in FixedWidthUtf8.ReadAsync<GeneratedPerson>(pipeReader, formatProvider: CultureInfo.InvariantCulture))
-{
-    // ...
-}
+FixedWidth.TryParse<GeneratedPerson>(lineBytes, new FixedWidthContext { FormatProvider = culture }, out var generated);
 ```
 
-Lines are sliced from the pipe's `ReadOnlySequence<byte>` and parsed in place when contiguous, copying into a pooled buffer only when a line spans segment boundaries. The same line semantics apply (BOM skipped once, `\n`/`\r\n`, empty lines skipped, trailing line without a newline yielded). By default the reader is completed when iteration ends; pass `leaveOpen: true` to leave it open.
-
-> **When to use it.** Prefer the `PipeReader` overload when you already hold a pipe. For plain files and streams the `Stream`/file overloads remain the faster default — a `PipeReader` adds per-read overhead that only pays off when there is real I/O to overlap (network, slow disk), not for in-memory or local-file sources.
+`FixedWidthContext` carries the format provider, the encoding and the string pool for one line; `default` means invariant culture, UTF-8 and no pool. `FixedWidthReader<T>.TryParse(line, out model)` parses one line with the reader's options.
 
 ## Writing
 
 ```csharp
-using System.Globalization;
 using FixedWidthParser.Writers;
 
 var writer = new FixedWidthWriter<Person>();
@@ -250,10 +183,12 @@ var people = new[]
 };
 
 using var stream = File.Create("out.txt");
-writer.WriteMany(stream, people.AsSpan(), CultureInfo.InvariantCulture);
+writer.WriteMany(stream, people.AsSpan());
 ```
 
-Overloads cover `Stream`/`StreamWriter` with `IEnumerable<T>`/`ReadOnlySpan<T>`, plus `WriteAsync` and `WriteManyAsync`. Reusing a `StreamWriter`, or passing a span, keeps writing allocation-free per line.
+`Write`, `WriteMany` (span or enumerable) and their async versions write each record followed by `NewLine`, batched into one pooled buffer. `FixedWidthWriterOptions` sets the `FormatProvider`, the `Encoding` and the `NewLine` (default `Environment.NewLine`). `TryFormat(in model, Span<byte>, out int)` formats one line into your own buffer.
+
+Generated models format through `FixedWidth.TryFormat(in model, Span<byte>, in FixedWidthContext, out int)`.
 
 ## Formatting Options
 
@@ -263,80 +198,56 @@ Each column can be tuned through named attribute arguments:
 [FixedColumn(0, 8, Alignment = Alignment.Right, Padding = '0')] public int Id { get; init; }       // "00000042"
 [FixedColumn(8, 10, Format = "F2")]                            public double Amount { get; init; } // "1234.50   "
 [FixedColumn(18, 5, Overflow = OverflowBehavior.Truncate)]     public string Code { get; init; }
+[FixedColumn(23, 5, TrimChar = '0', TrimMode = TrimMode.Leading)] public int Count { get; init; }
 ```
 
 - **`Alignment`**: `Left` (default) or `Right`.
-- **`Padding`**: fill character (default space; for example `'0'` for zero-padding).
-- **`Format`**: format string passed to `ISpanFormattable` (for example `"F2"` or `"N0"`); ignored for `string`.
-- **`Overflow`**: `Default`, `Truncate` or `Throw`. `Default` resolves per type: strings truncate, numeric types throw.
+- **`Padding`**: fill byte when writing (default space; for example `'0'` for zero-padding). Must be ASCII.
+- **`TrimChar`** / **`TrimMode`**: what to strip when parsing, and from which side. Must be ASCII.
+- **`Format`**: format string for `ISpanFormattable` when writing, and the exact format for `DateTime`, `DateOnly`, `TimeOnly` and `DateTimeOffset` when parsing.
+- **`Overflow`**: `Default`, `Truncate` or `Throw`. `Default` resolves per type: strings truncate, everything else throws. A truncated string keeps whole characters, so a multi-byte character is never split.
+- **`Converter`**: a type implementing `IFixedWidthConverter<T>`, used instead of the built-in parsing and formatting.
 
-## Culture Handling
+## Column Types
 
-Pass an `IFormatProvider` to `TryParse`, the reader constructor, the source-generated facade methods or the write methods. The generic path (`ISpanParsable`/`ISpanFormattable`) and the `double`/`float` processors honor it. When the provider is `null`, `'.'` is used as the decimal separator.
+`string`, `double` and `float`, any `IUtf8SpanParsable<T>` (parsed straight from bytes), any other `ISpanParsable<T>` (decoded first), `T?` of any of them (a blank column is `null`), and anything with a `Converter`. Writing needs `string`, `ISpanFormattable` or a converter.
 
-## StringPool
+## Encodings
 
-Pass a `CommunityToolkit.HighPerformance.Buffers.StringPool` to intern repeated string-column values:
+Column positions are bytes, so the encoding only decides how text inside a column is read and written. UTF-8 files with ASCII text and single-byte encodings (Latin-1, Windows-1252, …) keep one byte per character. UTF-16 and EBCDIC are not supported.
 
 ```csharp
-using System.Globalization;
-using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Readers;
-
-var pool = new StringPool();
-var reader = new FixedWidthReader<Person>(CultureInfo.InvariantCulture, stringPool: pool);
+var options = new FixedWidthReaderOptions { Encoding = Encoding.Latin1 };
+var records = FixedWidth.ReadFile<GeneratedPerson>("legacy.txt", options);
 ```
 
-This is a time-vs-memory trade-off: pooling removes repeated string allocations but costs extra CPU for hashing and lookup. Prefer it for GC-sensitive or high-concurrency workloads; skip it for raw throughput.
-
-Pooling applies to both the `char` and UTF-8 byte paths (`FixedWidthReader<T>`/`FixedWidthByteReader<T>` and the `FixedWidth`/`FixedWidthUtf8` facades), and to `ref struct` models. When no pool is supplied, each string column is decoded into a fresh string.
+On .NET, Windows-1252 and other code pages need `Encoding.RegisterProvider(CodePagesEncodingProvider.Instance)` first.
 
 ## Validation
 
-Invalid layouts fail fast with an `InvalidOperationException` on the runtime parser/writer paths, or generator diagnostics on generated models. Negative `Start`, `Length < 1`, and overlapping columns are rejected. Adjacent columns are valid.
+Invalid layouts fail fast with an `InvalidOperationException` on the runtime parser/writer, or a generator diagnostic on generated models: negative `Start`, `Length < 1`, overlapping columns, a non-ASCII `Padding` or `TrimChar` (FWP012), an unsupported column type and a converter for the wrong type. Adjacent columns are valid.
 
-## `ref struct` Models
+## Versioning
 
-> Requires `net10.0` (or any .NET 9+ target) — the `allows ref struct` constraint doesn't exist on `net8.0`, so this feature is compiled out there.
+The package follows [Semantic Versioning](https://semver.org/). A minor version may add types, members, options and enum values, but does not remove or change anything; every pull request checks the package against the last release.
 
-The parser accepts `ref struct` models (`where TModel : new(), allows ref struct`), useful for stack-only row processing:
-
-```csharp
-using FixedWidthParser.Attributes;
-using FixedWidthParser.Parsers;
-
-public ref struct Row
-{
-    public Row()
-    {
-        Name = string.Empty;
-        Age = 0;
-    }
-
-    [FixedColumn(0, 10)] public string Name { get; set; }
-    [FixedColumn(10, 5)] public int Age { get; set; }
-}
-
-var parser = new FixedWidthParser<Row>();
-parser.TryParse(line, CultureInfo.InvariantCulture, null, out var row);
-```
-
-Batch readers and the writer use regular generic constraints because `IEnumerable<T>` cannot carry a `ref struct`.
+- **Interfaces you implement** — `IFixedWidthModel<TSelf>` (normally through the generator) and `IFixedWidthConverter<T>` — never gain a member in a minor version. New settings arrive as new properties on `FixedWidthContext`, which every call receives.
+- **Types that appear in signatures only so enumeration stays allocation-free** — `IRecordLineParser<TModel>`, the `*LineParser` strategy structs and the `*RecordEnumerable`/`*RecordEnumerator` types — are implemented only by the library. Program against `IEnumerable<T>`/`IAsyncEnumerable<T>`; their shape can change in a minor version.
+- **`FixedWidthRuntime`** and **`ColumnFormatOptions`** are public because generated code calls them; they are not meant to be called directly.
 
 ## Performance
 
-Measured with BenchmarkDotNet (`MemoryDiagnoser`) on .NET 10. Highlights:
+Measured with BenchmarkDotNet (`MemoryDiagnoser`) on .NET 10 with 1.1, whose reader decoded text to UTF-16 first; the 2.0 numbers are yet to be measured. Highlights:
 
 - Parsing a line is allocation-light on the runtime path and reflection-free on the generated path.
-- Text readers avoid allocating a string per line by slicing a reusable buffer.
-- UTF-8 byte readers avoid `StreamReader` and transcoding for ASCII-style flat files.
-- Writing with `StreamWriter` reuse or `ReadOnlySpan<T>` is zero-alloc per line.
+- Readers parse each line in place, without a string per line.
+- Writing a span of records is zero-alloc per line.
 
 ### Comparison with other libraries
 
 #### Reading
 
-Batched read of N fixed-width records (10-char string + 5-char int + 10-char double) from an in-memory string, compared against [FileHelpers](https://www.filehelpers.net/), [FlatFiles](https://github.com/jehugaleahsa/FlatFiles), and [RecordParser](https://github.com/leandromoh/RecordParser).
+Batched read of N fixed-width records (10-char string + 5-char int + 10-char double), compared against [FileHelpers](https://www.filehelpers.net/), [FlatFiles](https://github.com/jehugaleahsa/FlatFiles), and [RecordParser](https://github.com/leandromoh/RecordParser).
 
 ```
 BenchmarkDotNet v0.15.8, Windows 11 (10.0.26200.8655/25H2/2025Update/HudsonValley2)
@@ -408,6 +319,5 @@ tests/Benchmarks/                      BenchmarkDotNet benchmarks
 
 ```bash
 dotnet build FixedWidthParser.slnx -c Release
-dotnet test tests/FixedWidthParser.Tests/FixedWidthParser.Tests.csproj
-dotnet test tests/FixedWidthParser.Generator.Tests/FixedWidthParser.Generator.Tests.csproj
+dotnet test --solution FixedWidthParser.slnx -c Release
 ```

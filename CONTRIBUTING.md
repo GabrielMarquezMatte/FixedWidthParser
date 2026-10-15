@@ -50,6 +50,20 @@ gets a benchmark comparison posted as a comment automatically.
 - This is a **performance-sensitive** library. Avoid introducing allocations on parse/write
   hot paths; if a change could affect performance, include benchmark numbers in the PR.
 
+## Public API and compatibility
+
+- The shipped library records every public member in `src/FixedWidthParser/PublicAPI.Unshipped.txt`
+  (analyzer RS0016). A new public member fails the build until it is added there; the code fix in the
+  IDE writes the line for you. At a release, the unshipped entries move to `PublicAPI.Shipped.txt`.
+- `dotnet pack` runs package validation against the last release on NuGet
+  (`PackageValidationBaselineVersion`), and CI packs on every pull request. A removed or changed
+  member fails the pack. Breaks belong in a major version: list them in `CompatibilitySuppressions.xml`
+  (generate it with `dotnet pack -p:ApiCompatGenerateSuppressionFile=true`) and in the changelog, then
+  delete the file once the baseline moves to that major version.
+- A minor version never adds a member to `IFixedWidthModel<TSelf>` or `IFixedWidthConverter<T>`; new
+  information reaches them as a new property on `FixedWidthContext`.
+- `src/` builds with warnings as errors.
+
 ## Pull request flow
 
 1. Branch off `develop` (or `master` for hotfixes).
