@@ -6,8 +6,8 @@ using static FixedWidthParser.Tests.TestHelpers;
 namespace FixedWidthParser.Tests
 {
     /// <summary>
-    /// Covers the <see cref="PipeReader"/> overloads of <see cref="FixedWidthByteReader{TModel}"/>
-    /// (reflection) and <see cref="FixedWidthParser.FixedWidthUtf8"/> (source-generated): line-ending
+    /// Covers the <see cref="PipeReader"/> overloads of <see cref="FixedWidthReader{TModel}"/>
+    /// (reflection) and <see cref="FixedWidth"/> (source-generated): line-ending
     /// handling, BOM skipping, empty-line skipping, multi-segment lines (the pooled scratch-copy path),
     /// cancellation, reader-completion behavior, and parity with the stream reader.
     /// </summary>
@@ -45,7 +45,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_Pipe_ParsesAll()
         {
-            var reader = new FixedWidthByteReader<PersonModel>(Inv);
+            var reader = new FixedWidthReader<PersonModel>();
 
             var people = await CollectAsync(reader.ReadAsync(Pipe(TwoPeople))).ConfigureAwait(true);
 
@@ -61,7 +61,7 @@ namespace FixedWidthParser.Tests
         public async Task ReadAsync_Pipe_Generated_ParsesAll()
         {
             var people = await CollectAsync(
-                FixedWidthParser.FixedWidthUtf8.ReadAsync<GenPersonModel>(Pipe(TwoPeople), formatProvider: Inv))
+                FixedWidth.ReadAsync<GenPersonModel>(Pipe(TwoPeople)))
                 .ConfigureAwait(true);
 
             Assert.Equal(2, people.Count);
@@ -75,7 +75,7 @@ namespace FixedWidthParser.Tests
         [InlineData("ABC\nDEF")]        // no trailing newline on the last line
         public async Task ReadAsync_Pipe_HandlesLineEndingsAndTrailingNewline(string text)
         {
-            var reader = new FixedWidthByteReader<CodeModel>();
+            var reader = new FixedWidthReader<CodeModel>();
 
             var codes = (await CollectAsync(reader.ReadAsync(Pipe(text))).ConfigureAwait(true)).Select(m => m.Code).ToList();
 
@@ -85,7 +85,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_Pipe_SkipsEmptyLines()
         {
-            var reader = new FixedWidthByteReader<CodeModel>();
+            var reader = new FixedWidthReader<CodeModel>();
 
             var codes = (await CollectAsync(reader.ReadAsync(Pipe("ABC\n\n\nDEF\n"))).ConfigureAwait(true)).Select(m => m.Code).ToList();
 
@@ -95,7 +95,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_Pipe_SkipsLeadingBom()
         {
-            var reader = new FixedWidthByteReader<CodeModel>();
+            var reader = new FixedWidthReader<CodeModel>();
 
             var codes = (await CollectAsync(reader.ReadAsync(Pipe("﻿ABC\nDEF\n"))).ConfigureAwait(true)).Select(m => m.Code).ToList();
 
@@ -107,7 +107,7 @@ namespace FixedWidthParser.Tests
         {
             // A tiny pipe buffer (8 bytes) forces each 25-byte record to span several segments, so the
             // line is non-contiguous and must be copied into the pooled scratch buffer before parsing.
-            var reader = new FixedWidthByteReader<PersonModel>(Inv);
+            var reader = new FixedWidthReader<PersonModel>();
 
             var people = await CollectAsync(reader.ReadAsync(Pipe(TwoPeople, bufferSize: 8))).ConfigureAwait(true);
 
@@ -122,7 +122,7 @@ namespace FixedWidthParser.Tests
         public async Task ReadAsync_Pipe_MatchesStreamReader()
         {
             // Same content, two sources: the pipe path must produce exactly what the stream path does.
-            var byteReader = new FixedWidthByteReader<PersonModel>(Inv);
+            var byteReader = new FixedWidthReader<PersonModel>();
 
 #pragma warning disable IDISP004 // the reader owns and disposes the stream when iteration completes
             var fromStream = await CollectAsync(byteReader.ReadAsync(StreamOf(TwoPeople))).ConfigureAwait(true);
@@ -141,7 +141,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_Pipe_HonorsCancellation()
         {
-            var reader = new FixedWidthByteReader<CodeModel>();
+            var reader = new FixedWidthReader<CodeModel>();
             using var cts = new CancellationTokenSource();
             await cts.CancelAsync().ConfigureAwait(true);
 
@@ -157,7 +157,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_Pipe_CompletesReaderByDefault()
         {
-            var reader = new FixedWidthByteReader<CodeModel>();
+            var reader = new FixedWidthReader<CodeModel>();
             var pipe = Pipe("ABC\nDEF\n");
 
             _ = await CollectAsync(reader.ReadAsync(pipe)).ConfigureAwait(true);
@@ -169,7 +169,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_Pipe_LeaveOpen_DoesNotCompleteReader()
         {
-            var reader = new FixedWidthByteReader<CodeModel>();
+            var reader = new FixedWidthReader<CodeModel>();
             var pipe = Pipe("ABC\nDEF\n");
 
             _ = await CollectAsync(reader.ReadAsync(pipe, leaveOpen: true)).ConfigureAwait(true);
@@ -184,7 +184,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void ReadAsync_Pipe_NullReader_Throws()
         {
-            var reader = new FixedWidthByteReader<CodeModel>();
+            var reader = new FixedWidthReader<CodeModel>();
 
             Assert.Throws<ArgumentNullException>(() => reader.ReadAsync((PipeReader)null!));
         }
@@ -194,7 +194,7 @@ namespace FixedWidthParser.Tests
             Justification = "The test deliberately uses the enumerator after disposal to verify it throws.")]
         public async Task ReadAsync_Pipe_MoveNextAfterDispose_Throws()
         {
-            var reader = new FixedWidthByteReader<CodeModel>();
+            var reader = new FixedWidthReader<CodeModel>();
             var enumerator = reader.ReadAsync(Pipe("ABC\nDEF\n")).GetAsyncEnumerator();
             await enumerator.DisposeAsync().ConfigureAwait(true);
 
@@ -207,7 +207,7 @@ namespace FixedWidthParser.Tests
             // Feeding one byte at a time forces the BOM check and every line to span multiple reads,
             // exercising the "need more data" paths (both before and within a line).
             var pipe = new Pipe();
-            var reader = new FixedWidthByteReader<CodeModel>();
+            var reader = new FixedWidthReader<CodeModel>();
 
             var produce = Task.Run(async () =>
             {
@@ -228,10 +228,10 @@ namespace FixedWidthParser.Tests
         [Fact]
         public Task ReadAsync_Pipe_UnparseableLine_ThrowsFormat()
         {
-            var reader = new FixedWidthByteReader<CodeModel>();
+            var reader = new FixedWidthReader<CodeModel>();
 
             // "A" is shorter than CodeModel's 3-wide column, so the trailing line fails to parse.
-            return Assert.ThrowsAsync<FormatException>(async () =>
+            return Assert.ThrowsAsync<FixedWidthParseException>(async () =>
                 await CollectAsync(reader.ReadAsync(Pipe("A"))).ConfigureAwait(false));
         }
 
@@ -239,7 +239,7 @@ namespace FixedWidthParser.Tests
         public async Task ReadAsync_Pipe_CancelPendingRead_ThrowsOperationCanceledException()
         {
             var pipe = new Pipe();
-            var reader = new FixedWidthByteReader<CodeModel>();
+            var reader = new FixedWidthReader<CodeModel>();
 
             var readTask = CollectAsync(reader.ReadAsync(pipe.Reader));
 
@@ -252,12 +252,12 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_Pipe_UnparseableLine_WithLeaveOpen_LeavesReaderUsable()
         {
-            var reader = new FixedWidthByteReader<CodeModel>();
+            var reader = new FixedWidthReader<CodeModel>();
             var pipe = Pipe("A\nDEF\n");
 
             var enumerator = reader.ReadAsync(pipe, leaveOpen: true).GetAsyncEnumerator();
 
-            await Assert.ThrowsAsync<FormatException>(async () => await enumerator.MoveNextAsync().ConfigureAwait(false)).ConfigureAwait(true);
+            await Assert.ThrowsAsync<FixedWidthParseException>(async () => await enumerator.MoveNextAsync().ConfigureAwait(false)).ConfigureAwait(true);
 
             await enumerator.DisposeAsync().ConfigureAwait(true);
 

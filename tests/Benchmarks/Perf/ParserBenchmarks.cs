@@ -1,6 +1,7 @@
-using System.Globalization;
+using System.Text;
 using BenchmarkDotNet.Attributes;
 using CommunityToolkit.HighPerformance.Buffers;
+using FixedWidthParser;
 using FixedWidthParser.Parsers;
 
 namespace Benchmarks.Perf
@@ -12,9 +13,9 @@ namespace Benchmarks.Perf
     [Config(typeof(RegressionConfig))]
     public class ParserBenchmarks
     {
-        private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
         private readonly FixedWidthParser<SampleModel> _parser = new();
-        private StringPool _stringPool = null!;
+        private FixedWidthContext _pooled;
+        private byte[] _line = [];
 
         [Params(
             "John Doe   30   60000.00 ",
@@ -24,20 +25,21 @@ namespace Benchmarks.Perf
         [GlobalSetup]
         public void Setup()
         {
-            _stringPool = new StringPool();
+            _line = Encoding.UTF8.GetBytes(Line);
+            _pooled = new FixedWidthContext { StringPool = new StringPool() };
         }
 
         [Benchmark(Baseline = true)]
         public SampleModel Parse_NoPool()
         {
-            _parser.TryParse(Line, Culture, null, out var model);
+            _parser.TryParse(_line, default, out var model);
             return model;
         }
 
         [Benchmark]
         public SampleModel Parse_WithStringPool()
         {
-            _parser.TryParse(Line, Culture, _stringPool, out var model);
+            _parser.TryParse(_line, _pooled, out var model);
             return model;
         }
     }

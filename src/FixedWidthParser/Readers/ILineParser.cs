@@ -1,54 +1,47 @@
-using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Parsers;
 
 namespace FixedWidthParser.Readers
 {
     /// <summary>
-    /// Element-type-generic parser strategy used by the shared record enumerator cores.
+    /// Parse strategy the record enumerators are specialized by. Implemented by
+    /// <see langword="struct"/> types so the JIT monomorphizes each <c>(TModel, TParser)</c> pair and
+    /// devirtualizes <see cref="TryParse"/> into a direct call. Public only because it appears in the
+    /// enumerator types; the library is its only implementer.
     /// </summary>
-    public interface IRecordLineParser<T, TModel> where T : unmanaged
+    public interface IRecordLineParser<TModel>
     {
         /// <summary>Parses a buffered line into a model.</summary>
-        bool TryParse(ReadOnlySpan<T> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model);
+        bool TryParse(ReadOnlySpan<byte> line, in FixedWidthContext context, out TModel model);
     }
 
-    /// <summary>
-    /// Strategy that parses a single fixed-width line into a <typeparamref name="TModel"/>.
-    /// Implemented by <see langword="struct"/> types so the shared enumerator cores can be
-    /// specialized per strategy: a <c>struct</c> type argument lets the JIT monomorphize each
-    /// <c>(TModel, TParser)</c> pair and devirtualize <see cref="TryParse"/> into a direct call —
-    /// no delegate, no boxing, no virtual dispatch on the hot path.
-    /// </summary>
-    public interface ILineParser<TModel>
-    {
-        /// <inheritdoc cref="IFixedWidthModel{TSelf}.TryParse"/>
-        bool TryParse(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model);
-    }
-
-    // Strategy structs are plumbing for the generic enumerator cores; they are never compared, so
+    // Strategy structs are plumbing for the generic enumerators; they are never compared, so
     // value equality is meaningless for them.
 #pragma warning disable CA1815 // Override equals and operator equals on value types
-    /// <summary>
-    /// Reflection-based parse strategy: forwards to a runtime <see cref="FixedWidthParser{TModel}"/>.
-    /// </summary>
-    public readonly struct ReflectionLineParser<TModel>(FixedWidthParser<TModel> parser) : ILineParser<TModel>, IRecordLineParser<char, TModel> where TModel : new()
+    /// <summary>Reflection-based parse strategy: forwards to a runtime <see cref="FixedWidthParser{TModel}"/>.</summary>
+    public readonly struct ReflectionLineParser<TModel> : IRecordLineParser<TModel> where TModel : new()
     {
-        public bool TryParse(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
+        private readonly FixedWidthParser<TModel> _parser;
+
+        internal ReflectionLineParser(FixedWidthParser<TModel> parser)
         {
-            return parser.TryParse(line, formatProvider, stringPool, out model);
+            _parser = parser;
+        }
+
+        /// <inheritdoc />
+        public bool TryParse(ReadOnlySpan<byte> line, in FixedWidthContext context, out TModel model)
+        {
+            return _parser.TryParse(line, in context, out model);
         }
     }
 
-    /// <summary>
-    /// Source-generated parse strategy: forwards to the model's static
-    /// <see cref="IFixedWidthModel{TSelf}.TryParse"/>, avoiding reflection and delegates.
-    /// </summary>
-    public readonly struct GeneratedLineParser<TModel> : ILineParser<TModel>, IRecordLineParser<char, TModel> where TModel : IFixedWidthModel<TModel>
+    /// <summary>Source-generated parse strategy: forwards to the model's static <see cref="IFixedWidthModel{TSelf}.TryParse"/>.</summary>
+    public readonly struct GeneratedLineParser<TModel> : IRecordLineParser<TModel> where TModel : IFixedWidthModel<TModel>
     {
-        public bool TryParse(ReadOnlySpan<char> line, IFormatProvider? formatProvider, StringPool? stringPool, out TModel model)
+        /// <inheritdoc />
+        public bool TryParse(ReadOnlySpan<byte> line, in FixedWidthContext context, out TModel model)
         {
-            return TModel.TryParse(line, formatProvider, stringPool, out model);
+            return TModel.TryParse(line, in context, out model);
         }
     }
-#pragma warning restore CA1815 // Override equals and operator equals on value types
+#pragma warning restore CA1815
 }

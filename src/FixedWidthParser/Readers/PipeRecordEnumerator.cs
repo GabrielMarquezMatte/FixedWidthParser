@@ -1,36 +1,27 @@
 using System.Buffers;
 using System.IO.Pipelines;
-using System.Text;
-using CommunityToolkit.HighPerformance.Buffers;
 
 namespace FixedWidthParser.Readers
 {
     /// <summary>
-    /// <see cref="PipeReader"/>-based counterpart of
-    /// <see cref="AsyncRecordEnumeratorCore{T, TFormat, TModel, TParser, TSource}"/>: parses fixed-width records from a
-    /// <see cref="PipeReader"/>, letting the pipe own buffering and read-ahead instead of the manual
-    /// pooled <see cref="LineBufferState{T, TFormat}"/> the stream cores use. Lines are split out of the
-    /// <see cref="ReadOnlySequence{T}"/> with a <see cref="SequenceReader{T}"/>; a line is parsed in place
-    /// from its <see cref="ReadOnlySequence{T}.FirstSpan"/> when it sits in a single segment, and copied
-    /// into a pooled scratch buffer only when it straddles segment boundaries (the parser needs a
-    /// contiguous span). Specialized by a <see langword="struct"/> <typeparamref name="TParser"/> strategy
-    /// so parsing devirtualizes, exactly like the stream cores.
-    /// <para>
-    /// Line semantics match the stream path: a leading UTF-8 BOM is skipped once, lines split on
-    /// <c>\n</c> (a preceding <c>\r</c> is dropped), empty lines are counted but not yielded, and a final
-    /// line without a trailing newline is yielded.
-    /// </para>
+    /// <see cref="PipeReader"/>-based counterpart of <see cref="AsyncRecordEnumerator{TModel, TParser}"/>:
+    /// lets the pipe own buffering and read-ahead. A line is parsed in place when it sits in a single
+    /// segment, and copied into a pooled scratch buffer only when it straddles segments. Line semantics
+    /// match the stream path: a UTF-8 byte order mark is skipped once, lines split on <c>\n</c> (a
+    /// preceding <c>\r</c> is dropped), empty lines are counted but not yielded, and a final line without
+    /// a line break is yielded.
     /// </summary>
-    public sealed class Utf8PipeRecordEnumeratorCore<TModel, TParser> : IAsyncEnumerator<TModel>
-        where TParser : struct, IUtf8LineParser<TModel>
+    public sealed class PipeRecordEnumerator<TModel, TParser> : IAsyncEnumerator<TModel>
+        where TParser : struct, IRecordLineParser<TModel>
     {
         private const byte Cr = (byte)'\r';
         private const byte Lf = (byte)'\n';
 
-        private readonly TParser _strategy;
+        private readonly TParser _parser;
         private readonly bool _completeReader;
-        private readonly IFormatProvider? _formatProvider;
-        private readonly StringPool? _stringPool;
+        private readonly FixedWidthContext _context;
+        private readonly Func<FixedWidthParseException, bool>? _onParseError;
+        private readonly int _maxLineLength;
         private readonly CancellationToken _cancellationToken;
         private PipeReader? _reader;
         private byte[]? _scratch;
@@ -38,35 +29,32 @@ namespace FixedWidthParser.Readers
         private bool _preambleChecked;
         private TModel _current;
 
-        // Stateful PipeReader tracking (PERF-B)
         private ReadResult _currentResult;
         private bool _hasResult;
         private SequencePosition _consumed;
         private SequencePosition _examined;
         private long _scannedBytes;
 
-        internal Utf8PipeRecordEnumeratorCore(
-            TParser strategy,
-            PipeReader reader,
-            bool completeReader,
-            IFormatProvider? formatProvider,
-            StringPool? stringPool,
-            CancellationToken cancellationToken)
+        internal PipeRecordEnumerator(TParser parser, PipeReader reader, bool completeReader, FixedWidthReaderOptions options, CancellationToken cancellationToken)
         {
-            _strategy = strategy;
+            _parser = parser;
             _reader = reader;
             _completeReader = completeReader;
-            _formatProvider = formatProvider;
-            _stringPool = stringPool;
+            _context = options.Context;
+            _onParseError = options.OnParseError;
+            _maxLineLength = options.MaxLineLength;
+            _preambleChecked = !options.SkipsByteOrderMark;
             _cancellationToken = cancellationToken;
             _current = default!;
         }
 
+        /// <inheritdoc />
         public TModel Current => _current;
 
+        /// <inheritdoc />
         public async ValueTask<bool> MoveNextAsync()
         {
-            ObjectDisposedException.ThrowIf(_reader is null, nameof(Utf8PipeRecordEnumeratorCore<,>));
+            ObjectDisposedException.ThrowIf(_reader is null, nameof(PipeRecordEnumerator<,>));
             var reader = _reader;
 
             try
@@ -83,20 +71,16 @@ namespace FixedWidthParser.Readers
                             throw new OperationCanceledException(_cancellationToken);
                         }
                         _hasResult = true;
-
-                        // Reset positions to point to the start of the new buffer (which corresponds to previous _consumed)
                         _consumed = _currentResult.Buffer.Start;
                         _examined = _currentResult.Buffer.Start;
                     }
 
                     var status = TryReadFromResult(out _consumed, out _examined);
-
                     if (status == LineStatus.Line)
                     {
                         return true;
                     }
 
-                    // Before reading more data or returning false at the end, advance the reader
                     reader.AdvanceTo(_consumed, _examined);
                     _hasResult = false;
 
@@ -128,16 +112,15 @@ namespace FixedWidthParser.Readers
                 {
                     Span<byte> head = stackalloc byte[3];
                     buffer.Slice(0, 3).CopyTo(head);
-                    int skip = head is [0xEF, 0xBB, 0xBF] ? 3 : 0;
-                    if (skip > 0)
+                    if (head is [0xEF, 0xBB, 0xBF])
                     {
-                        _consumed = buffer.GetPosition(skip);
+                        _consumed = buffer.GetPosition(3);
                     }
                     _preambleChecked = true;
                 }
                 else if (isCompleted)
                 {
-                    _preambleChecked = true; // too short to hold a BOM; no preamble
+                    _preambleChecked = true;
                 }
                 else
                 {
@@ -157,16 +140,14 @@ namespace FixedWidthParser.Readers
                 {
                     _lineNumber++;
                     var positionOfLf = remaining.GetPosition(seqReader.Consumed - 1, scanStart);
-                    var scopeLine = TrimTrailingCr(remaining.Slice(0, positionOfLf));
-
+                    var line = TrimTrailingCr(remaining.Slice(0, positionOfLf));
                     var nextPosition = remaining.GetPosition(seqReader.Consumed, scanStart);
                     _consumed = nextPosition;
                     _examined = nextPosition;
                     _scannedBytes = 0;
 
-                    if (!scopeLine.IsEmpty)
+                    if (!line.IsEmpty && Parse(in line))
                     {
-                        Parse(in scopeLine);
                         consumed = _consumed;
                         examined = _consumed;
                         return LineStatus.Line;
@@ -176,6 +157,11 @@ namespace FixedWidthParser.Readers
 
                 if (!isCompleted)
                 {
+                    // An unterminated line longer than the limit (+1 for its '\r') can never become valid.
+                    if (remaining.Length > _maxLineLength + 1L)
+                    {
+                        throw ParseErrors.LineTooLong(_lineNumber + 1, _maxLineLength);
+                    }
                     _scannedBytes = remaining.Length;
                     consumed = _consumed;
                     examined = buffer.End;
@@ -184,36 +170,29 @@ namespace FixedWidthParser.Readers
 
                 consumed = buffer.End;
                 examined = buffer.End;
-                if (remaining.Length <= 0)
-                {
-                    _consumed = buffer.End;
-                    _examined = buffer.End;
-                    _scannedBytes = 0;
-                    return LineStatus.End;
-                }
-                _lineNumber++;
-                var line = TrimTrailingCr(in remaining);
-                if (!line.IsEmpty)
-                {
-                    _consumed = buffer.End;
-                    _examined = buffer.End;
-                    _scannedBytes = 0;
-                    Parse(in line);
-                    return LineStatus.Line;
-                }
                 _consumed = buffer.End;
                 _examined = buffer.End;
                 _scannedBytes = 0;
-                return LineStatus.End;
+                if (remaining.Length <= 0)
+                {
+                    return LineStatus.End;
+                }
+                _lineNumber++;
+                var last = TrimTrailingCr(in remaining);
+                return !last.IsEmpty && Parse(in last) ? LineStatus.Line : LineStatus.End;
             }
         }
 
-        private void Parse(in ReadOnlySequence<byte> line)
+        // Returns false when the line failed to parse and OnParseError asked to skip it.
+        private bool Parse(in ReadOnlySequence<byte> line)
         {
+            if (line.Length > _maxLineLength)
+            {
+                throw ParseErrors.LineTooLong(_lineNumber, _maxLineLength);
+            }
             if (line.IsSingleSegment)
             {
-                ParseSpan(line.FirstSpan);
-                return;
+                return ParseSpan(line.FirstSpan);
             }
 
             int length = (int)line.Length;
@@ -228,16 +207,17 @@ namespace FixedWidthParser.Readers
                 _scratch = ArrayPool<byte>.Shared.Rent(length);
             }
             line.CopyTo(_scratch);
-            ParseSpan(_scratch.AsSpan(0, length));
+            return ParseSpan(_scratch.AsSpan(0, length));
         }
 
-        private void ParseSpan(ReadOnlySpan<byte> line)
+        private bool ParseSpan(ReadOnlySpan<byte> line)
         {
-            if (!_strategy.TryParse(line, _formatProvider, _stringPool, out _current))
+            if (_parser.TryParse(line, in _context, out _current))
             {
-                throw new FormatException(
-                    $"Line {_lineNumber} could not be parsed into {typeof(TModel).Name}: \"{Encoding.UTF8.GetString(line)}\".");
+                return true;
             }
+            ParseErrors.HandleFailure<TModel, TParser>(_parser, line, _lineNumber, in _context, _onParseError);
+            return false;
         }
 
         private static ReadOnlySequence<byte> TrimTrailingCr(in ReadOnlySequence<byte> line)
@@ -251,6 +231,7 @@ namespace FixedWidthParser.Readers
             return last == Cr ? line.Slice(0, length - 1) : line;
         }
 
+        /// <inheritdoc />
         public async ValueTask DisposeAsync()
         {
             if (_scratch is not null)

@@ -1,4 +1,3 @@
-using System.Text;
 using FixedWidthParser.Parsers;
 using FixedWidthParser.Writers;
 using static FixedWidthParser.Tests.TestHelpers;
@@ -8,156 +7,77 @@ namespace FixedWidthParser.Tests
     public class CorrectnessTests
     {
         [Fact]
-        public void DateTimeExact_RoundTrip_AllPaths()
+        public void DateTimeExact_RoundTrip_BothPaths()
         {
             var date = new DateTime(2026, 7, 16, 0, 0, 0, DateTimeKind.Unspecified);
             var dateOnly = new DateOnly(2026, 7, 16);
             const string input = "2026071620260716";
 
-            // 1. Reflection Char
-            var pChar = new FixedWidthParser<DateTimeExactModel>();
-            Assert.True(pChar.TryParse(input, Inv, null, out var model1));
-            Assert.Equal(date, model1.Date);
-            Assert.Equal(dateOnly, model1.DateOnlyVal);
+            var parser = new FixedWidthParser<DateTimeExactModel>();
+            Assert.True(parser.TryParse(Bytes(input), Ctx, out var reflected));
+            Assert.Equal(date, reflected.Date);
+            Assert.Equal(dateOnly, reflected.DateOnlyVal);
+            Assert.Equal(input, WriteOne(new FixedWidthWriter<DateTimeExactModel>(), reflected));
 
-            var wChar = new FixedWidthWriter<DateTimeExactModel>();
-            using (var ms = new MemoryStream())
-            using (var sw = new StreamWriter(ms, new UTF8Encoding(false), leaveOpen: true))
-            {
-                wChar.Write(sw, in model1, Inv);
-                sw.Flush();
-                Assert.Equal(input + Environment.NewLine, Encoding.UTF8.GetString(ms.ToArray()));
-            }
-
-            // 2. Reflection Utf8
-            var pUtf8 = new Utf8FixedWidthParser<DateTimeExactModel>();
-            var bytes = "2026071620260716"u8;
-            Assert.True(pUtf8.TryParse(bytes, Inv, null, out var model2));
-            Assert.Equal(date, model2.Date);
-            Assert.Equal(dateOnly, model2.DateOnlyVal);
-
-            // 3. Generated Char
-            Assert.True(FixedWidth.TryParse<GenDateTimeExactModel>(input, Inv, null, out var model3));
-            Assert.Equal(date, model3.Date);
-            Assert.Equal(dateOnly, model3.DateOnlyVal);
-
-            Span<char> charDest = stackalloc char[16];
-            Assert.True(FixedWidth.TryFormat(model3, charDest, Inv, out int cw));
-            Assert.Equal(16, cw);
-            Assert.Equal(input, charDest.ToString());
-
-            // 4. Generated Utf8
-            Assert.True(FixedWidthUtf8.TryParse<GenDateTimeExactModel>(bytes, Inv, null, out var model4));
-            Assert.Equal(date, model4.Date);
-            Assert.Equal(dateOnly, model4.DateOnlyVal);
+            Assert.True(FixedWidth.TryParse<GenDateTimeExactModel>(Bytes(input), Ctx, out var generated));
+            Assert.Equal(date, generated.Date);
+            Assert.Equal(dateOnly, generated.DateOnlyVal);
+            Assert.Equal(input, Format(generated));
         }
 
         [Fact]
         public void ZeroPadded_Leading_TrimMode()
         {
-            const string input = "0004203.14";
-            var bytes = "0004203.14"u8;
+            var parser = new FixedWidthParser<ZeroPaddedLeadingModel>();
+            Assert.True(parser.TryParse("0004203.14"u8, Ctx, out var reflected));
+            Assert.Equal(42, reflected.Value);
+            Assert.Equal(3.14, reflected.DoubleValue);
 
-            // 1. Reflection Char
-            var pChar = new FixedWidthParser<ZeroPaddedLeadingModel>();
-            Assert.True(pChar.TryParse(input, Inv, null, out var model1));
-            Assert.Equal(42, model1.Value);
-            Assert.Equal(3.14, model1.DoubleValue);
-
-            // 2. Reflection Utf8
-            var pUtf8 = new Utf8FixedWidthParser<ZeroPaddedLeadingModel>();
-            Assert.True(pUtf8.TryParse(bytes, Inv, null, out var model2));
-            Assert.Equal(42, model2.Value);
-            Assert.Equal(3.14, model2.DoubleValue);
-
-            // 3. Generated Char
-            Assert.True(FixedWidth.TryParse<GenZeroPaddedLeadingModel>(input, Inv, null, out var model3));
-            Assert.Equal(42, model3.Value);
-            Assert.Equal(3.14, model3.DoubleValue);
-
-            // 4. Generated Utf8
-            Assert.True(FixedWidthUtf8.TryParse<GenZeroPaddedLeadingModel>(bytes, Inv, null, out var model4));
-            Assert.Equal(42, model4.Value);
-            Assert.Equal(3.14, model4.DoubleValue);
+            Assert.True(FixedWidth.TryParse<GenZeroPaddedLeadingModel>("0004203.14"u8, Ctx, out var generated));
+            Assert.Equal(42, generated.Value);
+            Assert.Equal(3.14, generated.DoubleValue);
         }
 
         [Fact]
         public void ZeroPadded_Both_TrimMode()
         {
-            const string input = "00420";
-            // 1. Reflection Char
-            var pChar = new FixedWidthParser<ZeroPaddedBothModel>();
-            Assert.True(pChar.TryParse(input, Inv, null, out var model1));
-            Assert.Equal(42, model1.Value);
+            Assert.True(new FixedWidthParser<ZeroPaddedBothModel>().TryParse("00420"u8, Ctx, out var reflected));
+            Assert.Equal(42, reflected.Value);
 
-            // 2. Generated Char
-            Assert.True(FixedWidth.TryParse<GenZeroPaddedBothModel>(input, Inv, null, out var model3));
-            Assert.Equal(42, model3.Value);
+            Assert.True(FixedWidth.TryParse<GenZeroPaddedBothModel>("00420"u8, Ctx, out var generated));
+            Assert.Equal(42, generated.Value);
         }
 
         [Fact]
         public void Nullable_BlankDetection_WithCustomTrimChar()
         {
-            // Nullable model with custom TrimChar: should detect spaces or custom TrimChar as null
-            const string inputSpace = "          ";
-            const string inputZeroAsterisk = "00000*****";
+            const string spaces = "          ";
+            const string padded = "00000*****";
 
-            // 1. Reflection Char
-            var pChar = new FixedWidthParser<NullablePaddingModel>();
-            Assert.True(pChar.TryParse(inputSpace, Inv, null, out var model1));
-            Assert.Null(model1.Value);
-            Assert.Null(model1.DoubleValue);
+            var parser = new FixedWidthParser<NullablePaddingModel>();
+            Assert.True(parser.TryParse(Bytes(spaces), Ctx, out var fromSpaces));
+            Assert.Null(fromSpaces.Value);
+            Assert.Null(fromSpaces.DoubleValue);
+            Assert.True(parser.TryParse(Bytes(padded), Ctx, out var fromPadding));
+            Assert.Null(fromPadding.Value);
+            Assert.Null(fromPadding.DoubleValue);
+            Assert.Equal(padded, WriteOne(new FixedWidthWriter<NullablePaddingModel>(), fromPadding));
 
-            Assert.True(pChar.TryParse(inputZeroAsterisk, Inv, null, out var model2));
-            Assert.Null(model2.Value);
-            Assert.Null(model2.DoubleValue);
-
-            var wChar = new FixedWidthWriter<NullablePaddingModel>();
-            using (var ms = new MemoryStream())
-            using (var sw = new StreamWriter(ms, new UTF8Encoding(false), leaveOpen: true))
-            {
-                wChar.Write(sw, in model2, Inv);
-                sw.Flush();
-                Assert.Equal(inputZeroAsterisk + Environment.NewLine, Encoding.UTF8.GetString(ms.ToArray()));
-            }
-
-            // 2. Generated Char
-            Assert.True(FixedWidth.TryParse<GenNullablePaddingModel>(inputSpace, Inv, null, out var model3));
-            Assert.Null(model3.Value);
-            Assert.Null(model3.DoubleValue);
-
-            Assert.True(FixedWidth.TryParse<GenNullablePaddingModel>(inputZeroAsterisk, Inv, null, out var model4));
-            Assert.Null(model4.Value);
-            Assert.Null(model4.DoubleValue);
-
-            Span<char> charDest = stackalloc char[10];
-            Assert.True(FixedWidth.TryFormat(model4, charDest, Inv, out int cw));
-            Assert.Equal(10, cw);
-            Assert.Equal(inputZeroAsterisk, charDest.ToString());
+            Assert.True(FixedWidth.TryParse<GenNullablePaddingModel>(Bytes(spaces), Ctx, out var generatedSpaces));
+            Assert.Null(generatedSpaces.Value);
+            Assert.Null(generatedSpaces.DoubleValue);
+            Assert.True(FixedWidth.TryParse<GenNullablePaddingModel>(Bytes(padded), Ctx, out var generatedPadding));
+            Assert.Null(generatedPadding.Value);
+            Assert.Equal(padded, Format(generatedPadding));
         }
 
         [Fact]
         public void SignAware_ZeroPadding()
         {
-            var modelNegative = new SignPaddedModel { Value = -42 };
-            var modelPositive = new SignPaddedModel { Value = 42 };
-
             var writer = new FixedWidthWriter<SignPaddedModel>();
-            using (var ms = new MemoryStream())
-            using (var sw = new StreamWriter(ms, new UTF8Encoding(false), leaveOpen: true))
-            {
-                writer.Write(sw, in modelNegative, Inv);
-                sw.Flush();
-                Assert.Equal("-00042" + Environment.NewLine, Encoding.UTF8.GetString(ms.ToArray()));
-            }
 
-            using (var ms = new MemoryStream())
-            using (var sw = new StreamWriter(ms, new UTF8Encoding(false), leaveOpen: true))
-            {
-                writer.Write(sw, in modelPositive, Inv);
-                sw.Flush();
-                Assert.Equal("000042" + Environment.NewLine, Encoding.UTF8.GetString(ms.ToArray())); // Default int doesn't format with +, so just zero pad
-            }
+            Assert.Equal("-00042", WriteOne(writer, new SignPaddedModel { Value = -42 }));
+            Assert.Equal("000042", WriteOne(writer, new SignPaddedModel { Value = 42 }));
         }
 
         [Fact]

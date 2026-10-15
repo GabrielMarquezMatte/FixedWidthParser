@@ -45,10 +45,24 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
-        public void Utf8Parser_NoColumns_ThrowsOnConstruction()
+        public void Parser_NonAsciiTrimChar_ThrowsOnConstruction()
         {
-            var ex = Assert.Throws<InvalidOperationException>(() => new Utf8FixedWidthParser<NoColumnsModel>());
-            Assert.Contains("no [FixedColumn]", ex.Message, StringComparison.Ordinal);
+            var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthParser<NonAsciiTrimModel>());
+            Assert.Contains("TrimChar", ex.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Writer_NonAsciiPadding_ThrowsOnConstruction()
+        {
+            var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthWriter<NonAsciiPaddingModel>());
+            Assert.Contains("Padding", ex.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Parser_UnsupportedColumnType_ThrowsOnConstruction()
+        {
+            var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthParser<UnsupportedTypeModel>());
+            Assert.Contains("Converter", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]

@@ -5,142 +5,39 @@ using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
 {
+    /// <summary>
+    /// The <see cref="FixedWidth"/> read methods for generated models, sync and async, and their
+    /// parity with the reflection <see cref="FixedWidthReader{TModel}"/>.
+    /// </summary>
     public class GeneratedReaderTests
     {
         private const string TwoPeople =
             "John Doe  30   60000.00  \n" +
             "Jane      28   55000.00  ";
 
-        private static MemoryStream Utf8(string text)
-        {
-            return new(Encoding.UTF8.GetBytes(text));
-        }
-
-        // ----------------------------- Stream overloads – sync -----------------------------
-
         [Fact]
         public void Read_Stream_ParsesAll()
         {
-            using var stream = Utf8(TwoPeople);
-
-            var people = FixedWidth.Read<GenPersonModel>(stream, formatProvider: Inv).ToList();
+            var people = FixedWidth.Read<GenPersonModel>(StreamOf(TwoPeople)).ToList();
 
             Assert.Equal(2, people.Count);
             Assert.Equal("John Doe", people[0].Name);
+            Assert.Equal(30, people[0].Age);
             Assert.Equal("Jane", people[1].Name);
             Assert.Equal(55000.00, people[1].Salary, 2);
         }
 
         [Fact]
-        public void Read_Stream_CustomEncoding_IsHonored()
+        public void Read_StructEnumerator_IteratesManually()
         {
-            using var stream = new MemoryStream(Encoding.Latin1.GetBytes("Áb \nCDé\n"));
+            using var enumerator = FixedWidth.Read<GenPersonModel>(StreamOf(TwoPeople)).GetEnumerator();
+            var names = new List<string>();
+            while (enumerator.MoveNext())
+            {
+                names.Add(enumerator.Current.Name);
+            }
 
-            var codes = FixedWidth.Read<GenCodeModel>(stream, encoding: Encoding.Latin1)
-                .Select(m => m.Code)
-                .ToList();
-
-            Assert.Equal(["Áb", "CDé"], codes);
-        }
-
-        [Fact]
-        public void Read_Stream_LeaveOpenTrue_KeepsStreamOpen()
-        {
-            using var stream = Utf8("ABC\nDEF\n");
-
-            _ = FixedWidth.Read<GenCodeModel>(stream, leaveOpen: true).ToList();
-
-            Assert.True(stream.CanRead);
-        }
-
-        [Fact]
-        public void Read_Stream_LeaveOpenFalse_DisposesStream()
-        {
-            var stream = Utf8("ABC\nDEF\n");
-
-            _ = FixedWidth.Read<GenCodeModel>(stream).ToList(); // default leaveOpen: false
-
-            Assert.False(stream.CanRead);
-        }
-
-        [Fact]
-        public void Read_Stream_NullStream_Throws()
-        {
-            Assert.Throws<ArgumentNullException>(() => FixedWidth.Read<GenCodeModel>((Stream)null!));
-        }
-
-        // ----------------------------- Stream overloads – async -----------------------------
-
-        [Fact]
-        public async Task ReadAsync_Stream_ParsesAll()
-        {
-            await using var stream = Utf8(TwoPeople);
-
-            var people = await FixedWidth.ReadAsync<GenPersonModel>(stream, formatProvider: Inv).ToListAsync().ConfigureAwait(true);
-
-            Assert.Equal(2, people.Count);
-            Assert.Equal("John Doe", people[0].Name);
-            Assert.Equal("Jane", people[1].Name);
-            Assert.Equal(55000.00, people[1].Salary, 2);
-        }
-
-        [Fact]
-        public async Task ReadAsync_Stream_CustomEncoding_IsHonored()
-        {
-            await using var stream = new MemoryStream(Encoding.Latin1.GetBytes("Áb \nCDé\n"));
-
-            var codes = await FixedWidth.ReadAsync<GenCodeModel>(stream, encoding: Encoding.Latin1)
-                .Select(m => m.Code)
-                .ToListAsync().ConfigureAwait(true);
-
-            Assert.Equal(["Áb", "CDé"], codes);
-        }
-
-        [Fact]
-        public async Task ReadAsync_Stream_LeaveOpenTrue_KeepsStreamOpen()
-        {
-            await using var stream = Utf8("ABC\nDEF\n");
-
-            _ = await FixedWidth.ReadAsync<GenCodeModel>(stream, leaveOpen: true).ToListAsync().ConfigureAwait(true);
-
-            Assert.True(stream.CanRead);
-        }
-
-        [Fact]
-        public async Task ReadAsync_Stream_LeaveOpenFalse_DisposesStream()
-        {
-            var stream = Utf8("ABC\nDEF\n");
-
-            _ = await FixedWidth.ReadAsync<GenCodeModel>(stream).ToListAsync().ConfigureAwait(true); // default leaveOpen: false
-
-            Assert.False(stream.CanRead);
-        }
-
-        [Fact]
-        public void ReadAsync_Stream_NullStream_Throws()
-        {
-            Assert.Throws<ArgumentNullException>(() => FixedWidth.ReadAsync<GenCodeModel>((Stream)null!));
-        }
-
-        // ----------------------------- TextReader overloads -----------------------------
-
-        [Fact]
-        public void Read_MultipleLines_MatchesReflectionReader()
-        {
-            var reflection = new FixedWidthReader<PersonModel>(Inv);
-
-            var expected = reflection.Read(new StringReader(TwoPeople)).ToList();
-            var actual = FixedWidth.Read<GenPersonModel>(
-                new StringReader(TwoPeople),
-                formatProvider: Inv).ToList();
-
-            Assert.Equal(expected.Count, actual.Count);
-            Assert.Equal(expected[0].Name, actual[0].Name);
-            Assert.Equal(expected[0].Age, actual[0].Age);
-            Assert.Equal(expected[0].Salary, actual[0].Salary, 2);
-            Assert.Equal(expected[1].Name, actual[1].Name);
-            Assert.Equal(expected[1].Age, actual[1].Age);
-            Assert.Equal(expected[1].Salary, actual[1].Salary, 2);
+            Assert.Equal(["John Doe", "Jane"], names);
         }
 
         [Theory]
@@ -149,33 +46,41 @@ namespace FixedWidthParser.Tests
         [InlineData("ABC\nDEF")]
         public void Read_HandlesLineEndingsAndTrailingNewline(string text)
         {
-            var codes = FixedWidth.Read<GenCodeModel>(new StringReader(text))
-                .Select(m => m.Code)
-                .ToList();
+            var codes = FixedWidth.Read<GenCodeModel>(StreamOf(text)).Select(m => m.Code).ToList();
 
             Assert.Equal(["ABC", "DEF"], codes);
         }
 
         [Fact]
-        public void Read_SkipsEmptyLines()
+        public void Read_SkipsEmptyLinesAndBom()
         {
-            var codes = FixedWidth.Read<GenCodeModel>(new StringReader("ABC\n\n\nDEF\n"))
+            byte[] bytes = [0xEF, 0xBB, 0xBF, .. "ABC\n\n\nDEF\n"u8];
+
+            var codes = FixedWidth.Read<GenCodeModel>(new MemoryStream(bytes)).Select(m => m.Code).ToList();
+
+            Assert.Equal(["ABC", "DEF"], codes);
+        }
+
+        [Fact]
+        public void Read_Latin1_DecodesStringsAndKeepsBytePositions()
+        {
+            // 'Á' and 'é' are one byte each in Latin-1, so the 3-byte column holds three characters.
+            var options = new FixedWidthReaderOptions { Encoding = Encoding.Latin1 };
+
+            var codes = FixedWidth.Read<GenCodeModel>(new MemoryStream(Encoding.Latin1.GetBytes("Áb \nCDé\n")), options: options)
                 .Select(m => m.Code)
                 .ToList();
 
-            Assert.Equal(["ABC", "DEF"], codes);
+            Assert.Equal(["Áb", "CDé"], codes);
         }
 
         [Fact]
         public void Read_LineLongerThanBuffer_MatchesReflectionReader()
         {
-            var reflection = new FixedWidthReader<PersonModel>(Inv, bufferSize: 4);
+            var options = new FixedWidthReaderOptions { BufferSize = 4 };
 
-            var expected = reflection.Read(new StringReader(TwoPeople)).ToList();
-            var actual = FixedWidth.Read<GenPersonModel>(
-                new StringReader(TwoPeople),
-                formatProvider: Inv,
-                bufferSize: 4).ToList();
+            var expected = new FixedWidthReader<PersonModel>(options).Read(StreamOf(TwoPeople)).ToList();
+            var actual = FixedWidth.Read<GenPersonModel>(StreamOf(TwoPeople), options: options).ToList();
 
             Assert.Equal(expected[0].Name, actual[0].Name);
             Assert.Equal(expected[1].Name, actual[1].Name);
@@ -183,45 +88,53 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
-        public void Read_InvalidLine_ThrowsWithSameLineNumber()
+        public void Read_InvalidLine_ThrowsSameErrorAsReflectionReader()
         {
-            var reflection = new FixedWidthReader<PersonModel>(Inv);
-            var text = "John Doe  30   60000.00  \nJane      XX   55000.00  ";
+            const string text = "John Doe  30   60000.00  \nJane      XX   55000.00  ";
 
-            var expected = Assert.Throws<FormatException>(
-                () => reflection.Read(new StringReader(text)).ToList());
-            var actual = Assert.Throws<FormatException>(
-                () => FixedWidth.Read<GenPersonModel>(new StringReader(text), formatProvider: Inv).ToList());
+            var expected = Assert.Throws<FixedWidthParseException>(() => new FixedWidthReader<PersonModel>().Read(StreamOf(text)).ToList());
+            var actual = Assert.Throws<FixedWidthParseException>(() => FixedWidth.Read<GenPersonModel>(StreamOf(text)).ToList());
 
-            Assert.Contains("Line 2", expected.Message, StringComparison.Ordinal);
-            Assert.Contains("Line 2", actual.Message, StringComparison.Ordinal);
+            Assert.Equal(expected.LineNumber, actual.LineNumber);
+            Assert.Equal(expected.ColumnName, actual.ColumnName);
+            Assert.Equal(expected.RawValue, actual.RawValue);
+        }
+
+        [Fact]
+        public void Read_LeaveOpen_ControlsDisposal()
+        {
+            using var kept = StreamOf("ABC\n");
+            var owned = StreamOf("ABC\n");
+
+            _ = FixedWidth.Read<GenCodeModel>(kept, leaveOpen: true).ToList();
+            _ = FixedWidth.Read<GenCodeModel>(owned).ToList();
+
+            Assert.True(kept.CanRead);
+            Assert.False(owned.CanRead);
+        }
+
+        [Fact]
+        public void Read_NullArguments_Throw()
+        {
+            Assert.Throws<ArgumentNullException>(() => FixedWidth.Read<GenCodeModel>(null!));
+            Assert.Throws<ArgumentNullException>(() => FixedWidth.ReadAsync<GenCodeModel>((Stream)null!));
+            Assert.Throws<ArgumentException>(() => FixedWidth.ReadFile<GenCodeModel>(""));
         }
 
         [Fact]
         public void Read_WithStringPool_InternsRepeatedValues()
         {
-            var pool = new StringPool();
+            var options = new FixedWidthReaderOptions { StringPool = new StringPool() };
 
-            var codes = FixedWidth.Read<GenCodeModel>(
-                new StringReader("ABC\nABC\n"),
-                stringPool: pool).ToList();
+            var codes = FixedWidth.Read<GenCodeModel>(StreamOf("ABC\nABC\n"), options: options).ToList();
 
-            Assert.Equal("ABC", codes[0].Code);
             Assert.Same(codes[0].Code, codes[1].Code);
         }
 
         [Fact]
         public void GetEnumerator_IsStruct_ForAllocationFreeForeach()
         {
-            Assert.True(typeof(RecordEnumeratorCore<char, CharLineFormat, GenCodeModel, GeneratedLineParser<GenCodeModel>, TextReaderSource>).IsValueType);
-
-            int count = 0;
-            foreach (var _ in FixedWidth.Read<GenCodeModel>(new StringReader("ABC\nDEF\n")))
-            {
-                count++;
-            }
-
-            Assert.Equal(2, count);
+            Assert.True(typeof(RecordEnumerator<GenCodeModel, GeneratedLineParser<GenCodeModel>>).IsValueType);
         }
 
         [Fact]
@@ -245,54 +158,41 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
-        public async Task ReadAsync_MultipleLines_MatchesReflectionReader()
+        public async Task ReadAsync_MatchesReflectionReader()
         {
-            var reflection = new FixedWidthReader<PersonModel>(Inv);
-            var expected = await reflection.ReadAsync(new StringReader(TwoPeople)).ToListAsync().ConfigureAwait(true);
-            var actual = await FixedWidth.ReadAsync<GenPersonModel>(
-                new StringReader(TwoPeople),
-                formatProvider: Inv).ToListAsync().ConfigureAwait(true);
+            var expected = await new FixedWidthReader<PersonModel>().ReadAsync(StreamOf(TwoPeople)).ToListAsync(TestContext.Current.CancellationToken);
+            var actual = await FixedWidth.ReadAsync<GenPersonModel>(StreamOf(TwoPeople)).ToListAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(expected.Count, actual.Count);
-            Assert.Equal(expected[0].Name, actual[0].Name);
-            Assert.Equal(expected[0].Age, actual[0].Age);
             Assert.Equal(expected[1].Name, actual[1].Name);
             Assert.Equal(expected[1].Salary, actual[1].Salary, 2);
         }
 
         [Fact]
-        public async Task ReadAsync_LineLongerThanBuffer_MatchesReflectionReader()
+        public async Task ReadAsync_LeaveOpen_ControlsDisposal()
         {
-            var reflection = new FixedWidthReader<PersonModel>(Inv, bufferSize: 4);
-            var expected = await reflection.ReadAsync(new StringReader(TwoPeople)).ToListAsync().ConfigureAwait(true);
-            var actual = await FixedWidth.ReadAsync<GenPersonModel>(
-                new StringReader(TwoPeople),
-                formatProvider: Inv,
-                bufferSize: 4).ToListAsync().ConfigureAwait(true);
+            using var kept = StreamOf("ABC\n");
+            var owned = StreamOf("ABC\n");
 
-            Assert.Equal(expected[0].Name, actual[0].Name);
-            Assert.Equal(expected[1].Salary, actual[1].Salary, 2);
+            _ = await FixedWidth.ReadAsync<GenCodeModel>(kept, leaveOpen: true).ToListAsync(TestContext.Current.CancellationToken);
+            _ = await FixedWidth.ReadAsync<GenCodeModel>(owned).ToListAsync(TestContext.Current.CancellationToken);
+
+            Assert.True(kept.CanRead);
+            Assert.False(owned.CanRead);
         }
 
         [Fact]
-        public async Task ReadAsync_InvalidLine_ThrowsWithSameLineNumber()
+        public async Task ReadAsync_CancelledToken_Throws()
         {
-            var reflection = new FixedWidthReader<PersonModel>(Inv);
-            var text = "John Doe  30   60000.00  \nJane      XX   55000.00  ";
+            using var cts = new CancellationTokenSource();
+            await cts.CancelAsync();
 
-            var expected = await Assert.ThrowsAsync<FormatException>(async () =>
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             {
-                using StringReader reader = new(text);
-                await foreach (var _ in reflection.ReadAsync(reader).ConfigureAwait(false)) { }
-            }).ConfigureAwait(true);
-            var actual = await Assert.ThrowsAsync<FormatException>(async () =>
-            {
-                using StringReader reader = new(text);
-                await foreach (var _ in FixedWidth.ReadAsync<GenPersonModel>(reader, formatProvider: Inv).ConfigureAwait(false)) { }
-            }).ConfigureAwait(true);
-
-            Assert.Contains("Line 2", expected.Message, StringComparison.Ordinal);
-            Assert.Contains("Line 2", actual.Message, StringComparison.Ordinal);
+                await foreach (var _ in FixedWidth.ReadAsync<GenCodeModel>(StreamOf("ABC\nDEF\n")).WithCancellation(cts.Token))
+                {
+                }
+            });
         }
 
         [Fact]
@@ -301,9 +201,9 @@ namespace FixedWidthParser.Tests
             string path = Path.GetTempFileName();
             try
             {
-                await File.WriteAllTextAsync(path, "ABC\nDEF\nGHI\n").ConfigureAwait(true);
+                await File.WriteAllTextAsync(path, "ABC\nDEF\nGHI\n", TestContext.Current.CancellationToken);
 
-                var asyncCodes = await FixedWidth.ReadFileAsync<GenCodeModel>(path).Select(m => m.Code).ToListAsync().ConfigureAwait(true);
+                var asyncCodes = await FixedWidth.ReadFileAsync<GenCodeModel>(path).Select(m => m.Code).ToListAsync(TestContext.Current.CancellationToken);
                 var syncCodes = FixedWidth.ReadFile<GenCodeModel>(path).Select(m => m.Code).ToList();
 
                 Assert.Equal(["ABC", "DEF", "GHI"], asyncCodes);
