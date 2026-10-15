@@ -56,6 +56,12 @@ jobs:
       - name: Build (Release)
         run: dotnet build FixedWidthParser.slnx --configuration Release --no-restore -p:DeterministicSourcePaths=false
 
+      # Packing runs package validation, which fails on any binary break against the last release.
+      # No --no-build: the generator's analyzer ProjectReference trips NETSDK1085 otherwise (see release.yml).
+      - name: Validate package against the last release
+        if: matrix.os == 'ubuntu-latest'
+        run: dotnet pack src/FixedWidthParser/FixedWidthParser.csproj --configuration Release --no-restore --output ./package-validation
+
       - name: Test (Release) + collect coverage
         run: >-
           dotnet test --solution FixedWidthParser.slnx 
