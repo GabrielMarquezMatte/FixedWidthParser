@@ -313,7 +313,11 @@ src/FixedWidthParser.Generator/        Roslyn source generator
 tests/FixedWidthParser.Tests/          Runtime, reader, writer and parity tests
 tests/FixedWidthParser.Generator.Tests/Source generator tests
 tests/Benchmarks/                      BenchmarkDotNet benchmarks
+docs/                                  Measurements behind design decisions
 ```
+
+[ARCHITECTURE.md](ARCHITECTURE.md) maps the code; [CONTRIBUTING.md](CONTRIBUTING.md) and
+[STYLEGUIDE.md](STYLEGUIDE.md) cover how to change it.
 
 ## Building and Testing
 
