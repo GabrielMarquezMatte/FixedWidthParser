@@ -250,10 +250,17 @@ namespace FixedWidthParser.Generator
             {
                 return WriteKind.String;
             }
-            var formattable = compilation.GetTypeByMetadataName(SpanFormattableMetadataName);
-            return formattable is not null && type.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, formattable))
-                ? WriteKind.Formattable
-                : WriteKind.Unsupported;
+            if (!Implements(type, compilation, SpanFormattableMetadataName))
+            {
+                return WriteKind.Unsupported;
+            }
+            return Implements(type, compilation, "System.IUtf8SpanFormattable") ? WriteKind.Utf8Formattable : WriteKind.Formattable;
+        }
+
+        private static bool Implements(ITypeSymbol type, Compilation compilation, string interfaceMetadataName)
+        {
+            var iface = compilation.GetTypeByMetadataName(interfaceMetadataName);
+            return iface is not null && type.AllInterfaces.Any(i => SymbolEqualityComparer.Default.Equals(i, iface));
         }
 
         private static ITypeSymbol UnwrapNullable(ITypeSymbol type)
@@ -634,6 +641,9 @@ namespace FixedWidthParser.Generator
                 case WriteKind.Formattable:
                     sb.Append(stmt).Append(RuntimeFqn).Append(".FormatValue(").Append(valueExpr).Append(", ").Append(slice).Append(", context").AppendLine(tail);
                     break;
+                case WriteKind.Utf8Formattable:
+                    sb.Append(stmt).Append(RuntimeFqn).Append(".FormatUtf8Value(").Append(valueExpr).Append(", ").Append(slice).Append(", context").AppendLine(tail);
+                    break;
                 case WriteKind.Converter:
                     sb.Append(stmt).Append(RuntimeFqn).Append(".FormatConvert(").Append(valueExpr).Append(", ").Append(slice)
                       .Append(", context, __converter").Append(i).AppendLine(tail);
@@ -688,7 +698,7 @@ namespace FixedWidthParser.Generator
 
         private enum ColumnKind { String, Double, Float, Utf8Parsable, DecodedParsable, Exact, Converter, BadConverter, Unsupported }
 
-        private enum WriteKind { String, Formattable, Converter, Unsupported }
+        private enum WriteKind { String, Formattable, Utf8Formattable, Converter, Unsupported }
 
         private readonly struct ColumnInfo(
             string name, int start, int length, ColumnKind kind, string typeFqn, string? converterFqn, bool isNullable,

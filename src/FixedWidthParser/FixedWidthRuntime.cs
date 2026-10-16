@@ -1,8 +1,10 @@
 using System.Buffers;
+using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Unicode;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Formatters;
 using FixedWidthParser.Processors;
@@ -159,6 +161,19 @@ namespace FixedWidthParser
         /// </summary>
         public static void FormatString(string value, Span<byte> slice, in FixedWidthContext context, ColumnFormatOptions options, string columnName)
         {
+            // Left-aligned UTF-8 transcodes straight into the slice; FromUtf16 stops at a whole character,
+            // which is exactly the truncation. Overflow that throws falls through to report it.
+            // ponytail: lone surrogates become U+FFFD here even for a throwing UTF8Encoding.
+            if (context.IsUtf8 && options.Alignment == Alignment.Left)
+            {
+                var status = Utf8.FromUtf16(value, slice, out _, out int written);
+                if (status == OperationStatus.Done || options.Overflow == OverflowBehavior.Truncate)
+                {
+                    slice[written..].Fill((byte)options.Padding);
+                    return;
+                }
+            }
+
             ReadOnlySpan<char> text = value;
             var encoding = context.Encoding;
             if (options.Overflow == OverflowBehavior.Truncate && encoding.GetByteCount(text) > slice.Length)
@@ -206,6 +221,89 @@ namespace FixedWidthParser
             throw new InvalidOperationException(
                 $"Value of type \"{typeof(TValue)}\" for column \"{columnName}\" could not be formatted " +
                 $"within {maxSize} characters (format \"{options.Format}\").");
+        }
+
+        /// <summary>
+        /// Formats an <see cref="IUtf8SpanFormattable"/> column straight into <paramref name="slice"/>, with
+        /// no intermediate buffer or transcode. The UTF-8 result is kept when the encoding is UTF-8 or the
+        /// result is ASCII (numbers and dates, almost always); otherwise, and for a value wider than the
+        /// column, it falls back to <see cref="FormatValue{TValue}"/>, which re-encodes or reports the overflow.
+        /// </summary>
+        public static void FormatUtf8Value<TValue>(TValue value, Span<byte> slice, in FixedWidthContext context, ColumnFormatOptions options, string columnName)
+            where TValue : IUtf8SpanFormattable, ISpanFormattable
+        {
+            if (TryFormatInto(value, slice, in context, options, out int written) && (context.IsUtf8 || Ascii.IsValid(slice[..written])))
+            {
+                options.AlignInPlace(slice, written);
+                return;
+            }
+            FormatValue(value, slice, in context, options, columnName);
+        }
+
+        private static bool TryFormatInto<TValue>(TValue value, Span<byte> destination, in FixedWidthContext context, ColumnFormatOptions options, out int written)
+            where TValue : IUtf8SpanFormattable
+        {
+            if (typeof(TValue) == typeof(double) && options.Format is null)
+            {
+                return TryFormatDouble(Unsafe.As<TValue, double>(ref value), destination, in context, out written);
+            }
+            return value.TryFormat(destination, out written, options.Format, context.FormatProvider);
+        }
+
+        /// <summary>
+        /// Byte-identical to <see cref="double.TryFormat(Span{byte}, out int, ReadOnlySpan{char}, IFormatProvider?)"/>
+        /// with no format. A value with at most four fractional digits and a magnitude under 1e9 is written
+        /// as a scaled integer; the smallest scale whose quotient reproduces the value exactly is the
+        /// shortest round-trip form.
+        /// </summary>
+        internal static bool TryFormatDouble(double value, Span<byte> destination, in FixedWidthContext context, out int written)
+        {
+            byte separator = context.DecimalSeparator;
+            if (separator != 0 && value != 0 && Math.Abs(value) < 1e9)
+            {
+                ReadOnlySpan<double> pow10 = [1, 10, 100, 1000, 10000];
+                for (int scale = 0; scale < pow10.Length; scale++)
+                {
+                    double scaled = Math.Round(value * pow10[scale]);
+                    if (scaled / pow10[scale] == value)
+                    {
+                        return TryFormatScaled((long)scaled, scale, separator, destination, out written);
+                    }
+                }
+            }
+            return value.TryFormat(destination, out written, default, context.FormatProvider);
+        }
+
+        private static bool TryFormatScaled(long scaled, int scale, byte separator, Span<byte> destination, out int written)
+        {
+            written = 0;
+            if (scaled < 0)
+            {
+                if (destination.IsEmpty)
+                {
+                    return false;
+                }
+                destination[written++] = (byte)'-';
+            }
+            ulong magnitude = (ulong)Math.Abs(scaled);
+            ulong divisor = scale switch { 0 => 1, 1 => 10, 2 => 100, 3 => 1000, _ => 10000 };
+            if (!Utf8Formatter.TryFormat(magnitude / divisor, destination[written..], out int n))
+            {
+                return false;
+            }
+            written += n;
+            if (scale == 0)
+            {
+                return true;
+            }
+            if (destination.Length < written + 1 + scale)
+            {
+                return false;
+            }
+            destination[written++] = separator;
+            Utf8Formatter.TryFormat(magnitude % divisor, destination[written..], out n, new StandardFormat('D', (byte)scale));
+            written += n;
+            return true;
         }
 
         /// <summary>
@@ -262,7 +360,7 @@ namespace FixedWidthParser
         [SkipLocalsInit]
         private static void WriteText(ReadOnlySpan<char> text, Span<byte> slice, Encoding encoding, ColumnFormatOptions options, string columnName)
         {
-            bool ascii = System.Text.Ascii.IsValid(text);
+            bool ascii = Ascii.IsValid(text);
             int byteCount = ascii ? text.Length : encoding.GetByteCount(text);
             byte[]? rented = byteCount <= StackBufferSize ? null : ArrayPool<byte>.Shared.Rent(byteCount);
             Span<byte> bytes = rented is null ? stackalloc byte[StackBufferSize] : rented;
@@ -284,7 +382,7 @@ namespace FixedWidthParser
 
         private static int NarrowAscii(ReadOnlySpan<char> text, Span<byte> bytes)
         {
-            System.Text.Ascii.FromUtf16(text, bytes, out int written);
+            Ascii.FromUtf16(text, bytes, out int written);
             return written;
         }
 

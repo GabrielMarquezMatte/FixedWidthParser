@@ -156,4 +156,10 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 6)] public string Name { get; init; }
         [FixedColumn(6, 3)] public int Age { get; init; }
     }
+
+    /// <summary>Currency column — mirrors <see cref="PriceModel"/>.</summary>
+    public readonly partial record struct GenPriceModel : IFixedWidthModel<GenPriceModel>
+    {
+        [FixedColumn(0, 8, Alignment = Alignment.Right, Format = "C")] public decimal Price { get; init; }
+    }
 }

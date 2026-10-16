@@ -80,6 +80,12 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
   their own, since the reader already buffers. The default buffer is 65,536 bytes.
 - The writer batches records into one pooled buffer and writes bytes straight to the stream, instead of
   going through a `StreamWriter`.
+- The writer formats `IUtf8SpanFormattable` columns (every BCL number and date) straight into the line,
+  and transcodes left-aligned string columns straight into it when the encoding is UTF-8. A formatted
+  value that is not ASCII under another encoding still goes through that encoding.
+- A `double` column with no `Format`, at most four decimals and a magnitude under 1e9 is written as a
+  scaled integer, about 5x faster, with the same bytes. A line of a string, an `int` and a `double`
+  writes about 2x faster.
 - The generator targets `netstandard2.0`, so Visual Studio's .NET Framework compiler host can load it.
 - The library and generator build with warnings as errors.
 
