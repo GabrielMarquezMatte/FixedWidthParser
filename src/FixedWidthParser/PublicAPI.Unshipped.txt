@@ -101,12 +101,9 @@ FixedWidthParser.Readers.AsyncRecordEnumerator<TModel, TParser>.DisposeAsync() -
 FixedWidthParser.Readers.AsyncRecordEnumerator<TModel, TParser>.MoveNextAsync() -> System.Threading.Tasks.ValueTask<bool>
 FixedWidthParser.Readers.FixedWidthAsyncRecordEnumerable<TModel, TParser>
 FixedWidthParser.Readers.FixedWidthAsyncRecordEnumerable<TModel, TParser>.GetAsyncEnumerator(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> FixedWidthParser.Readers.AsyncRecordEnumerator<TModel, TParser>!
-FixedWidthParser.Readers.FixedWidthPipeRecordEnumerable<TModel, TParser>
-FixedWidthParser.Readers.FixedWidthPipeRecordEnumerable<TModel, TParser>.GetAsyncEnumerator(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> FixedWidthParser.Readers.PipeRecordEnumerator<TModel, TParser>!
 FixedWidthParser.Readers.FixedWidthReader<TModel>
 FixedWidthParser.Readers.FixedWidthReader<TModel>.FixedWidthReader(FixedWidthParser.FixedWidthReaderOptions? options = null) -> void
 FixedWidthParser.Readers.FixedWidthReader<TModel>.Read(System.IO.Stream! stream, bool leaveOpen = false) -> FixedWidthParser.Readers.FixedWidthRecordEnumerable<TModel, FixedWidthParser.Readers.ReflectionLineParser<TModel>>!
-FixedWidthParser.Readers.FixedWidthReader<TModel>.ReadAsync(System.IO.Pipelines.PipeReader! reader, bool leaveOpen = false) -> FixedWidthParser.Readers.FixedWidthPipeRecordEnumerable<TModel, FixedWidthParser.Readers.ReflectionLineParser<TModel>>!
 FixedWidthParser.Readers.FixedWidthReader<TModel>.ReadAsync(System.IO.Stream! stream, bool leaveOpen = false) -> FixedWidthParser.Readers.FixedWidthAsyncRecordEnumerable<TModel, FixedWidthParser.Readers.ReflectionLineParser<TModel>>!
 FixedWidthParser.Readers.FixedWidthReader<TModel>.ReadFile(string! path) -> FixedWidthParser.Readers.FixedWidthRecordEnumerable<TModel, FixedWidthParser.Readers.ReflectionLineParser<TModel>>!
 FixedWidthParser.Readers.FixedWidthReader<TModel>.ReadFileAsync(string! path) -> FixedWidthParser.Readers.FixedWidthAsyncRecordEnumerable<TModel, FixedWidthParser.Readers.ReflectionLineParser<TModel>>!
@@ -118,10 +115,6 @@ FixedWidthParser.Readers.GeneratedLineParser<TModel>.GeneratedLineParser() -> vo
 FixedWidthParser.Readers.GeneratedLineParser<TModel>.TryParse(System.ReadOnlySpan<byte> line, in FixedWidthParser.FixedWidthContext context, out TModel model) -> bool
 FixedWidthParser.Readers.IRecordLineParser<TModel>
 FixedWidthParser.Readers.IRecordLineParser<TModel>.TryParse(System.ReadOnlySpan<byte> line, in FixedWidthParser.FixedWidthContext context, out TModel model) -> bool
-FixedWidthParser.Readers.PipeRecordEnumerator<TModel, TParser>
-FixedWidthParser.Readers.PipeRecordEnumerator<TModel, TParser>.Current.get -> TModel
-FixedWidthParser.Readers.PipeRecordEnumerator<TModel, TParser>.DisposeAsync() -> System.Threading.Tasks.ValueTask
-FixedWidthParser.Readers.PipeRecordEnumerator<TModel, TParser>.MoveNextAsync() -> System.Threading.Tasks.ValueTask<bool>
 FixedWidthParser.Readers.RecordEnumerator<TModel, TParser>
 FixedWidthParser.Readers.RecordEnumerator<TModel, TParser>.Current.get -> TModel
 FixedWidthParser.Readers.RecordEnumerator<TModel, TParser>.Dispose() -> void
@@ -142,7 +135,6 @@ FixedWidthParser.Writers.FixedWidthWriter<TModel>.WriteManyAsync(System.IO.Strea
 override FixedWidthParser.FixedWidthContext.GetHashCode() -> int
 override FixedWidthParser.Formatters.ColumnFormatOptions.GetHashCode() -> int
 static FixedWidthParser.FixedWidth.Read<TModel>(System.IO.Stream! stream, bool leaveOpen = false, FixedWidthParser.FixedWidthReaderOptions? options = null) -> FixedWidthParser.Readers.FixedWidthRecordEnumerable<TModel, FixedWidthParser.Readers.GeneratedLineParser<TModel>>!
-static FixedWidthParser.FixedWidth.ReadAsync<TModel>(System.IO.Pipelines.PipeReader! reader, bool leaveOpen = false, FixedWidthParser.FixedWidthReaderOptions? options = null) -> FixedWidthParser.Readers.FixedWidthPipeRecordEnumerable<TModel, FixedWidthParser.Readers.GeneratedLineParser<TModel>>!
 static FixedWidthParser.FixedWidth.ReadAsync<TModel>(System.IO.Stream! stream, bool leaveOpen = false, FixedWidthParser.FixedWidthReaderOptions? options = null) -> FixedWidthParser.Readers.FixedWidthAsyncRecordEnumerable<TModel, FixedWidthParser.Readers.GeneratedLineParser<TModel>>!
 static FixedWidthParser.FixedWidth.ReadFile<TModel>(string! path, FixedWidthParser.FixedWidthReaderOptions? options = null) -> FixedWidthParser.Readers.FixedWidthRecordEnumerable<TModel, FixedWidthParser.Readers.GeneratedLineParser<TModel>>!
 static FixedWidthParser.FixedWidth.ReadFileAsync<TModel>(string! path, FixedWidthParser.FixedWidthReaderOptions? options = null) -> FixedWidthParser.Readers.FixedWidthAsyncRecordEnumerable<TModel, FixedWidthParser.Readers.GeneratedLineParser<TModel>>!

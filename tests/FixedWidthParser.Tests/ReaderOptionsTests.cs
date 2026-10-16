@@ -1,4 +1,3 @@
-using System.IO.Pipelines;
 using System.Text;
 using FixedWidthParser.Readers;
 using static FixedWidthParser.Tests.TestHelpers;
@@ -88,16 +87,14 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
-        public async Task OnParseError_SkipsOnAsyncAndPipeReads()
+        public async Task OnParseError_SkipsOnAsyncReads()
         {
             var options = new FixedWidthReaderOptions { OnParseError = _ => true };
             var reader = new FixedWidthReader<PersonModel>(options);
 
             var fromStream = await reader.ReadAsync(StreamOf(BadAge)).Select(p => p.Name).ToListAsync(TestContext.Current.CancellationToken);
-            var fromPipe = await reader.ReadAsync(PipeReader.Create(StreamOf(BadAge))).Select(p => p.Name).ToListAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(["John Doe", "Max"], fromStream);
-            Assert.Equal(fromStream, fromPipe);
         }
 
         [Fact]
@@ -141,20 +138,6 @@ namespace FixedWidthParser.Tests
             await Assert.ThrowsAsync<InvalidDataException>(async () =>
             {
                 await foreach (var _ in new FixedWidthReader<CodeModel>(options).ReadAsync(new MemoryStream(new byte[10_000])))
-                {
-                }
-            });
-        }
-
-        [Fact]
-        public async Task MaxLineLength_UnterminatedLine_ThrowsOnPipeRead()
-        {
-            var options = new FixedWidthReaderOptions { MaxLineLength = 100 };
-            var pipe = PipeReader.Create(new MemoryStream(new byte[10_000]), new StreamPipeReaderOptions(bufferSize: 64));
-
-            await Assert.ThrowsAsync<InvalidDataException>(async () =>
-            {
-                await foreach (var _ in FixedWidth.ReadAsync<GenCodeModel>(pipe, options: options))
                 {
                 }
             });

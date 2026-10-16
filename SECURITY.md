@@ -16,7 +16,7 @@ or by email to **gabrielandremarquez.matte@gmail.com**.
 
 Include, where possible:
 - A minimal reproduction: the model and the input that triggers it
-- The reading or writing path involved (stream, async, `PipeReader`, generated or runtime)
+- The reading or writing path involved (file or stream, sync, async or parallel, generated or runtime)
 - The impact you observed (crash, excessive memory/CPU, incorrect data, etc.)
 - The affected version(s)
 

@@ -21,7 +21,7 @@ Upgrading from 1.x? See [the 2.0 entry in the changelog](CHANGELOG.md#200).
 
 - **Attribute-driven** column mapping (`[FixedColumn(start, length)]`) on properties and public fields.
 - **Byte positions.** Lines are read and written as bytes, with no transcoding to UTF-16. Text columns are decoded with the file's encoding: UTF-8 by default, or any ASCII-compatible encoding such as Latin-1 or Windows-1252.
-- **Lazy reading** from a `Stream`, a file or a `System.IO.Pipelines` `PipeReader`, synchronous (`IEnumerable<T>` with a struct enumerator) and asynchronous (`IAsyncEnumerable<T>`).
+- **Lazy reading** from a `Stream` or a file, synchronous (`IEnumerable<T>` with a struct enumerator) and asynchronous (`IAsyncEnumerable<T>`).
 - **Source-generated parsing and writing** for `partial` models implementing `IFixedWidthModel<TSelf>`.
 - **Errors that name the column**: a `FixedWidthParseException` with the line number, column, position and raw text, and an `OnParseError` callback to skip bad lines.
 - **Bounded memory on untrusted input**: `MaxLineLength` stops a source without line breaks from growing the buffer.
@@ -109,7 +109,7 @@ foreach (var person in FixedWidth.ReadFile<GeneratedPerson>("people.txt"))
 }
 ```
 
-### Async and pipes
+### Async
 
 ```csharp
 await foreach (var person in reader.ReadFileAsync("people.txt"))
@@ -118,7 +118,7 @@ await foreach (var person in reader.ReadFileAsync("people.txt"))
 }
 ```
 
-`ReadAsync(Stream, leaveOpen)` mirrors the synchronous overload, and cancellation is honored via `WithCancellation`. When the source is already a [`PipeReader`](https://learn.microsoft.com/dotnet/standard/io/pipelines) — a Kestrel request body, a socket, an upstream pipeline stage — `ReadAsync(PipeReader, leaveOpen)` parses straight off it and lets the pipe own buffering. For plain files and streams the `Stream` overloads are the faster default.
+`ReadAsync(Stream, leaveOpen)` mirrors the synchronous overload, and cancellation is honored via `WithCancellation`. A [`PipeReader`](https://learn.microsoft.com/dotnet/standard/io/pipelines) — a Kestrel request body, a socket — is read through `pipeReader.AsStream()`.
 
 ### Parallel aggregation
 

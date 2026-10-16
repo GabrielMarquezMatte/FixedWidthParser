@@ -1,10 +1,9 @@
-using System.IO.Pipelines;
 using FixedWidthParser.Parsers;
 
 namespace FixedWidthParser.Readers
 {
     /// <summary>
-    /// Reads attribute-mapped models from a stream, a file or a pipe, lazily and with low allocation,
+    /// Reads attribute-mapped models from a stream or a file, lazily and with low allocation,
     /// through the runtime (reflection-built) parser. Configured once; reusable across reads. For
     /// source-generated models use <see cref="FixedWidth"/>.
     /// <para><b>Column positions are bytes.</b></para>
@@ -47,18 +46,6 @@ namespace FixedWidthParser.Readers
         {
             ArgumentNullException.ThrowIfNull(stream);
             return new(new ReflectionLineParser<TModel>(_parser), stream, ownsStream: !leaveOpen, _options);
-        }
-
-        /// <summary>
-        /// Reads from a <see cref="PipeReader"/> via <c>await foreach</c>, letting the pipe own buffering
-        /// (<see cref="FixedWidthReaderOptions.BufferSize"/> does not apply). Use it when the source is
-        /// already a pipe, such as a Kestrel request body. <paramref name="leaveOpen"/> controls whether
-        /// the reader is completed when iteration ends.
-        /// </summary>
-        public FixedWidthPipeRecordEnumerable<TModel, ReflectionLineParser<TModel>> ReadAsync(PipeReader reader, bool leaveOpen = false)
-        {
-            ArgumentNullException.ThrowIfNull(reader);
-            return new(new ReflectionLineParser<TModel>(_parser), reader, completeReader: !leaveOpen, _options);
         }
 
         /// <summary>Reads from a file via <c>await foreach</c> with asynchronous I/O, reopening it on each enumeration.</summary>

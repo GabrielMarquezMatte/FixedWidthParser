@@ -70,24 +70,23 @@ source -> line splitter -> IRecordLineParser<TModel> -> model
            pooled buffer)     runtime or generated)
 ```
 
-Three enumerators share one shape, each specialized by a `struct` parse strategy
+Two enumerators share one shape, each specialized by a `struct` parse strategy
 (`IRecordLineParser<TModel>`: `ReflectionLineParser<T>` or `GeneratedLineParser<T>`, in
 `Readers/ILineParser.cs`). Because the strategy is a `struct` type argument, the JIT compiles one
 enumerator per `(TModel, TParser)` pair and the parse call devirtualizes.
 
-| Source | Enumerator | Line splitting |
-|---|---|---|
-| `Stream`, sync | `RecordEnumerator` (a `struct`, so `foreach` allocates nothing) | `LineBufferState` |
-| `Stream`, async | `AsyncRecordEnumerator` | `LineBufferState` |
-| `PipeReader` | `PipeRecordEnumerator` | its own scan over `ReadOnlySequence<byte>` |
+| Source | Enumerator |
+|---|---|
+| `Stream` or file, sync | `RecordEnumerator` (a `struct`, so `foreach` allocates nothing) |
+| `Stream` or file, async | `AsyncRecordEnumerator` |
 
-`LineBufferState` (`Readers/LineBufferState.cs`) owns a pooled buffer: it finds the next `\n`, drops a
-preceding `\r`, skips a UTF-8 byte order mark once, skips empty lines while counting them, and
-compacts or grows the buffer when a line does not fit. Growth stops at `MaxLineLength`, which is what
-bounds memory on a source with no line breaks. The pipe enumerator implements the same rules over
-pipe segments, parsing a line in place when it sits in one segment and copying it to a pooled scratch
-buffer only when it straddles two. The three must stay identical in behavior; see
-[STYLEGUIDE.md § Twins](STYLEGUIDE.md#twins).
+Every reader, the parallel ones included, splits lines with `LineBufferState`
+(`Readers/LineBufferState.cs`). It owns a pooled buffer: it finds the next `\n`, drops a preceding
+`\r`, skips a UTF-8 byte order mark once, skips empty lines while counting them, and compacts or grows
+the buffer when a line does not fit. Growth stops at `MaxLineLength`, which is what bounds memory on a
+source with no line breaks. Keeping one splitter is deliberate: a `PipeReader` reader with its own
+splitter over `ReadOnlySequence<byte>` was removed because it duplicated these rules and read slower
+than `PipeReader.AsStream()` ([pipe-reader.md](docs/pipe-reader.md)).
 
 The async enumerator keeps the line scan synchronous: `MoveNextAsync` returns a completed
 `ValueTask` while the buffer still holds a line, and only `MoveNextSlowAsync` awaits a refill.

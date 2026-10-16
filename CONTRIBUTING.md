@@ -43,7 +43,7 @@ rewrites — see [ARCHITECTURE.md](ARCHITECTURE.md) for the shape of the codebas
   Codecov from the Linux leg.
 
   A change to one path needs the same change, and a parity test, on its twin: the runtime and
-  generated paths, and the stream, async and pipe readers
+  generated paths, the sync and async readers, and the file and stream aggregators
   ([STYLEGUIDE.md § Twins](STYLEGUIDE.md#twins)). Line-splitting code reads untrusted input; read
   [STYLEGUIDE.md § Untrusted Input](STYLEGUIDE.md#untrusted-input) before touching it.
 
@@ -65,7 +65,7 @@ rewrites — see [ARCHITECTURE.md](ARCHITECTURE.md) for the shape of the codebas
 Use [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, imperative
 mood, lowercase summary, no trailing period. Common types in this repo: `feat`, `fix`, `refactor`,
 `perf`, `test`, `docs`, `chore`, `ci`, `build`. The scope is usually the area touched (`reader`,
-`writer`, `parser`, `generator`). Example: `fix(reader): bound a pipe line by MaxLineLength`.
+`writer`, `parser`, `generator`). Example: `fix(reader): bound an unterminated line by MaxLineLength`.
 
 ## Pull requests
 
