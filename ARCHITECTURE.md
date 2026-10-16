@@ -113,6 +113,23 @@ small files run, so there is no separate sequential twin.
 A worker does not know how many lines precede its range. It counts them only when a line fails —
 line breaks from the start of the file up to the failing line, continued from there for later failures
 in the same range — so errors carry the sequential line number and the happy path pays nothing.
+
+A `Stream` cannot be read at an offset, so `ParallelStreamAggregator` follows ExcelReader's XLSX
+pipeline instead:
+
+```
+source -> producer (1 thread) -> bounded queue -> N workers -> ordered merge
+          256 KB pooled chunks,    chunk, index,     parse + Add     by chunk index
+          cut after the last '\n'  lines before
+```
+
+The producer carries the bytes after the last line break into the next chunk and counts the line
+breaks it hands over, so each chunk knows the number of its first line and workers report sequential
+line numbers directly. The queue holds about two chunks per worker, which bounds memory whatever the
+source's size. A line longer than a chunk grows the chunk, up to `MaxLineLength`. A failure in the
+producer lies past every chunk it emitted, so a worker's failure is thrown first. With
+`DegreeOfParallelism = 1` the stream is read by the ordinary async enumerator.
+
 Measurements are in [parallel-aggregate.md](docs/parallel-aggregate.md).
 
 ### Errors
