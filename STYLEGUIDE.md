@@ -278,9 +278,10 @@ captured and rethrown from the instance constructor, never left to surface as a
 Files and request bodies are attacker-controlled. These rules are not optional in reader code.
 
 - **Bound every buffer a source can grow.** A source without line breaks must hit `MaxLineLength`
-  before it drives an allocation, on every reader: stream, async stream and `PipeReader`.
-- **When you add a guard to one reader, apply it to every sibling reader.** The three readers split
-  lines independently; a limit enforced on two of them is a hole in the third.
+  before it drives an allocation, on every reader: sync, async and both parallel aggregators.
+- **Split lines in one place.** Every reader goes through `LineBufferState`. The parallel stream
+  producer also grows a chunk for an unterminated line, so a guard added to `LineBufferState.GrowIfFull`
+  belongs there too; a limit enforced in one and not the other is a hole.
 - **Validate before you allocate, not before you use.** Renting a bigger buffer first and discovering the
   line is too long afterwards still hands the attacker the allocation.
 - **Never let a malformed value silently change semantics.** A column that does not parse fails the
@@ -314,8 +315,9 @@ keeps them honest:
 - **Runtime and generated.** `FixedWidthParser<T>`/`FixedWidthWriter<T>` and the generator's
   `TryParse`/`TryFormat` call the same `FixedWidthRuntime` helpers. Put shared behavior there, not in
   either side.
-- **Stream, async stream and pipe readers.** Line semantics — the byte order mark, `\r\n`, empty
-  lines, a last line without a break, `MaxLineLength` — must match across all three.
+- **Sequential and parallel reads.** `AggregateFileAsync` and `AggregateAsync` must return what a
+  sequential read folded into one accumulator would, with the same line numbers in errors. Their
+  per-line work shares `ParallelAggregator.TryAdd`.
 - **Sync and async writers.** `WriteMany` and `WriteManyAsync` batch the same way.
 
 So:
@@ -325,7 +327,7 @@ So:
 - Behavior shared by twins belongs in a helper none of them duplicates — the split should cover only
   the awaiting or the code generation, not the logic around it.
 - Changes to a twinned path need a parity test asserting identical output, including at buffer
-  boundaries (a line straddling a refill or a pipe segment) — that is exactly where implementations drift.
+  boundaries (a line straddling a refill or a partition) — that is exactly where implementations drift.
 - A synchronous method does not take a `CancellationToken`.
 
 ---

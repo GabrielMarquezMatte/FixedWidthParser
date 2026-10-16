@@ -19,8 +19,8 @@ in options objects and a `FixedWidthContext`, so later versions can add to them 
 
 | 1.x | 2.0 |
 |---|---|
-| `FixedWidthReader<T>` over a `TextReader`, `FixedWidthByteReader<T>` | `FixedWidthReader<T>` over a `Stream`, a file or a `PipeReader` |
-| `FixedWidthUtf8.Read*`, `FixedWidth.Read*` over a `TextReader` | `FixedWidth.Read*` over a `Stream`, a file or a `PipeReader` |
+| `FixedWidthReader<T>` over a `TextReader`, `FixedWidthByteReader<T>` | `FixedWidthReader<T>` over a `Stream` or a file |
+| `FixedWidthUtf8.Read*`, `FixedWidth.Read*` over a `TextReader` | `FixedWidth.Read*` over a `Stream` or a file |
 | `new FixedWidthReader<T>(provider, pool, bufferSize)` | `new FixedWidthReader<T>(new FixedWidthReaderOptions { FormatProvider = …, StringPool = …, BufferSize = … })` |
 | `FixedWidth.Read<T>(stream, encoding, leaveOpen, provider, pool, bufferSize)` | `FixedWidth.Read<T>(stream, leaveOpen, options)`; the encoding is `FixedWidthReaderOptions.Encoding` |
 | `FixedWidthParser<T>`, `Utf8FixedWidthParser<T>` `.TryParse(line, provider, pool, out m)` | `FixedWidthParser<T>.TryParse(ReadOnlySpan<byte> line, in FixedWidthContext context, out m)` |
@@ -53,7 +53,7 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
 - `FixedWidthReaderOptions.OnParseError`: return `true` to skip a line that fails to parse.
 - `FixedWidthReaderOptions.MaxLineLength` (default 1 MiB): a longer line throws
   `InvalidDataException`. Before, a source without line breaks doubled the read buffer until memory ran
-  out, which a `PipeReader` over a request body made reachable from the network.
+  out, which a request body made reachable from the network.
 - Encodings other than UTF-8 for text columns, dates parsed with a format and types that parse only
   from characters. A UTF-8 byte order mark is skipped only when the encoding is UTF-8.
 - Columns of any `ISpanParsable<T>` type without a UTF-8 parser, decoded first (they used to be
@@ -96,6 +96,9 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
 - The library and generator build with warnings as errors.
 
 ### Removed
+- **Breaking:** reading from a `PipeReader` (`ReadAsync(PipeReader)` and its enumerator types). Pass
+  `pipeReader.AsStream()` to the `Stream` overloads instead; it reads twice as fast as the dedicated
+  path did ([docs/pipe-reader.md](docs/pipe-reader.md)).
 - **Breaking:** `FixedWidthUtf8`, `FixedWidthByteReader<T>`, `Utf8FixedWidthParser<T>`,
   `IUtf8FixedWidthModel<T>`, `IUtf8FixedWidthConverter<T>`, `Utf8FixedWidthRuntime` and the `TextReader`
   overloads. Diagnostics `FWP007` and `FWP009`, which only applied to the second path, are retired.

@@ -1,4 +1,3 @@
-using System.IO.Pipelines;
 using FixedWidthParser.Readers;
 
 namespace FixedWidthParser
@@ -47,17 +46,6 @@ namespace FixedWidthParser
         {
             ArgumentNullException.ThrowIfNull(stream);
             return new(default, stream, ownsStream: !leaveOpen, FixedWidthReaderOptions.Validate(options));
-        }
-
-        /// <summary>
-        /// Reads from a <see cref="PipeReader"/> via <c>await foreach</c>, letting the pipe own buffering.
-        /// <paramref name="leaveOpen"/> controls whether the reader is completed when iteration ends.
-        /// </summary>
-        public static FixedWidthPipeRecordEnumerable<TModel, GeneratedLineParser<TModel>> ReadAsync<TModel>(PipeReader reader, bool leaveOpen = false, FixedWidthReaderOptions? options = null)
-            where TModel : IFixedWidthModel<TModel>
-        {
-            ArgumentNullException.ThrowIfNull(reader);
-            return new(default, reader, completeReader: !leaveOpen, FixedWidthReaderOptions.Validate(options));
         }
 
         /// <summary>Reads from a file via <c>await foreach</c> with asynchronous I/O, reopening it on each enumeration.</summary>

@@ -6,8 +6,10 @@ a constraint; the numbers that justified it live here, so they can be re-run and
 
 - [writer-performance.md](writer-performance.md) — where a written line spends its time, and the
   formatting shortcuts that came out of it.
-- [parallel-aggregate.md](parallel-aggregate.md) — how `AggregateFileAsync` scales with the number of
-  workers.
+- [parallel-aggregate.md](parallel-aggregate.md) — how `AggregateFileAsync` and `AggregateAsync`
+  scale with the number of workers.
+- [pipe-reader.md](pipe-reader.md) — why a `PipeReader` is read through `AsStream()` rather than
+  its own enumerator.
 
 Usage documentation is the [README](../README.md); the shape of the code is
 [ARCHITECTURE.md](../ARCHITECTURE.md).

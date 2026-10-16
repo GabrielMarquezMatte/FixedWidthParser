@@ -42,7 +42,6 @@ jobs:
           - name: byte
             filter: >-
               Benchmarks.Perf.ReaderPoolingBenchmarks.*
-              Benchmarks.Perf.PipeReaderBenchmarks.*
           - name: writer
             filter: Benchmarks.Perf.WriterBenchmarks.*
           - name: comparison
