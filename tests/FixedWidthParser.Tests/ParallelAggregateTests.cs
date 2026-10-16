@@ -5,9 +5,15 @@ using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
 {
-    /// <summary>Parallel aggregation must equal one sequential pass, whatever the partition size.</summary>
+    /// <summary>Parallel aggregation must equal one sequential pass, whatever the source and partition size.</summary>
     public sealed class ParallelAggregateTests : IDisposable
     {
+        public enum Source
+        {
+            File,
+            Stream,
+        }
+
         private readonly string _path = Path.GetTempFileName();
 
         public void Dispose()
@@ -45,6 +51,24 @@ namespace FixedWidthParser.Tests
             }
         }
 
+        public static TheoryData<Source, int> SourcesAndChunkSizes()
+        {
+            var data = new TheoryData<Source, int>();
+            foreach (var source in Enum.GetValues<Source>())
+            {
+                foreach (int chunkSize in new[] { 1, 7, 10, 64, 4096, 0 })
+                {
+                    data.Add(source, chunkSize);
+                }
+            }
+            return data;
+        }
+
+        public static TheoryData<Source> Sources()
+        {
+            return new TheoryData<Source>(Enum.GetValues<Source>());
+        }
+
         // A BOM, CRLF and LF breaks, empty lines and no final line break: every boundary a partition can cut.
         private static string Content(int lines, int badLine = 0)
         {
@@ -65,25 +89,41 @@ namespace FixedWidthParser.Tests
             return text.ToString();
         }
 
-        private List<int> Sequential()
+        private List<int> Sequential(FixedWidthReaderOptions? options = null)
         {
-            return [.. new FixedWidthReader<NameAgeModel>().ReadFile(_path).Select(m => m.Age)];
+            return [.. new FixedWidthReader<NameAgeModel>(options).ReadFile(_path).Select(m => m.Age)];
+        }
+
+        private Task<Ages> Aggregate(Source source, FixedWidthParallelOptions parallel, FixedWidthReaderOptions? options = null)
+        {
+            var reader = new FixedWidthReader<NameAgeModel>(options);
+            var ct = TestContext.Current.CancellationToken;
+            return source switch
+            {
+                Source.File => reader.AggregateFileAsync<Ages>(_path, parallel, ct),
+                _ => reader.AggregateAsync<Ages>(File.OpenRead(_path), leaveOpen: false, parallel, ct),
+            };
+        }
+
+        private Task<GenAges> AggregateGenerated(Source source, FixedWidthParallelOptions parallel)
+        {
+            var ct = TestContext.Current.CancellationToken;
+            return source switch
+            {
+                Source.File => FixedWidth.AggregateFileAsync<GenNameAgeModel, GenAges>(_path, parallel: parallel, ct: ct),
+                _ => FixedWidth.AggregateAsync<GenNameAgeModel, GenAges>(File.OpenRead(_path), parallel: parallel, ct: ct),
+            };
         }
 
         [Theory]
-        [InlineData(1)]
-        [InlineData(7)]
-        [InlineData(10)]
-        [InlineData(64)]
-        [InlineData(4096)]
-        [InlineData(0)]
-        public async Task EveryPartitionSize_EqualsTheSequentialRead(int chunkSize)
+        [MemberData(nameof(SourcesAndChunkSizes))]
+        public async Task EveryPartitionSize_EqualsTheSequentialRead(Source source, int chunkSize)
         {
             File.WriteAllText(_path, Content(2000));
             var parallel = new FixedWidthParallelOptions { DegreeOfParallelism = 4, ChunkSize = chunkSize };
 
-            var runtime = await new FixedWidthReader<NameAgeModel>().AggregateFileAsync<Ages>(_path, parallel, TestContext.Current.CancellationToken);
-            var generated = await FixedWidth.AggregateFileAsync<GenNameAgeModel, GenAges>(_path, parallel: parallel, ct: TestContext.Current.CancellationToken);
+            var runtime = await Aggregate(source, parallel);
+            var generated = await AggregateGenerated(source, parallel);
 
             var expected = Sequential();
             Assert.Equal(2000, expected.Count);
@@ -91,81 +131,117 @@ namespace FixedWidthParser.Tests
             Assert.Equal(expected, generated.Values);
         }
 
-        [Fact]
-        public async Task EmptyFile_ReturnsAnEmptyAccumulator()
+        [Theory]
+        [MemberData(nameof(Sources))]
+        public async Task OneWorker_EqualsTheSequentialRead(Source source)
+        {
+            File.WriteAllText(_path, Content(500));
+
+            var result = await Aggregate(source, new FixedWidthParallelOptions { DegreeOfParallelism = 1 });
+
+            Assert.Equal(Sequential(), result.Values);
+        }
+
+        [Theory]
+        [MemberData(nameof(Sources))]
+        public async Task EmptySource_ReturnsAnEmptyAccumulator(Source source)
         {
             File.WriteAllBytes(_path, []);
 
-            var result = await new FixedWidthReader<NameAgeModel>().AggregateFileAsync<Ages>(_path, ct: TestContext.Current.CancellationToken);
+            var result = await Aggregate(source, new FixedWidthParallelOptions { DegreeOfParallelism = 4, ChunkSize = 8 });
 
             Assert.Empty(result.Values);
         }
 
         [Theory]
-        [InlineData(5)]
-        [InlineData(4096)]
-        public async Task ParseFailure_ReportsTheSequentialLineNumber(int chunkSize)
+        [MemberData(nameof(SourcesAndChunkSizes))]
+        public async Task ParseFailure_ReportsTheSequentialLineNumber(Source source, int chunkSize)
         {
             File.WriteAllText(_path, Content(2000, badLine: 1537));
             var expected = Assert.Throws<FixedWidthParseException>(() => Sequential());
             var parallel = new FixedWidthParallelOptions { DegreeOfParallelism = 4, ChunkSize = chunkSize };
 
-            var actual = await Assert.ThrowsAsync<FixedWidthParseException>(
-                () => new FixedWidthReader<NameAgeModel>().AggregateFileAsync<Ages>(_path, parallel, TestContext.Current.CancellationToken));
+            var actual = await Assert.ThrowsAsync<FixedWidthParseException>(() => Aggregate(source, parallel));
 
             Assert.Equal(expected.LineNumber, actual.LineNumber);
             Assert.Equal(expected.Message, actual.Message);
         }
 
-        [Fact]
-        public async Task OnParseError_SkipsEachBadLineOnce_WithItsLineNumber()
+        [Theory]
+        [MemberData(nameof(Sources))]
+        public async Task OnParseError_SkipsEachBadLineOnce_WithItsLineNumber(Source source)
         {
             File.WriteAllText(_path, Content(2000, badLine: 1537) + "\nbad line\n" + Content(3, badLine: 2)[1..]);
             var sequentialErrors = new List<long>();
-            var sequentialOptions = new FixedWidthReaderOptions { OnParseError = ex => { sequentialErrors.Add(ex.LineNumber); return true; } };
-            var expected = new FixedWidthReader<NameAgeModel>(sequentialOptions).ReadFile(_path).Select(m => m.Age).ToList();
+            var expected = Sequential(new FixedWidthReaderOptions { OnParseError = ex => { sequentialErrors.Add(ex.LineNumber); return true; } });
             var parallelErrors = new ConcurrentBag<long>();
-            var parallelOptions = new FixedWidthReaderOptions { OnParseError = ex => { parallelErrors.Add(ex.LineNumber); return true; } };
+            var options = new FixedWidthReaderOptions { OnParseError = ex => { parallelErrors.Add(ex.LineNumber); return true; } };
 
-            var result = await new FixedWidthReader<NameAgeModel>(parallelOptions).AggregateFileAsync<Ages>(
-                _path, new FixedWidthParallelOptions { DegreeOfParallelism = 4, ChunkSize = 9 }, TestContext.Current.CancellationToken);
+            var result = await Aggregate(source, new FixedWidthParallelOptions { DegreeOfParallelism = 4, ChunkSize = 9 }, options);
 
             Assert.Equal(3, sequentialErrors.Count);
             Assert.Equal(expected, result.Values);
             Assert.Equal(sequentialErrors, parallelErrors.Order());
         }
 
-        [Fact]
-        public async Task LineTooLong_ReportsTheSequentialLineNumber()
+        [Theory]
+        [MemberData(nameof(SourcesAndChunkSizes))]
+        public async Task LineTooLong_ReportsTheSequentialLineNumber(Source source, int chunkSize)
         {
             File.WriteAllText(_path, Content(300) + "\n" + new string('9', 50) + "\n" + Content(3)[1..]);
             var options = new FixedWidthReaderOptions { MaxLineLength = 20 };
-            var expected = Assert.Throws<InvalidDataException>(() => new FixedWidthReader<NameAgeModel>(options).ReadFile(_path).ToList());
+            var expected = Assert.Throws<InvalidDataException>(() => Sequential(options));
+            var parallel = new FixedWidthParallelOptions { DegreeOfParallelism = 4, ChunkSize = chunkSize };
 
-            var actual = await Assert.ThrowsAsync<InvalidDataException>(() => new FixedWidthReader<NameAgeModel>(options).AggregateFileAsync<Ages>(
-                _path, new FixedWidthParallelOptions { DegreeOfParallelism = 4, ChunkSize = 6 }, TestContext.Current.CancellationToken));
+            var actual = await Assert.ThrowsAsync<InvalidDataException>(() => Aggregate(source, parallel, options));
 
             Assert.Equal(expected.Message, actual.Message);
         }
 
-        [Fact]
-        public async Task CancelledToken_Throws()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task Stream_IsDisposedUnlessLeftOpen(bool leaveOpen)
+        {
+            File.WriteAllText(_path, Content(10));
+            await using var stream = File.OpenRead(_path);
+
+            await new FixedWidthReader<NameAgeModel>().AggregateAsync<Ages>(
+                stream, leaveOpen, new FixedWidthParallelOptions { DegreeOfParallelism = 2, ChunkSize = 16 }, TestContext.Current.CancellationToken);
+
+            Assert.Equal(leaveOpen, stream.CanRead);
+        }
+
+        [Theory]
+        [MemberData(nameof(Sources))]
+        public async Task CancelledToken_Throws(Source source)
         {
             File.WriteAllText(_path, Content(10));
             using var cts = new CancellationTokenSource();
             await cts.CancelAsync();
+            var reader = new FixedWidthReader<NameAgeModel>();
+            var parallel = new FixedWidthParallelOptions { DegreeOfParallelism = 2 };
 
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(
-                () => new FixedWidthReader<NameAgeModel>().AggregateFileAsync<Ages>(_path, ct: cts.Token));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => source switch
+            {
+                Source.File => reader.AggregateFileAsync<Ages>(_path, parallel, cts.Token),
+                _ => reader.AggregateAsync<Ages>(File.OpenRead(_path), leaveOpen: false, parallel, cts.Token),
+            });
         }
 
+        // Arguments are validated before the stream is taken over, so the caller still owns it.
         [Fact]
         public async Task NegativeDegreeOfParallelism_Throws()
         {
             File.WriteAllText(_path, Content(10));
+            var reader = new FixedWidthReader<NameAgeModel>();
+            var parallel = new FixedWidthParallelOptions { DegreeOfParallelism = -1 };
+            var ct = TestContext.Current.CancellationToken;
+            await using var stream = File.OpenRead(_path);
 
-            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => new FixedWidthReader<NameAgeModel>().AggregateFileAsync<Ages>(
-                _path, new FixedWidthParallelOptions { DegreeOfParallelism = -1 }, TestContext.Current.CancellationToken));
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => reader.AggregateFileAsync<Ages>(_path, parallel, ct));
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => reader.AggregateAsync<Ages>(stream, leaveOpen: false, parallel, ct));
+            Assert.True(stream.CanRead);
         }
     }
 }

@@ -85,5 +85,20 @@ namespace FixedWidthParser.Readers
             return ParallelAggregator.RunAsync<TModel, ReflectionLineParser<TModel>, TAccumulator>(
                 new ReflectionLineParser<TModel>(_parser), path, _options, FixedWidthParallelOptions.Validate(parallel), ct);
         }
+
+        /// <summary>
+        /// Reads a stream once and folds every record into a <typeparamref name="TAccumulator"/> across
+        /// several threads: one thread reads the stream into chunks, the others parse them, one instance
+        /// per chunk, merged in stream order. <paramref name="leaveOpen"/> controls whether the stream is
+        /// disposed afterwards.
+        /// </summary>
+        /// <remarks>Carries the same contract as <see cref="AggregateFileAsync{TAccumulator}"/>.</remarks>
+        public Task<TAccumulator> AggregateAsync<TAccumulator>(Stream stream, bool leaveOpen = false, FixedWidthParallelOptions? parallel = null, CancellationToken ct = default)
+            where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            return ParallelStreamAggregator.RunAsync<TModel, ReflectionLineParser<TModel>, TAccumulator>(
+                new ReflectionLineParser<TModel>(_parser), stream, leaveOpen, _options, FixedWidthParallelOptions.Validate(parallel), ct);
+        }
     }
 }

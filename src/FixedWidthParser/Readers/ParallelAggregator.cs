@@ -92,12 +92,10 @@ namespace FixedWidthParser.Readers
                     {
                         ct.ThrowIfCancellationRequested();
                     }
-                    if (parser.TryParse(line, in context, out var model))
+                    if (!TryAdd<TModel, TParser, TAccumulator>(parser, line, in context, ref accumulator))
                     {
-                        accumulator.Add(in model);
-                        continue;
+                        ParseErrors.HandleFailure<TModel, TParser>(parser, line, reader.LineNumberAt(lineStart), in context, options.OnParseError);
                     }
-                    ParseErrors.HandleFailure<TModel, TParser>(parser, line, reader.LineNumberAt(lineStart), in context, options.OnParseError);
                 }
             }
             finally
@@ -105,6 +103,19 @@ namespace FixedWidthParser.Readers
                 lines.Return();
             }
             return accumulator;
+        }
+
+        /// <summary>Parses one line and folds it in; <see langword="false"/> when it does not parse.</summary>
+        internal static bool TryAdd<TModel, TParser, TAccumulator>(TParser parser, ReadOnlySpan<byte> line, in FixedWidthContext context, ref TAccumulator accumulator)
+            where TParser : struct, IRecordLineParser<TModel>
+            where TAccumulator : IRecordAccumulator<TAccumulator, TModel>
+        {
+            if (!parser.TryParse(line, in context, out var model))
+            {
+                return false;
+            }
+            accumulator.Add(in model);
+            return true;
         }
 
         private sealed class ChunkPlan

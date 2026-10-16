@@ -152,6 +152,9 @@ as a sequential read. `FixedWidthParallelOptions.DegreeOfParallelism` caps the t
 default, means one per processor; `1` reads the file in one pass). `OnParseError`, when set, runs on
 the worker threads.
 
+`AggregateAsync` does the same over a `Stream`, which is read once: one thread reads it into chunks
+and the others parse.
+
 ### Options
 
 Every read takes an optional `FixedWidthReaderOptions`:

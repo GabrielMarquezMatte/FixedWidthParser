@@ -22,7 +22,7 @@ namespace FixedWidthParser.Readers
         internal int End;
         internal int ScanFrom;
         internal bool Eof;
-        internal int LineNumber;
+        internal long LineNumber;
         // Offset, from the first byte read, of the line TryGetLine last returned: the byte after the
         // previous line break, so a skipped byte order mark belongs to the first line.
         internal long LineStart;
@@ -41,12 +41,26 @@ namespace FixedWidthParser.Readers
 
         internal void Rent(FixedWidthReaderOptions options, bool skipByteOrderMark)
         {
-            Buffer = ArrayPool<byte>.Shared.Rent(options.BufferSize);
+            Init(ArrayPool<byte>.Shared.Rent(options.BufferSize), 0, eof: false, linesBefore: 0, options, skipByteOrderMark);
+        }
+
+        /// <summary>
+        /// Takes ownership of a pooled <paramref name="buffer"/> already holding the whole input: its
+        /// first <paramref name="length"/> bytes, numbered from the line after <paramref name="linesBefore"/>.
+        /// </summary>
+        internal void Wrap(byte[] buffer, int length, long linesBefore, FixedWidthReaderOptions options, bool skipByteOrderMark)
+        {
+            Init(buffer, length, eof: true, linesBefore, options, skipByteOrderMark);
+        }
+
+        private void Init(byte[] buffer, int end, bool eof, long linesBefore, FixedWidthReaderOptions options, bool skipByteOrderMark)
+        {
+            Buffer = buffer;
             Start = 0;
-            End = 0;
+            End = end;
             ScanFrom = 0;
-            Eof = false;
-            LineNumber = 0;
+            Eof = eof;
+            LineNumber = linesBefore;
             LineStart = 0;
             _nextLineStart = 0;
             _compacted = 0;

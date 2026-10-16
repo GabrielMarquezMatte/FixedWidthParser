@@ -23,6 +23,26 @@ string columns, or with a `StringPool`, was not measured.
 `dop 1` is one range through the same worker code as the parallel case, and lands within a few
 percent of the sequential enumerator on both paths.
 
+## Stream
+
+Same file, generated path, the source opened fresh for each run. The stream engine runs `dop` parsing
+workers beside the producer, so `dop 8` is eight parsing threads and one reading flow. The pipe rows
+read a `PipeReader.Create(stream, ...)` through `AsStream()`, with the segment size shown.
+
+| Source | dop 1 | dop 2 | dop 4 | dop 8 | dop 16 |
+|---|--:|--:|--:|--:|--:|
+| file (`AggregateFileAsync`) | 181.5 | 104.5 | 61.8 | 46.8 | 46.4 |
+| `Stream` | 192.2 | 85.1 | 44.9 | 35.6 | 31.8 |
+| `PipeReader.AsStream()`, 64 KB segments | 194.8 | 78.1 | 46.8 | 38.0 | 39.6 |
+| `PipeReader.AsStream()`, default 4 KB segments | 423.7 | 108.1 | 111.9 | 112.5 | 109.2 |
+
+A pipe with 4 KB segments caps the run at the speed one thread can copy 4 KB reads into chunks, so
+the pipe's own buffer size, not the engine, sets the ceiling.
+
+The stream engine beats the file engine from `dop 2` up on this cached file. The file engine's ranges
+are 3.25 MB at `dop 8` against the stream engine's 256 KB chunks, and each file worker refills a 64 KB
+buffer with one `RandomAccess.Read` call at a time. Which of the two costs more is unmeasured.
+
 ## Not measured
 
 - A cold file: every worker reads its own range, so on a spinning disk the access pattern is random.
