@@ -62,6 +62,26 @@ namespace FixedWidthParser.Tests
             Assert.Equal("Joséé 42 ", Encoding.Latin1.GetString(generated));
         }
 
+        // Numbers format straight to UTF-8; a non-ASCII result must still be re-encoded for other encodings.
+        [Theory]
+        [InlineData("utf-8", "  é5.00")]
+        [InlineData("iso-8859-1", "   é5.00")]
+        public void NonAsciiFormattedValue_UsesTheConfiguredEncoding(string encodingName, string expected)
+        {
+            var encoding = Encoding.GetEncoding(encodingName);
+            var culture = (System.Globalization.CultureInfo)Inv.Clone();
+            culture.NumberFormat.CurrencySymbol = "é";
+            var writer = new FixedWidthWriter<PriceModel>(new FixedWidthWriterOptions { Encoding = encoding, FormatProvider = culture });
+            Span<byte> generated = stackalloc byte[8];
+            Span<byte> reflected = stackalloc byte[8];
+
+            Assert.True(FixedWidth.TryFormat(new GenPriceModel { Price = 5m }, generated, CtxWith(culture, encoding: encoding), out _));
+            Assert.True(writer.TryFormat(new PriceModel { Price = 5m }, reflected, out _));
+
+            Assert.Equal(encoding.GetBytes(expected), generated.ToArray());
+            Assert.Equal(encoding.GetBytes(expected), reflected.ToArray());
+        }
+
         [Fact]
         public void NewLine_IsConfigurable()
         {

@@ -51,7 +51,7 @@ namespace FixedWidthParser.Generator.Tests
             Assert.Contains("global::System.Span<byte> destination, in global::FixedWidthParser.FixedWidthContext context, out int bytesWritten", generated, StringComparison.Ordinal);
             Assert.Contains("if (destination.Length < 8) { bytesWritten = 0; return false; }", generated, StringComparison.Ordinal);
             Assert.Contains("FixedWidthRuntime.FormatString(model.Code,", generated, StringComparison.Ordinal);
-            Assert.Contains("FixedWidthRuntime.FormatValue(model.Quantity,", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.FormatUtf8Value(model.Quantity,", generated, StringComparison.Ordinal);
             Assert.Contains("ColumnFormatOptions __options1", generated, StringComparison.Ordinal);
         }
 
@@ -108,7 +108,9 @@ namespace FixedWidthParser.Generator.Tests
 
             Assert.Empty(result.GeneratorDiagnostics);
             Assert.Empty(result.CompilationErrors);
-            Assert.Contains("FixedWidthRuntime.TryParseDecoded<global::GeneratorSmoke.OnlyCharParsable>", Assert.Single(result.GeneratedSources), StringComparison.Ordinal);
+            var generated = Assert.Single(result.GeneratedSources);
+            Assert.Contains("FixedWidthRuntime.TryParseDecoded<global::GeneratorSmoke.OnlyCharParsable>", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.FormatValue(model.Value,", generated, StringComparison.Ordinal);
         }
 
         [Fact]

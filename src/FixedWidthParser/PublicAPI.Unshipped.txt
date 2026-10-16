@@ -152,6 +152,7 @@ static FixedWidthParser.FixedWidthContext.operator !=(FixedWidthParser.FixedWidt
 static FixedWidthParser.FixedWidthContext.operator ==(FixedWidthParser.FixedWidthContext left, FixedWidthParser.FixedWidthContext right) -> bool
 static FixedWidthParser.FixedWidthRuntime.FormatConvert<TValue, TConverter>(TValue value, System.Span<byte> slice, in FixedWidthParser.FixedWidthContext context, TConverter converter, FixedWidthParser.Formatters.ColumnFormatOptions options, string! columnName) -> void
 static FixedWidthParser.FixedWidthRuntime.FormatString(string! value, System.Span<byte> slice, in FixedWidthParser.FixedWidthContext context, FixedWidthParser.Formatters.ColumnFormatOptions options, string! columnName) -> void
+static FixedWidthParser.FixedWidthRuntime.FormatUtf8Value<TValue>(TValue value, System.Span<byte> slice, in FixedWidthParser.FixedWidthContext context, FixedWidthParser.Formatters.ColumnFormatOptions options, string! columnName) -> void
 static FixedWidthParser.FixedWidthRuntime.FormatValue<TValue>(TValue value, System.Span<byte> slice, in FixedWidthParser.FixedWidthContext context, FixedWidthParser.Formatters.ColumnFormatOptions options, string! columnName) -> void
 static FixedWidthParser.FixedWidthRuntime.IsBlank(System.ReadOnlySpan<byte> column, byte trimChar) -> bool
 static FixedWidthParser.FixedWidthRuntime.String(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, byte trimChar = 32, FixedWidthParser.Attributes.TrimMode trimMode = FixedWidthParser.Attributes.TrimMode.Trailing) -> string!

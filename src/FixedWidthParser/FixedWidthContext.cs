@@ -17,13 +17,37 @@ namespace FixedWidthParser
     public readonly record struct FixedWidthContext
     {
         private readonly IFormatProvider? _formatProvider;
-        private readonly Encoding? _encoding;
 
         /// <summary>The format provider for numbers and dates. Defaults to <see cref="CultureInfo.InvariantCulture"/>.</summary>
         public IFormatProvider FormatProvider
         {
             get => _formatProvider ?? CultureInfo.InvariantCulture;
-            init => _formatProvider = value;
+            init
+            {
+                _formatProvider = value;
+                DecimalSeparator = PlainDecimalSeparator(value);
+            }
+        }
+
+        /// <summary>
+        /// The provider's decimal separator as one ASCII byte when its negative sign is "-", so a plain
+        /// number can be written without going through the provider; 0 otherwise.
+        /// </summary>
+        // ponytail: read once, so a NumberFormatInfo mutated after this context was built is not seen.
+        internal byte DecimalSeparator { get => _formatProvider is null ? (byte)'.' : field; private init; }
+
+        private static byte PlainDecimalSeparator(IFormatProvider? provider)
+        {
+            if (provider is null)
+            {
+                return (byte)'.';
+            }
+            var info = NumberFormatInfo.GetInstance(provider);
+            if (!string.Equals(info.NegativeSign, "-", StringComparison.Ordinal) || info.NumberDecimalSeparator is not [var separator] || !char.IsAscii(separator))
+            {
+                return 0;
+            }
+            return (byte)separator;
         }
 
         /// <summary>
@@ -33,9 +57,17 @@ namespace FixedWidthParser
         /// </summary>
         public Encoding Encoding
         {
-            get => _encoding ?? Encoding.UTF8;
-            init => _encoding = value;
+            get => field ?? Encoding.UTF8;
+            init
+            {
+                field = value;
+                IsUtf8 = value is null || value.CodePage == Encoding.UTF8.CodePage;
+            }
         }
+
+        /// <summary>True when <see cref="Encoding"/> is UTF-8, so UTF-8 bytes can be written as they are.</summary>
+        // The backing field stores the negation, so default(FixedWidthContext), which means UTF-8, reads as UTF-8.
+        internal bool IsUtf8 { get => !field; private init => field = !value; }
 
         /// <summary>Interns string columns when set; otherwise each string column is a new string.</summary>
         public StringPool? StringPool { get; init; }

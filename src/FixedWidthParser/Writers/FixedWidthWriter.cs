@@ -288,8 +288,11 @@ namespace FixedWidthParser.Writers
                 throw new InvalidOperationException(
                     $"Column '{member.Name}' has type '{valueType}', which is not string or ISpanFormattable; set a Converter for it.");
             }
+            var formatterType = typeof(IUtf8SpanFormattable).IsAssignableFrom(valueType)
+                ? typeof(Utf8SpanFormattableColumnFormatter<,>)
+                : typeof(SpanFormattableColumnFormatter<,>);
             return (IColumnFormatter<TModel>)Activator.CreateInstance(
-                typeof(SpanFormattableColumnFormatter<,>).MakeGenericType(typeof(TModel), valueType),
+                formatterType.MakeGenericType(typeof(TModel), valueType),
                 attribute.Start, attribute.Length, options, member.Name, getter)!;
         }
     }

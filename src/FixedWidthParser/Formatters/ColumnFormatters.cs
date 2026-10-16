@@ -30,6 +30,16 @@ namespace FixedWidthParser.Formatters
         }
     }
 
+    internal sealed class Utf8SpanFormattableColumnFormatter<TModel, TProperty>(
+        int start, int length, ColumnFormatOptions options, string columnName, RefGetter<TModel, TProperty> getter)
+        : IColumnFormatter<TModel> where TProperty : IUtf8SpanFormattable, ISpanFormattable
+    {
+        public void Format(in TModel model, Span<byte> line, in FixedWidthContext context)
+        {
+            FixedWidthRuntime.FormatUtf8Value(getter(in model), line.Slice(start, length), in context, options, columnName);
+        }
+    }
+
     internal sealed class ConverterColumnFormatter<TModel, TProperty, TConverter>(
         int start, int length, ColumnFormatOptions options, string columnName, RefGetter<TModel, TProperty> getter, TConverter converter)
         : IColumnFormatter<TModel> where TConverter : IFixedWidthConverter<TProperty>

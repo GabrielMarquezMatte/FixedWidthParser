@@ -425,4 +425,10 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 6)] public string Name { get; init; }
         [FixedColumn(6, 3)] public int Age { get; init; }
     }
+
+    /// <summary>A currency column, whose symbol may be non-ASCII depending on the culture.</summary>
+    public readonly record struct PriceModel
+    {
+        [FixedColumn(0, 8, Alignment = Alignment.Right, Format = "C")] public decimal Price { get; init; }
+    }
 }

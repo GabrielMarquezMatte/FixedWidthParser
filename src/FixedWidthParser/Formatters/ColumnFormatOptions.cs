@@ -23,26 +23,22 @@ namespace FixedWidthParser.Formatters
 
             if (length <= width)
             {
-                if (Alignment == Alignment.Right)
-                {
-                    int pad = width - length;
-                    if (Padding != ' ' && content.Length > 0 && (content[0] == (byte)'-' || content[0] == (byte)'+'))
-                    {
-                        slice[0] = content[0];
-                        slice[1..(pad + 1)].Fill(padding);
-                        content[1..].CopyTo(slice[(pad + 1)..]);
-                    }
-                    else
-                    {
-                        slice[..pad].Fill(padding);
-                        content.CopyTo(slice[pad..]);
-                    }
-                }
-                else
+                if (Alignment != Alignment.Right)
                 {
                     content.CopyTo(slice);
                     slice[length..].Fill(padding);
+                    return;
                 }
+                int pad = width - length;
+                if (Padding != ' ' && content.Length > 0 && (content[0] == (byte)'-' || content[0] == (byte)'+'))
+                {
+                    slice[0] = content[0];
+                    slice[1..(pad + 1)].Fill(padding);
+                    content[1..].CopyTo(slice[(pad + 1)..]);
+                    return;
+                }
+                slice[..pad].Fill(padding);
+                content.CopyTo(slice[pad..]);
                 return;
             }
 
@@ -56,11 +52,38 @@ namespace FixedWidthParser.Formatters
             if (Alignment == Alignment.Right)
             {
                 content[(length - width)..].CopyTo(slice);
+                return;
             }
-            else
+            content[..width].CopyTo(slice);
+        }
+
+        /// <summary>
+        /// Aligns and pads <paramref name="length"/> bytes already formatted at the start of
+        /// <paramref name="slice"/>, exactly as <see cref="WriteInto"/> would place them.
+        /// </summary>
+        internal void AlignInPlace(Span<byte> slice, int length)
+        {
+            byte padding = (byte)Padding;
+            int pad = slice.Length - length;
+            if (Alignment != Alignment.Right)
             {
-                content[..width].CopyTo(slice);
+                slice[length..].Fill(padding);
+                return;
             }
+            if (pad == 0)
+            {
+                return;
+            }
+            byte first = slice[0];
+            slice[..length].CopyTo(slice[pad..]);
+            if (Padding != ' ' && length > 0 && (first == (byte)'-' || first == (byte)'+'))
+            {
+                // The sign stays leftmost, ahead of the padding.
+                slice[..(pad + 1)].Fill(padding);
+                slice[0] = first;
+                return;
+            }
+            slice[..pad].Fill(padding);
         }
     }
 }
