@@ -120,6 +120,38 @@ await foreach (var person in reader.ReadFileAsync("people.txt"))
 
 `ReadAsync(Stream, leaveOpen)` mirrors the synchronous overload, and cancellation is honored via `WithCancellation`. When the source is already a [`PipeReader`](https://learn.microsoft.com/dotnet/standard/io/pipelines) — a Kestrel request body, a socket, an upstream pipeline stage — `ReadAsync(PipeReader, leaveOpen)` parses straight off it and lets the pipe own buffering. For plain files and streams the `Stream` overloads are the faster default.
 
+### Parallel aggregation
+
+To fold a large file into one result — totals, counts, groups — read it on several threads:
+
+```csharp
+public sealed class Payroll : IRecordAccumulator<Payroll, Person>
+{
+    public double Total { get; private set; }
+
+    public void Add(in Person person)
+    {
+        Total += person.Salary;
+    }
+
+    public void Merge(Payroll following)
+    {
+        Total += following.Total;
+    }
+}
+
+var payroll = await reader.AggregateFileAsync<Payroll>("people.txt");
+// GeneratedPayroll: the same accumulator over GeneratedPerson.
+var generated = await FixedWidth.AggregateFileAsync<GeneratedPerson, GeneratedPayroll>("people.txt");
+```
+
+The file is cut into byte ranges, each folded into its own accumulator on a worker thread, and the
+accumulators are merged left to right in file order. `Add` must touch only its own instance; `Merge`
+runs on one thread. Every line is parsed exactly once, and a failing line reports the same line number
+as a sequential read. `FixedWidthParallelOptions.DegreeOfParallelism` caps the threads (`0`, the
+default, means one per processor; `1` reads the file in one pass). `OnParseError`, when set, runs on
+the worker threads.
+
 ### Options
 
 Every read takes an optional `FixedWidthReaderOptions`:

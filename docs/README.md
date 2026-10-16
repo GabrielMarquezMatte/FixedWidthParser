@@ -6,6 +6,8 @@ a constraint; the numbers that justified it live here, so they can be re-run and
 
 - [writer-performance.md](writer-performance.md) — where a written line spends its time, and the
   formatting shortcuts that came out of it.
+- [parallel-aggregate.md](parallel-aggregate.md) — how `AggregateFileAsync` scales with the number of
+  workers.
 
 Usage documentation is the [README](../README.md); the shape of the code is
 [ARCHITECTURE.md](../ARCHITECTURE.md).

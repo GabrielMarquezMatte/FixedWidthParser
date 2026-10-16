@@ -67,5 +67,23 @@ namespace FixedWidthParser.Readers
             ArgumentException.ThrowIfNullOrEmpty(path);
             return new(new ReflectionLineParser<TModel>(_parser), path, _options);
         }
+
+        /// <summary>
+        /// Reads a file across several threads and folds every record into a <typeparamref name="TAccumulator"/>,
+        /// one instance per partition, merged in file order.
+        /// </summary>
+        /// <remarks>
+        /// The result equals one sequential pass when <see cref="IRecordAccumulator{TSelf, TModel}.Merge"/> is
+        /// associative. Every line is parsed exactly once, and errors report the same line number as a
+        /// sequential read. <see cref="FixedWidthReaderOptions.OnParseError"/> runs on the worker threads,
+        /// possibly concurrently, and the first failure in file order is the one thrown.
+        /// </remarks>
+        public Task<TAccumulator> AggregateFileAsync<TAccumulator>(string path, FixedWidthParallelOptions? parallel = null, CancellationToken ct = default)
+            where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
+        {
+            ArgumentException.ThrowIfNullOrEmpty(path);
+            return ParallelAggregator.RunAsync<TModel, ReflectionLineParser<TModel>, TAccumulator>(
+                new ReflectionLineParser<TModel>(_parser), path, _options, FixedWidthParallelOptions.Validate(parallel), ct);
+        }
     }
 }

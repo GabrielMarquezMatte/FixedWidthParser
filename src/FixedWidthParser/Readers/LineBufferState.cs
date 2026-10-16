@@ -23,10 +23,23 @@ namespace FixedWidthParser.Readers
         internal int ScanFrom;
         internal bool Eof;
         internal int LineNumber;
+        // Offset, from the first byte read, of the line TryGetLine last returned: the byte after the
+        // previous line break, so a skipped byte order mark belongs to the first line.
+        internal long LineStart;
+        private long _nextLineStart;
+        private long _compacted;
         private int _maxLineLength;
         private bool _preambleChecked;
 
+        /// <summary>Offset, from the first byte read, of the first byte no line has consumed yet.</summary>
+        internal readonly long Consumed => _compacted + Start;
+
         internal void Rent(FixedWidthReaderOptions options)
+        {
+            Rent(options, options.SkipsByteOrderMark);
+        }
+
+        internal void Rent(FixedWidthReaderOptions options, bool skipByteOrderMark)
         {
             Buffer = ArrayPool<byte>.Shared.Rent(options.BufferSize);
             Start = 0;
@@ -34,8 +47,11 @@ namespace FixedWidthParser.Readers
             ScanFrom = 0;
             Eof = false;
             LineNumber = 0;
+            LineStart = 0;
+            _nextLineStart = 0;
+            _compacted = 0;
             _maxLineLength = options.MaxLineLength;
-            _preambleChecked = !options.SkipsByteOrderMark;
+            _preambleChecked = !skipByteOrderMark;
         }
 
         internal LineStatus TryGetLine(out ReadOnlySpan<byte> line)
@@ -110,6 +126,8 @@ namespace FixedWidthParser.Readers
             }
 
             line = Buffer.AsSpan(Start, contentEnd - Start);
+            LineStart = _nextLineStart;
+            _nextLineStart = _compacted + nextStart;
             Start = nextStart;
             ScanFrom = nextStart;
             LineNumber++;
@@ -131,6 +149,7 @@ namespace FixedWidthParser.Readers
 
             End = len;
             ScanFrom -= Start;
+            _compacted += Start;
             Start = 0;
         }
 
