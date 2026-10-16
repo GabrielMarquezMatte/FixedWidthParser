@@ -36,6 +36,11 @@ bytes. Read files written in a single-byte encoding with that encoding (`Encodin
 Windows-1252 after registering `CodePagesEncodingProvider`).
 
 ### Added
+- Parallel aggregation: `FixedWidthReader<T>.AggregateFileAsync` and `FixedWidth.AggregateFileAsync`
+  read a file in byte-range partitions on several threads and fold each into an
+  `IRecordAccumulator<TSelf, TModel>`, merged in file order. Every line is parsed exactly once, and
+  errors carry the same line number as a sequential read. `FixedWidthParallelOptions.DegreeOfParallelism`
+  sets the thread count.
 - `FixedWidthReaderOptions`: `FormatProvider`, `Encoding`, `StringPool`, `BufferSize`,
   `MaxLineLength` and `OnParseError`, taken by every read. `FixedWidthWriterOptions`: `FormatProvider`,
   `Encoding` and `NewLine`.

@@ -67,5 +67,20 @@ namespace FixedWidthParser
             ArgumentException.ThrowIfNullOrEmpty(path);
             return new(default, path, FixedWidthReaderOptions.Validate(options));
         }
+
+        /// <summary>
+        /// Reads a file across several threads and folds every record into a <typeparamref name="TAccumulator"/>,
+        /// one instance per partition, merged in file order.
+        /// </summary>
+        /// <remarks>Carries the same contract as <see cref="FixedWidthReader{TModel}.AggregateFileAsync{TAccumulator}"/>.</remarks>
+        public static Task<TAccumulator> AggregateFileAsync<TModel, TAccumulator>(
+            string path, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken ct = default)
+            where TModel : IFixedWidthModel<TModel>
+            where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
+        {
+            ArgumentException.ThrowIfNullOrEmpty(path);
+            return ParallelAggregator.RunAsync<TModel, GeneratedLineParser<TModel>, TAccumulator>(
+                default, path, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), ct);
+        }
     }
 }

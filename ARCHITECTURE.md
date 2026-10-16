@@ -95,6 +95,26 @@ The async enumerator keeps the line scan synchronous: `MoveNextAsync` returns a 
 A file path is reopened on each enumeration (`FixedWidthRecordEnumerable` and its async sibling); a
 stream is read once and disposed unless the caller passed `leaveOpen`.
 
+### Parallel aggregation
+
+`ParallelAggregator` (`Readers/ParallelAggregator.cs`) backs `AggregateFileAsync` on both paths. It
+opens the file once as a `SafeFileHandle`, cuts it into byte ranges (four per worker, 1 MB to 64 MB
+each), and lets workers pull ranges from a shared counter. Each worker reads its range with
+`RandomAccess.Read`, through its own `LineBufferState`, into its own accumulator; the caller merges the
+accumulators in range order and throws the first failure in file order.
+
+A line belongs to the range its first byte falls in, the byte after the previous line break, so a
+byte order mark belongs to line 1. A worker starts one byte before its range, skips the line it lands
+inside, and stops once the next line would start past its range. Fixed-width lines have no quoting,
+so unlike ExcelReader's CSV engine there is no guessed start to confirm or re-read: every line is
+parsed exactly once. A single range is the sequential read, which is how `DegreeOfParallelism = 1` and
+small files run, so there is no separate sequential twin.
+
+A worker does not know how many lines precede its range. It counts them only when a line fails —
+line breaks from the start of the file up to the failing line, continued from there for later failures
+in the same range — so errors carry the sequential line number and the happy path pays nothing.
+Measurements are in [parallel-aggregate.md](docs/parallel-aggregate.md).
+
 ### Errors
 
 A line that fails to parse costs nothing extra on the lines that succeed. On failure, `ParseErrors`

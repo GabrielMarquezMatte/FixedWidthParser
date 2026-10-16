@@ -172,3 +172,12 @@ static FixedWidthParser.Formatters.ColumnFormatOptions.operator ==(FixedWidthPar
 ~override FixedWidthParser.FixedWidthContext.ToString() -> string
 ~override FixedWidthParser.Formatters.ColumnFormatOptions.Equals(object obj) -> bool
 ~override FixedWidthParser.Formatters.ColumnFormatOptions.ToString() -> string
+FixedWidthParser.FixedWidthParallelOptions
+FixedWidthParser.FixedWidthParallelOptions.DegreeOfParallelism.get -> int
+FixedWidthParser.FixedWidthParallelOptions.DegreeOfParallelism.init -> void
+FixedWidthParser.FixedWidthParallelOptions.FixedWidthParallelOptions() -> void
+FixedWidthParser.IRecordAccumulator<TSelf, TModel>
+FixedWidthParser.IRecordAccumulator<TSelf, TModel>.Add(in TModel model) -> void
+FixedWidthParser.IRecordAccumulator<TSelf, TModel>.Merge(TSelf following) -> void
+FixedWidthParser.Readers.FixedWidthReader<TModel>.AggregateFileAsync<TAccumulator>(string! path, FixedWidthParser.FixedWidthParallelOptions? parallel = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!
+static FixedWidthParser.FixedWidth.AggregateFileAsync<TModel, TAccumulator>(string! path, FixedWidthParser.FixedWidthReaderOptions? options = null, FixedWidthParser.FixedWidthParallelOptions? parallel = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!
