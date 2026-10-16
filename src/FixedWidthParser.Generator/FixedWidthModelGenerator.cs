@@ -103,82 +103,10 @@ namespace FixedWidthParser.Generator
             var columns = ImmutableArray.CreateBuilder<ColumnInfo>();
             foreach (var member in symbol.GetMembers())
             {
-                if (member.IsStatic)
+                if (ExtractColumn(member, columnAttribute, compilation) is { } column)
                 {
-                    continue;
+                    columns.Add(column);
                 }
-
-                ITypeSymbol? memberType = member switch
-                {
-                    IPropertySymbol { SetMethod: not null, DeclaredAccessibility: Accessibility.Public } p => p.Type,
-                    IFieldSymbol { IsReadOnly: false, IsConst: false, DeclaredAccessibility: Accessibility.Public } f => f.Type,
-                    _ => null
-                };
-                if (memberType is null)
-                {
-                    continue;
-                }
-
-                var attribute = member.GetAttributes().FirstOrDefault(a =>
-                    SymbolEqualityComparer.Default.Equals(a.AttributeClass, columnAttribute));
-                if (attribute is null || attribute.ConstructorArguments.Length < 2)
-                {
-                    continue;
-                }
-
-                int start = attribute.ConstructorArguments[0].Value is int s ? s : 0;
-                int length = attribute.ConstructorArguments[1].Value is int l ? l : 0;
-
-                ITypeSymbol? converterType = null;
-                int alignment = 0; // Alignment.Left
-                char padding = ' ';
-                string? format = null;
-                int overflow = 0; // OverflowBehavior.Default
-                char trimChar = ' ';
-                int trimMode = 0; // TrimMode.Trailing
-                foreach (var namedArg in attribute.NamedArguments)
-                {
-                    switch (namedArg.Key)
-                    {
-                        case "Converter" when namedArg.Value.Value is ITypeSymbol converterSymbol:
-                            converterType = converterSymbol;
-                            break;
-                        case "Alignment" when namedArg.Value.Value is int a:
-                            alignment = a;
-                            break;
-                        case "Padding" when namedArg.Value.Value is char p:
-                            padding = p;
-                            break;
-                        case "Format":
-                            format = namedArg.Value.Value as string;
-                            break;
-                        case "Overflow" when namedArg.Value.Value is int o:
-                            overflow = o;
-                            break;
-                        case "TrimChar" when namedArg.Value.Value is char t:
-                            trimChar = t;
-                            break;
-                        case "TrimMode" when namedArg.Value.Value is int tm:
-                            trimMode = tm;
-                            break;
-                    }
-                }
-
-                var underlying = UnwrapNullable(memberType);
-                bool isNullable = !SymbolEqualityComparer.Default.Equals(underlying, memberType);
-                string? converterFqn = converterType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                var kind = Classify(underlying, converterType, format, compilation);
-                var writeKind = ClassifyWrite(underlying, converterType, compilation);
-                // Mirrors FixedWidthWriter: an explicit Overflow wins; otherwise string truncates and everything else throws.
-                int resolvedOverflow = overflow;
-                if (resolvedOverflow == 0)
-                {
-                    resolvedOverflow = writeKind == WriteKind.String ? 1 : 2;
-                }
-
-                columns.Add(new ColumnInfo(
-                    member.Name, start, length, kind, underlying.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), converterFqn,
-                    isNullable, writeKind, alignment, padding, format, resolvedOverflow, trimChar, trimMode));
             }
 
             string? ns = symbol.ContainingNamespace.IsGlobalNamespace
@@ -194,6 +122,87 @@ namespace FixedWidthParser.Generator
                 declaration.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)),
                 symbol.ContainingType is not null,
                 declaration.Identifier.GetLocation());
+        }
+
+        // A settable public instance property or field carrying [FixedColumn]; null for any other member.
+        private static ColumnInfo? ExtractColumn(ISymbol member, INamedTypeSymbol columnAttribute, Compilation compilation)
+        {
+            if (member.IsStatic)
+            {
+                return null;
+            }
+
+            ITypeSymbol? memberType = member switch
+            {
+                IPropertySymbol { SetMethod: not null, DeclaredAccessibility: Accessibility.Public } p => p.Type,
+                IFieldSymbol { IsReadOnly: false, IsConst: false, DeclaredAccessibility: Accessibility.Public } f => f.Type,
+                _ => null
+            };
+            if (memberType is null)
+            {
+                return null;
+            }
+
+            var attribute = member.GetAttributes().FirstOrDefault(a =>
+                SymbolEqualityComparer.Default.Equals(a.AttributeClass, columnAttribute));
+            if (attribute is null || attribute.ConstructorArguments.Length < 2)
+            {
+                return null;
+            }
+
+            int start = attribute.ConstructorArguments[0].Value is int s ? s : 0;
+            int length = attribute.ConstructorArguments[1].Value is int l ? l : 0;
+
+            ITypeSymbol? converterType = null;
+            int alignment = 0; // Alignment.Left
+            char padding = ' ';
+            string? format = null;
+            int overflow = 0; // OverflowBehavior.Default
+            char trimChar = ' ';
+            int trimMode = 0; // TrimMode.Trailing
+            foreach (var namedArg in attribute.NamedArguments)
+            {
+                switch (namedArg.Key)
+                {
+                    case "Converter" when namedArg.Value.Value is ITypeSymbol converterSymbol:
+                        converterType = converterSymbol;
+                        break;
+                    case "Alignment" when namedArg.Value.Value is int a:
+                        alignment = a;
+                        break;
+                    case "Padding" when namedArg.Value.Value is char p:
+                        padding = p;
+                        break;
+                    case "Format":
+                        format = namedArg.Value.Value as string;
+                        break;
+                    case "Overflow" when namedArg.Value.Value is int o:
+                        overflow = o;
+                        break;
+                    case "TrimChar" when namedArg.Value.Value is char t:
+                        trimChar = t;
+                        break;
+                    case "TrimMode" when namedArg.Value.Value is int tm:
+                        trimMode = tm;
+                        break;
+                }
+            }
+
+            var underlying = UnwrapNullable(memberType);
+            bool isNullable = !SymbolEqualityComparer.Default.Equals(underlying, memberType);
+            string? converterFqn = converterType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            var kind = Classify(underlying, converterType, format, compilation);
+            var writeKind = ClassifyWrite(underlying, converterType, compilation);
+            // Mirrors FixedWidthWriter: an explicit Overflow wins; otherwise string truncates and everything else throws.
+            int resolvedOverflow = overflow;
+            if (resolvedOverflow == 0)
+            {
+                resolvedOverflow = writeKind == WriteKind.String ? 1 : 2;
+            }
+
+            return new ColumnInfo(
+                member.Name, start, length, kind, underlying.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), converterFqn,
+                isNullable, writeKind, alignment, padding, format, resolvedOverflow, trimChar, trimMode);
         }
 
         // Implements IFixedWidthModel<ThisType>?
