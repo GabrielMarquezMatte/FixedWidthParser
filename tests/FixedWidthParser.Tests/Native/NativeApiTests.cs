@@ -73,6 +73,21 @@ namespace FixedWidthParser.Tests.Native
         }
 
         [Fact]
+        public void DefFile_ListsEveryExport()
+        {
+            var exports = typeof(NativeApi).Assembly.GetType("FixedWidthParser.Native.Exports")!
+                .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+                .Select(m => m.GetCustomAttributes(typeof(System.Runtime.InteropServices.UnmanagedCallersOnlyAttribute), false).Cast<System.Runtime.InteropServices.UnmanagedCallersOnlyAttribute>().FirstOrDefault()?.EntryPoint)
+                .OfType<string>()
+                .Order(StringComparer.Ordinal);
+            string def = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "FixedWidthParser.Native", "include", "fixedwidth.def");
+
+            var listed = File.ReadAllLines(def).Skip(1).Select(l => l.Trim()).Where(l => l.Length > 0).Order(StringComparer.Ordinal);
+
+            Assert.Equal(exports, listed);
+        }
+
+        [Fact]
         public void HandleTable_ResolvesOnlyItsOwnKind()
         {
             nint id = NativeHandleTable.Register("a string");
