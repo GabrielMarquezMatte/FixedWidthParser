@@ -141,8 +141,10 @@ source -> producer (1 thread) -> bounded queue -> N workers -> ordered merge
 
 The producer carries the bytes after the last line break into the next chunk and counts the line
 breaks it hands over, so each chunk knows the number of its first line and workers report sequential
-line numbers directly. The queue holds about two chunks per worker, which bounds memory whatever the
-source's size. A line longer than a chunk grows the chunk, up to `MaxLineLength`. A failure in the
+line numbers directly. The queue holds about two chunks per worker, and results are merged in chunk
+order as soon as every earlier chunk is merged. Each chunk holds one of four slots per worker from the
+time it is read until it is merged, so a slow early chunk stalls the producer instead of letting later
+results pile up: chunks and unmerged accumulators stay bounded whatever the source's size. A line longer than a chunk grows the chunk, up to `MaxLineLength`. A failure in the
 producer lies past every chunk it emitted, so a worker's failure is thrown first. With
 `DegreeOfParallelism = 1` the stream is read by the ordinary async enumerator.
 

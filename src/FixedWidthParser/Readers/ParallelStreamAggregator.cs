@@ -10,13 +10,15 @@ namespace FixedWidthParser.Readers
     /// Parallel aggregation over a sequential source. One producer reads the source into pooled chunks,
     /// cuts each after its last line break, carries the rest into the next chunk, and counts the line
     /// breaks it hands over, so every chunk knows the number of its first line. Workers fold the chunks
-    /// from a bounded queue into one accumulator each; the caller merges them in chunk order. A queue
-    /// about twice the worker count bounds memory to roughly that many chunks, whatever the source's size.
+    /// from a bounded queue into one accumulator each, merged in chunk order as they complete. Every chunk
+    /// holds one of a few slots per worker from the moment it is produced until it is merged, which bounds
+    /// memory, chunks and unmerged accumulators alike, whatever the source's size.
     /// </summary>
     internal static class ParallelStreamAggregator
     {
         private const int DefaultChunkSize = 256 * 1024;
         private const int LinesPerCancellationCheck = 4096;
+        private const int SlotsPerWorker = 4;
 
         [StructLayout(LayoutKind.Auto)]
         private readonly record struct Chunk(int Index, byte[] Buffer, int Length, long LinesBefore);
@@ -70,20 +72,25 @@ namespace FixedWidthParser.Readers
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             int workerCount = options.Workers;
+            // Two chunks queued and one folding per worker leave one slot per worker for results waiting on an earlier chunk.
+            using var slots = new SemaphoreSlim(workerCount * SlotsPerWorker);
             var queue = Channel.CreateBounded<Chunk>(new BoundedChannelOptions(workerCount * 2) { SingleWriter = true });
-            var workers = new Task<List<Outcome<TAccumulator>>>[workerCount];
+            var merge = new OrderedMerge<TModel, TAccumulator>(slots);
+            var workers = new Task[workerCount];
             foreach (ref var worker in workers.AsSpan())
             {
-                worker = Task.Run(() => ConsumeAsync<TModel, TParser, TAccumulator>(parser, queue.Reader, options, ct), ct);
+#pragma warning disable IDISP013 // Every worker is awaited below, before the slots are disposed.
+                worker = Task.Run(() => ConsumeAsync<TModel, TParser, TAccumulator>(parser, queue.Reader, merge, options, ct), ct);
+#pragma warning restore IDISP013
             }
 
             ExceptionDispatchInfo? producerFailure = null;
             try
             {
-                await ProduceAsync(source, queue.Writer, options, options.ChunkSize > 0 ? options.ChunkSize : DefaultChunkSize, ct).ConfigureAwait(false);
+                await ProduceAsync(source, queue.Writer, slots, options, options.ChunkSize > 0 ? options.ChunkSize : DefaultChunkSize, ct).ConfigureAwait(false);
             }
             // Cancellation too: the workers must finish before the chunks left in the queue are returned.
-#pragma warning disable CA1031 // Rethrown by Merge once the workers have finished.
+#pragma warning disable CA1031 // Rethrown by merge.Result once the workers have finished.
             catch (Exception ex)
 #pragma warning restore CA1031
             {
@@ -96,8 +103,8 @@ namespace FixedWidthParser.Readers
 
             try
             {
-                var outcomes = (await Task.WhenAll(workers).ConfigureAwait(false)).SelectMany(o => o).OrderBy(o => o.Index);
-                return Merge<TModel, TAccumulator>(outcomes, producerFailure);
+                await Task.WhenAll(workers).ConfigureAwait(false);
+                return merge.Result(producerFailure);
             }
             finally
             {
@@ -108,33 +115,8 @@ namespace FixedWidthParser.Readers
             }
         }
 
-        // Every chunk precedes the point where the producer failed, so a worker's failure comes first in the source.
-        private static TAccumulator Merge<TModel, TAccumulator>(IEnumerable<Outcome<TAccumulator>> outcomes, ExceptionDispatchInfo? producerFailure)
-            where TModel : allows ref struct
-            where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
-        {
-            TAccumulator? merged = default;
-            bool first = true;
-            foreach (var outcome in outcomes)
-            {
-                outcome.Failure?.Throw();
-                if (first)
-                {
-                    merged = outcome.Accumulator;
-                    first = false;
-                    continue;
-                }
-                merged!.Merge(outcome.Accumulator!);
-            }
-            producerFailure?.Throw();
-            if (first)
-            {
-                return new TAccumulator();
-            }
-            return merged!;
-        }
-
-        private static async Task ProduceAsync(Stream source, ChannelWriter<Chunk> queue, FixedWidthReaderOptions options, int chunkSize, CancellationToken ct)
+        private static async Task ProduceAsync(
+            Stream source, ChannelWriter<Chunk> queue, SemaphoreSlim slots, FixedWidthReaderOptions options, int chunkSize, CancellationToken ct)
         {
             byte[] buffer = ArrayPool<byte>.Shared.Rent(chunkSize);
             int filled = 0;
@@ -171,6 +153,7 @@ namespace FixedWidthParser.Readers
                     long lines = buffer.AsSpan(0, cut).Count((byte)'\n');
                     try
                     {
+                        await slots.WaitAsync(ct).ConfigureAwait(false);
                         await queue.WriteAsync(new Chunk(index++, buffer, cut, linesBefore), ct).ConfigureAwait(false);
                     }
                     catch
@@ -206,26 +189,28 @@ namespace FixedWidthParser.Readers
             return bigger;
         }
 
-        private static async Task<List<Outcome<TAccumulator>>> ConsumeAsync<TModel, TParser, TAccumulator>(
-            TParser parser, ChannelReader<Chunk> queue, FixedWidthReaderOptions options, CancellationToken ct)
+        private static async Task ConsumeAsync<TModel, TParser, TAccumulator>(
+            TParser parser, ChannelReader<Chunk> queue, OrderedMerge<TModel, TAccumulator> merge, FixedWidthReaderOptions options, CancellationToken ct)
             where TModel : allows ref struct
             where TParser : struct, IRecordLineParser<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
-            var outcomes = new List<Outcome<TAccumulator>>();
             var context = options.Context;
             await foreach (var chunk in queue.ReadAllAsync(ct).ConfigureAwait(false))
             {
+                Outcome<TAccumulator> outcome;
                 try
                 {
-                    outcomes.Add(new(chunk.Index, Fold<TModel, TParser, TAccumulator>(parser, chunk, options, in context, ct), null));
+                    outcome = new(chunk.Index, Fold<TModel, TParser, TAccumulator>(parser, chunk, options, in context, ct), null);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                // Anything but the caller's cancellation, which stops everything, becomes this chunk's result: a chunk
+                // that never completes would hold its slot, and the producer would wait for it forever.
+                catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
                 {
-                    outcomes.Add(new(chunk.Index, default, ExceptionDispatchInfo.Capture(ex)));
+                    outcome = new(chunk.Index, default, ExceptionDispatchInfo.Capture(ex));
                 }
+                merge.Complete(outcome);
             }
-            return outcomes;
         }
 
         private static TAccumulator Fold<TModel, TParser, TAccumulator>(
@@ -257,6 +242,76 @@ namespace FixedWidthParser.Readers
                 lines.Return();
             }
             return accumulator;
+        }
+
+        /// <summary>
+        /// Merges the workers' accumulators left to right as soon as every earlier chunk has been merged, and
+        /// frees each chunk's slot then: a slow early chunk stalls the producer instead of letting later
+        /// results pile up.
+        /// </summary>
+        private sealed class OrderedMerge<TModel, TAccumulator>(SemaphoreSlim slots)
+            where TModel : allows ref struct
+            where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
+        {
+            private readonly Lock _gate = new();
+            private readonly Dictionary<int, Outcome<TAccumulator>> _pending = [];
+            private int _next;
+            private bool _any;
+            private TAccumulator? _merged;
+            private ExceptionDispatchInfo? _failure;
+
+            public void Complete(Outcome<TAccumulator> outcome)
+            {
+                int released = 0;
+                lock (_gate)
+                {
+                    _pending.Add(outcome.Index, outcome);
+                    while (_pending.Remove(_next, out var ready))
+                    {
+                        _next++;
+                        released++;
+                        // Past the first failure the results are dropped; only their slots still matter.
+                        _failure ??= ready.Failure;
+                        if (_failure is null)
+                        {
+                            Accept(ready.Accumulator!);
+                        }
+                    }
+                }
+                if (released > 0)
+                {
+                    slots.Release(released);
+                }
+            }
+
+            // Every chunk precedes the point where the producer failed, so a worker's failure comes first in the source.
+            public TAccumulator Result(ExceptionDispatchInfo? producerFailure)
+            {
+                _failure?.Throw();
+                producerFailure?.Throw();
+                return _any ? _merged! : new TAccumulator();
+            }
+
+            private void Accept(TAccumulator accumulator)
+            {
+                if (!_any)
+                {
+                    _merged = accumulator;
+                    _any = true;
+                    return;
+                }
+                try
+                {
+                    _merged!.Merge(accumulator);
+                }
+                // Thrown by Result instead, so the slots keep flowing and the producer is never left waiting.
+#pragma warning disable CA1031
+                catch (Exception ex)
+#pragma warning restore CA1031
+                {
+                    _failure = ExceptionDispatchInfo.Capture(ex);
+                }
+            }
         }
     }
 }
