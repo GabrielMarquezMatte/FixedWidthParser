@@ -3,6 +3,8 @@ foreach(test read write arrow)
     target_link_libraries(fw_cpp_${test} PRIVATE fw::fixedwidth)
     if(MSVC)
         target_compile_options(fw_cpp_${test} PRIVATE /W4 /WX)
+        # The tests use standard std::fopen, which the CRT deprecates (C4996) in favour of fopen_s.
+        target_compile_definitions(fw_cpp_${test} PRIVATE _CRT_SECURE_NO_WARNINGS)
     else()
         # Designated initializers that leave defaulted options out are the intended use.
         target_compile_options(fw_cpp_${test} PRIVATE -Wall -Wextra -Werror -Wno-missing-field-initializers)
