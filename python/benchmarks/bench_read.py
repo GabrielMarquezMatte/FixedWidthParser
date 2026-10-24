@@ -12,11 +12,10 @@ import tempfile
 import time
 from pathlib import Path
 
+import fixedwidth as fw
 import numpy as np
 import pandas as pd
 import polars as pl
-
-import fixedwidth as fw
 
 sys.path.insert(0, str(Path(__file__).parent))
 import cotahist  # noqa: E402

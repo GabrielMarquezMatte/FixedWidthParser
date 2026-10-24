@@ -8,7 +8,13 @@ from typing import Any
 
 from fixedwidth import _native
 from fixedwidth.layout import Layout, check
-from fixedwidth.types import Column, ColumnType, FixedWidthError, WriteOptions, code_page
+from fixedwidth.types import (
+    Column,
+    ColumnType,
+    FixedWidthError,
+    WriteOptions,
+    code_page,
+)
 
 
 def write(data: Any, path: str | os.PathLike[str], layout: Layout, options: WriteOptions | None = None) -> None:
