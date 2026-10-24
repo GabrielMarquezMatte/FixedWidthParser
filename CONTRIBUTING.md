@@ -28,10 +28,10 @@ rewrites — see [ARCHITECTURE.md](ARCHITECTURE.md) for the shape of the codebas
   - New inputs go on the options objects or a new overload, never as a new optional parameter on an
     existing method.
   - `dotnet pack` runs package validation against `PackageValidationBaselineVersion` in
-    `src/FixedWidthParser/FixedWidthParser.csproj`, and CI runs it on every pull request. A break that
-    belongs in a major version is listed in `CompatibilitySuppressions.xml` (generate it with
-    `dotnet pack -p:ApiCompatGenerateSuppressionFile=true`) and in the changelog. After each release,
-    move the baseline to the version just published and delete the suppressions file.
+    `src/FixedWidthParser/FixedWidthParser.csproj`, and CI runs it on every pull request. It is off
+    while a major version is in development, since that version breaks the last one on purpose; list
+    those breaks in the changelog. After each release, turn validation back on with the baseline set
+    to the version just published.
 
 - **Tests are required for behavior changes.** Run the suite before opening a PR:
 

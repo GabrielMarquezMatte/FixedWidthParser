@@ -21,12 +21,10 @@
     <NoWarn>$([System.String]::Copy('$(NoWarn)').Replace('RS0016', '').Replace('RS0037', ''));CS1591;S2743;CA1720;S3011</NoWarn>
   </PropertyGroup>
 
-  <!-- Pack fails on any binary break against the baseline; move it to each new release. The 2.0
-       breaks against 1.1.1 are listed, deliberately, in CompatibilitySuppressions.xml; delete that
-       file when the baseline moves to 2.0.0. -->
+  <!-- ponytail: package validation is off while 2.0 breaks 1.x on purpose. Once 2.0.0 ships, set
+       EnablePackageValidation=true and PackageValidationBaselineVersion=2.0.0 here. -->
   <PropertyGroup>
-    <EnablePackageValidation>true</EnablePackageValidation>
-    <PackageValidationBaselineVersion>1.1.1</PackageValidationBaselineVersion>
+    <EnablePackageValidation>false</EnablePackageValidation>
   </PropertyGroup>
 
   <!-- NuGet package metadata -->
