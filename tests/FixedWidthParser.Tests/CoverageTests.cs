@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using System.Text;
 using FixedWidthParser.Infrastructure;
@@ -34,6 +35,28 @@ namespace FixedWidthParser.Tests
 
             Assert.False(FixedWidth.TryParse(bad, FixedWidthLayout.FromAttributes<TimeExactModel>(), Ctx, out _));
             Assert.False(FixedWidth.TryParse<GenTimeExactModel>(bad, Ctx, out _));
+        }
+
+        [Fact]
+        public void StrictDecoding_InvalidWideColumn_ReturnsTheRentedBuffer()
+        {
+            // Wider than the 256-char stack buffer, so decoding rents; the trailing 0xFF makes the strict decoder throw.
+            var strict = new UTF8Encoding(false, true);
+            byte[] column = new byte[300];
+            column.AsSpan().Fill((byte)'1');
+            column[^1] = 0xFF;
+            var options = new ColumnParseOptions(' ', TrimMode.Trailing, "yyyyMMdd");
+            int size = strict.GetMaxCharCount(column.Length);
+
+            // The shared pool hands a thread back the array it last returned, so a lost rental shows as a different array.
+            char[] cached = ArrayPool<char>.Shared.Rent(size);
+            ArrayPool<char>.Shared.Return(cached);
+
+            Assert.Throws<DecoderFallbackException>(() => FixedWidthRuntime.TryDateOnlyExact(column, CtxWith(encoding: strict), in options, out _));
+
+            char[] next = ArrayPool<char>.Shared.Rent(size);
+            ArrayPool<char>.Shared.Return(next);
+            Assert.Same(cached, next);
         }
 
         [Fact]

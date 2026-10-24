@@ -436,7 +436,18 @@ namespace FixedWidthParser.Infrastructure
                 rented = ArrayPool<char>.Shared.Rent(max);
                 chars = rented;
             }
-            int written = encoding.GetChars(bytes, chars);
+            int written;
+            try
+            {
+                written = encoding.GetChars(bytes, chars);
+            }
+            catch
+            {
+                // A strict decoder throws on invalid bytes, before the caller owns the rental.
+                Return(rented);
+                rented = null;
+                throw;
+            }
             return chars[..written];
         }
 
