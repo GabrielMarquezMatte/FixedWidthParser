@@ -50,6 +50,54 @@ namespace FixedWidthParser.Tests
             }
         }
 
+        /// <summary>Stalls on the first line and counts the accumulators not yet merged into another.</summary>
+        public sealed class SlowFirstChunk : IRecordAccumulator<SlowFirstChunk, NameAgeModel>
+        {
+            public static int Unmerged;
+            public static int MaxUnmerged;
+
+            public SlowFirstChunk()
+            {
+                int unmerged = Interlocked.Increment(ref Unmerged);
+                int max;
+                while (unmerged > (max = Volatile.Read(ref MaxUnmerged)) && Interlocked.CompareExchange(ref MaxUnmerged, unmerged, max) != max)
+                {
+                }
+            }
+
+            public List<int> Values { get; } = [];
+
+            public void Add(in NameAgeModel model)
+            {
+                if (model.Name == "Name1" && model.Age == 1)
+                {
+                    Thread.Sleep(300);
+                }
+                Values.Add(model.Age);
+            }
+
+            public void Merge(SlowFirstChunk following)
+            {
+                Values.AddRange(following.Values);
+                Interlocked.Decrement(ref Unmerged);
+            }
+        }
+
+        public sealed class CancelsItself : IRecordAccumulator<CancelsItself, NameAgeModel>
+        {
+            public void Add(in NameAgeModel model)
+            {
+                if (model.Age == 7)
+                {
+                    throw new OperationCanceledException();
+                }
+            }
+
+            public void Merge(CancelsItself following)
+            {
+            }
+        }
+
         public static TheoryData<Source, int> SourcesAndChunkSizes()
         {
             var data = new TheoryData<Source, int>();
@@ -128,6 +176,31 @@ namespace FixedWidthParser.Tests
             Assert.Equal(2000, expected.Count);
             Assert.Equal(expected, runtime.Values);
             Assert.Equal(expected, generated.Values);
+        }
+
+        // Hundreds of chunks finish while the first one stalls; only a few slots' worth may wait for it.
+        [Fact]
+        public async Task SlowEarlyChunk_BoundsTheResultsWaitingToMerge()
+        {
+            File.WriteAllText(_path, Content(2000));
+            var options = new FixedWidthReaderOptions { DegreeOfParallelism = 4, ChunkSize = 64 };
+
+            var result = await FixedWidth.AggregateAsync<NameAgeModel, SlowFirstChunk>(
+                File.OpenRead(_path), FixedWidthLayout.FromAttributes<NameAgeModel>(), leaveOpen: false, options, TestContext.Current.CancellationToken);
+
+            Assert.Equal(Sequential(), result.Values);
+            Assert.InRange(SlowFirstChunk.MaxUnmerged, 1, 4 * 4 + 1);
+        }
+
+        // Not the caller's cancellation: it fails its chunk like any exception instead of stalling the producer.
+        [Fact]
+        public async Task AccumulatorThrowingOperationCanceled_FailsTheAggregation()
+        {
+            File.WriteAllText(_path, Content(2000));
+            var options = new FixedWidthReaderOptions { DegreeOfParallelism = 4, ChunkSize = 64 };
+
+            await Assert.ThrowsAsync<OperationCanceledException>(() => FixedWidth.AggregateAsync<NameAgeModel, CancelsItself>(
+                File.OpenRead(_path), FixedWidthLayout.FromAttributes<NameAgeModel>(), leaveOpen: false, options, TestContext.Current.CancellationToken));
         }
 
         [Theory]
