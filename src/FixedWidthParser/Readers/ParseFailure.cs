@@ -30,10 +30,41 @@ namespace FixedWidthParser.Readers
     /// </summary>
     internal static class ParseErrors
     {
+        /// <summary>
+        /// Whether an enumerator should yield <paramref name="line"/>. Without
+        /// <see cref="FixedWidthReaderOptions.OnParseError"/> every line is yielded and a bad one throws when
+        /// <see cref="Parse"/> reads it; with it, the line is parsed here so a bad one can be skipped.
+        /// </summary>
+        internal static bool Accepts<TModel, TParser>(
+            TParser parser, ReadOnlySpan<byte> line, long lineNumber, in FixedWidthContext context, Func<FixedWidthParseException, bool>? onParseError)
+            where TModel : allows ref struct
+            where TParser : struct, IRecordLineParser<TModel>
+        {
+            if (onParseError is null || parser.TryParse(line, in context, out _))
+            {
+                return true;
+            }
+            HandleFailure<TModel, TParser>(parser, line, lineNumber, in context, onParseError);
+            return false;
+        }
+
+        /// <summary>Parses the line an enumerator sits on, throwing as a reader does when it does not parse.</summary>
+        internal static TModel Parse<TModel, TParser>(TParser parser, ReadOnlySpan<byte> line, long lineNumber, in FixedWidthContext context)
+            where TModel : allows ref struct
+            where TParser : struct, IRecordLineParser<TModel>
+        {
+            if (!parser.TryParse(line, in context, out var model))
+            {
+                HandleFailure<TModel, TParser>(parser, line, lineNumber, in context, onParseError: null);
+            }
+            return model;
+        }
+
         /// <summary>Returns when <see cref="FixedWidthReaderOptions.OnParseError"/> asks to skip the line; throws otherwise.</summary>
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void HandleFailure<TModel, TParser>(
             TParser parser, ReadOnlySpan<byte> line, long lineNumber, in FixedWidthContext context, Func<FixedWidthParseException, bool>? onParseError)
+            where TModel : allows ref struct
             where TParser : struct, IRecordLineParser<TModel>
         {
             var failure = new ParseFailure();

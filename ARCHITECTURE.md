@@ -71,9 +71,11 @@ sources (`TryBuildSpecial`) and mirrored by the generator's `Classify`; the form
 string, `IUtf8SpanFormattable`, `ISpanFormattable`, a nullable wrapper) is mirrored by `ClassifyWrite`.
 Column options are validated by `FormatterBuilder.ResolveOptions` for both.
 
-A layout accepts `ref struct` models (`allows ref struct`) for `TryParse` and `TryFormat`; the readers
-do not, since an enumerator has to hold its current model in a field, and an attribute layout over a
-`ref struct` does not write.
+A layout accepts `ref struct` models (`allows ref struct`) for `TryParse`, `TryFormat`, the readers and
+the aggregates; an attribute layout over a `ref struct` does not write. An enumerator cannot hold a
+`ref struct` in a field, so `MoveNext` only finds the next line and `Current`
+parses it on access; `foreach` reads `Current` once, so each line is still parsed once. With
+`OnParseError` set, `MoveNext` parses the line too, to skip a bad one before yielding it.
 
 ## Reading
 

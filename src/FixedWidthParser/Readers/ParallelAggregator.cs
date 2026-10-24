@@ -21,6 +21,7 @@ namespace FixedWidthParser.Readers
 
         internal static async Task<TAccumulator> RunAsync<TModel, TParser, TAccumulator>(
             TParser parser, string path, FixedWidthReaderOptions options, CancellationToken ct)
+            where TModel : allows ref struct
             where TParser : struct, IRecordLineParser<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
@@ -48,6 +49,7 @@ namespace FixedWidthParser.Readers
         private static void Drain<TModel, TParser, TAccumulator>(
             TParser parser, SafeFileHandle handle, ChunkPlan plan, FixedWidthReaderOptions options,
             TAccumulator[] results, ExceptionDispatchInfo?[] failures, CancellationToken ct)
+            where TModel : allows ref struct
             where TParser : struct, IRecordLineParser<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
@@ -67,6 +69,7 @@ namespace FixedWidthParser.Readers
 
         private static TAccumulator AggregateChunk<TModel, TParser, TAccumulator>(
             TParser parser, SafeFileHandle handle, long start, long end, FixedWidthReaderOptions options, CancellationToken ct)
+            where TModel : allows ref struct
             where TParser : struct, IRecordLineParser<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
@@ -108,6 +111,7 @@ namespace FixedWidthParser.Readers
 
         /// <summary>Parses one line and folds it in; <see langword="false"/> when it does not parse.</summary>
         internal static bool TryAdd<TModel, TParser, TAccumulator>(TParser parser, ReadOnlySpan<byte> line, in FixedWidthContext context, ref TAccumulator accumulator)
+            where TModel : allows ref struct
             where TParser : struct, IRecordLineParser<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>
         {

@@ -20,8 +20,10 @@ namespace FixedWidthParser
     /// </remarks>
     public interface IRecordAccumulator<TSelf, TModel>
         where TSelf : IRecordAccumulator<TSelf, TModel>
+        where TModel : allows ref struct
     {
         /// <summary>Folds one record into this instance.</summary>
+        /// <param name="model">The record. It is valid only for the duration of the call.</param>
         void Add(in TModel model);
 
         /// <summary>Folds the records of the partition that immediately follows this one into this instance.</summary>

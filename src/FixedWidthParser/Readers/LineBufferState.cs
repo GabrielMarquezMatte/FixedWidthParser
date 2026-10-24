@@ -28,11 +28,16 @@ namespace FixedWidthParser.Readers
         internal long LineStart;
         private long _nextLineStart;
         private long _compacted;
+        private int _lineOffset;
+        private int _lineLength;
         private int _maxLineLength;
         private bool _preambleChecked;
 
         /// <summary>Offset, from the first byte read, of the first byte no line has consumed yet.</summary>
         internal readonly long Consumed => _compacted + Start;
+
+        /// <summary>The line <see cref="TryGetLine"/> last returned, valid until the next <see cref="Compact"/>.</summary>
+        internal readonly ReadOnlySpan<byte> CurrentLine => Buffer.AsSpan(_lineOffset, _lineLength);
 
         internal void Rent(FixedWidthReaderOptions options)
         {
@@ -139,7 +144,9 @@ namespace FixedWidthParser.Readers
                 throw ParseErrors.LineTooLong(LineNumber + 1L, _maxLineLength);
             }
 
-            line = Buffer.AsSpan(Start, contentEnd - Start);
+            _lineOffset = Start;
+            _lineLength = contentEnd - Start;
+            line = Buffer.AsSpan(_lineOffset, _lineLength);
             LineStart = _nextLineStart;
             _nextLineStart = _compacted + nextStart;
             Start = nextStart;
