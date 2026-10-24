@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace FixedWidthParser.Infrastructure
 {
     /// <summary>
@@ -10,6 +12,7 @@ namespace FixedWidthParser.Infrastructure
     /// constructor overload and a new property; the existing constructor is never changed.
     /// </remarks>
 #pragma warning disable CA1815 // Never compared; value equality is meaningless for it.
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public readonly struct ColumnParseOptions
 #pragma warning restore CA1815
     {

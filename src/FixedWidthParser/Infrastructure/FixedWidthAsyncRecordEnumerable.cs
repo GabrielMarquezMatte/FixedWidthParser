@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace FixedWidthParser.Infrastructure
 {
     /// <summary>
@@ -5,6 +7,7 @@ namespace FixedWidthParser.Infrastructure
     /// <c>await foreach</c>. A stream is read once; a file is reopened, with asynchronous I/O, on each
     /// enumeration.
     /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public sealed class FixedWidthAsyncRecordEnumerable<TModel, TParser> : IAsyncEnumerable<TModel>
         where TParser : struct, IRecordLineParser<TModel>
     {
