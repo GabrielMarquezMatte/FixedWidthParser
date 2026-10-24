@@ -56,7 +56,12 @@ null read leaves a plain field at its default. `make_field`'s last argument, `fw
 rest of `ColumnSpec`: `scale`, `format`, `trim_char`, `trim_mode`, `alignment`, `padding`, `overflow`.
 
 `TableView<T>` keeps the library's columns and converts a row on access; a `std::string_view` field points
-into it. An integer field narrower than `int64_t` that a value does not fit fails the read with
+into it. `view[i]` is unchecked, `view.at(i)` returns an empty optional out of range, and `view.table()` is
+the `fw::Table` underneath, with `lines_read()` and `lines_skipped()`. `fw::TypedReader<T>::open_file` or
+`open_memory` reads in batches: `next()` returns the next `TableView<T>`, or an empty optional at the end.
+`fw::layout_for<T>()` returns the `fw::Layout` the bindings describe, for the untyped API.
+
+An integer field narrower than `int64_t` that a value does not fit fails the read with
 `FW_INVALID_ARGUMENT` instead of wrapping.
 
 ## CMake

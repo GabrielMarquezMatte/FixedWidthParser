@@ -258,7 +258,7 @@ Match the exception to whose fault it is:
 |---|---|
 | A line that does not fit the layout | `FixedWidthParseException`, naming the line, column and raw text |
 | A source that breaks a configured limit (`MaxLineLength`) | `InvalidDataException` |
-| A model whose layout is invalid | `InvalidOperationException` from the runtime constructor, or a generator diagnostic |
+| A model whose layout is invalid | `InvalidOperationException` from `FixedWidthLayout.Build` or `FromAttributes`, or a generator diagnostic |
 | A value too wide for its column when writing | `InvalidOperationException` naming the column |
 | A bad argument from the caller | `ArgumentException` and its subtypes |
 
@@ -310,7 +310,7 @@ not a performance nit.
 
 ## Twins
 
-Three sets of code paths in this library must stay behaviorally identical, and nothing in the compiler
+Four sets of code paths in this library must stay behaviorally identical, and nothing in the compiler
 keeps them honest:
 
 - **Layout and generated.** `FixedWidthLayout<T>` (from attributes or `Build`) and the generator's
@@ -319,7 +319,11 @@ keeps them honest:
 - **Sequential and parallel reads.** `AggregateFileAsync` and `AggregateAsync` must return what a
   sequential read folded into one accumulator would, with the same line numbers in errors. Their
   per-line work shares `ParallelAggregator.TryAdd`.
-- **Sync and async writers.** `WriteMany` and `WriteManyAsync` batch the same way.
+- **Sync and async.** The readers (`RecordEnumerator` and `AsyncRecordEnumerator`) split and parse lines
+  the same way, and the writers (`WriteMany` and `WriteManyAsync`) batch the same way.
+- **Model and sink loops.** `ParallelAggregator.AggregateChunk` folds models into an accumulator and
+  `SinkChunk` feeds the native layer's sinks; they are copies on purpose (the comment above them says
+  why).
 
 So:
 

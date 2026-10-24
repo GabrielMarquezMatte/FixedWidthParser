@@ -39,6 +39,11 @@ read a `PipeReader.Create(stream, ...)` through `AsStream()`, with the segment s
 A pipe with 4 KB segments caps the run at the speed one thread can copy 4 KB reads into chunks, so
 the pipe's own buffer size, not the engine, sets the ceiling.
 
+These rows predate merging the stream engine's results as they complete, which bounds its memory (each
+chunk now holds a slot until it is merged). A Stopwatch check afterwards, on a 2,000,000-line file of the
+same model, put the `Stream` engine at `dop 8` at 8.2–8.7 ns a line against 8.9 here; the table was not
+re-run.
+
 The stream engine beats the file engine from `dop 2` up on this cached file. The file engine's ranges
 are 3.25 MB at `dop 8` against the stream engine's 256 KB chunks, and each file worker refills a 64 KB
 buffer with one `RandomAccess.Read` call at a time. Measured warm, the read size is not it, and the

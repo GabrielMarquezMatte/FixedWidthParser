@@ -37,6 +37,10 @@ public readonly partial record struct GeneratedPerson : IFixedWidthModel<Generat
 }
 ```
 
+Columns can be declared on a base class: its `[FixedColumn]` members are part of the layout, for
+attribute and generated models alike. An override keeps the attribute of the member it overrides unless
+it declares its own, and a `new` member replaces the one it hides.
+
 ## Layouts without attributes
 
 For a type you cannot annotate, or a layout known only at run time, describe the columns in code. Each column binds through a getter (used to write) and a setter (used to read), so nothing is reflected over:
