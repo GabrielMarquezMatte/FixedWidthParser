@@ -37,14 +37,14 @@ namespace FixedWidthParser.Tests.Native
             };
         }
 
-        internal static ReadOutcome FromMemory(byte[] content, NativeLayout layout, NativeReadOptionsRaw? options = null)
+        internal static ReadOutcome FromMemory(byte[] content, NativeLayout layout, NativeReadOptionsRaw? options = null, int chunkSize = 0)
         {
             NativeReadOptionsRaw value = options ?? default;
             NativeTableRaw table = default;
             var result = new NativeReadResultRaw { StructSize = sizeof(NativeReadResultRaw) };
             fixed (byte* data = content)
             {
-                int status = ReadApi.ReadMemory(data, content.Length, layout, options is null ? null : &value, &table, &result);
+                int status = ReadApi.ReadMemory(data, content.Length, layout, options is null ? null : &value, &table, &result, chunkSize);
                 return Collect(status, &table, result);
             }
         }

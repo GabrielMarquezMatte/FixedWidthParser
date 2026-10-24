@@ -24,6 +24,8 @@ namespace FixedWidthParser.Native
 
         internal ref T this[int index] => ref _data[index];
 
+        internal ReadOnlySpan<T> Span => new(_data, Count);
+
         /// <summary>Drops every element from <paramref name="count"/> on.</summary>
         internal void Truncate(int count)
         {

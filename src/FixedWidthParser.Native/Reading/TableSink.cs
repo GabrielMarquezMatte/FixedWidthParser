@@ -11,6 +11,7 @@ namespace FixedWidthParser.Native.Reading
         private readonly ColumnBuilder[] _columns;
         private readonly int _requiredLength;
         private int _failedColumn;
+        private List<TableSink>? _following;
 
         internal TableSink(NativeLayout layout)
         {
@@ -18,10 +19,15 @@ namespace FixedWidthParser.Native.Reading
             _columns = [.. layout.Columns.Select(c => new ColumnBuilder(c))];
             _requiredLength = layout.Columns.Max(c => c.Start + c.Length);
             _failedColumn = -1;
+            _following = null;
             Rows = 0;
         }
 
+        /// <summary>The rows of this partition only.</summary>
         internal int Rows { get; private set; }
+
+        /// <summary>The rows of this partition and every partition merged into it.</summary>
+        internal readonly long TotalRows => Rows + (_following?.Sum(f => (long)f.Rows) ?? 0);
 
         public bool TryAdd(ReadOnlySpan<byte> line, in FixedWidthContext context)
         {
@@ -58,29 +64,42 @@ namespace FixedWidthParser.Native.Reading
                 lineNumber, column.Name, column.Start, column.Length, raw);
         }
 
-        public readonly void Merge(TableSink following)
+        /// <summary>Adopts the following partition without copying; <see cref="Publish"/> concatenates once.</summary>
+        public void Merge(TableSink following)
         {
-            throw new NotSupportedException("Partitioned reads arrive in a later step.");
+            (_following ??= []).Add(following);
         }
+
+        /// <summary>This partition's columns, then every merged partition's, in file order.</summary>
+        internal readonly IEnumerable<ColumnBuilder[]> Chunks => _following is null ? [_columns] : [_columns, .. _following.Select(f => f._columns)];
 
         /// <summary>Hands every column's buffers to <paramref name="table"/>; the caller frees them with <see cref="NativeTable.Free"/>.</summary>
         internal readonly unsafe void Publish(NativeTableRaw* table)
         {
+            var chunks = Chunks.ToArray();
             var columns = (NativeColumnRaw*)Marshal.AllocHGlobal(_columns.Length * sizeof(NativeColumnRaw));
+            var parts = new ColumnBuilder[chunks.Length];
             for (int i = 0; i < _columns.Length; i++)
             {
-                _columns[i].Publish(columns + i);
+                for (int c = 0; c < chunks.Length; c++)
+                {
+                    parts[c] = chunks[c][i];
+                }
+                ColumnBuilder.Concat(parts, columns + i);
             }
             table->ColumnCount = _columns.Length;
-            table->RowCount = Rows;
+            table->RowCount = TotalRows;
             table->Columns = columns;
         }
 
         public readonly void Dispose()
         {
-            foreach (var column in _columns)
+            foreach (var chunk in Chunks)
             {
-                column.Dispose();
+                foreach (var column in chunk)
+                {
+                    column.Dispose();
+                }
             }
         }
 
