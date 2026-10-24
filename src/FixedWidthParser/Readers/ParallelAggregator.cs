@@ -38,13 +38,14 @@ namespace FixedWidthParser.Readers
         /// <summary>
         /// Reads <c>[dataStart, source.Length)</c> in partitions, one <typeparamref name="TSink"/> each, merged in
         /// order. <paramref name="dataStart"/> must start a line; line numbers count from the start of the source.
+        /// <paramref name="create"/> gets the bytes of the partition its sink will read.
         /// </summary>
         internal static Task<TSink> RunAsync<TSink>(
-            IRandomAccessSource source, long dataStart, Func<TSink> create, FixedWidthReaderOptions options, CancellationToken ct)
+            IRandomAccessSource source, long dataStart, Func<long, TSink> create, FixedWidthReaderOptions options, CancellationToken ct)
             where TSink : struct, ILineSink<TSink>
         {
             return RunPartitionsAsync(source, dataStart, options,
-                (plan, index) => SinkChunk(source, plan, index, create(), options, ct),
+                (plan, index) => SinkChunk(source, plan, index, create(plan.End(index) - plan.Start(index)), options, ct),
                 static (merged, following) =>
                 {
                     merged.Merge(following);
@@ -170,6 +171,11 @@ namespace FixedWidthParser.Readers
                     }
                     if (!sink.TryAdd(line, in context))
                     {
+                        if (options.OnSkip is { } skip)
+                        {
+                            skip();
+                            continue;
+                        }
                         ParseErrors.Reject(sink.Diagnose(line, reader.LineNumberAt(lineStart), in context), options.OnParseError);
                     }
                 }

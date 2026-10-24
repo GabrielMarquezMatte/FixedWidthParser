@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using FixedWidthParser.Native.Layouts;
 using FixedWidthParser.Readers;
@@ -14,11 +15,13 @@ namespace FixedWidthParser.Native.Reading
         private int _failedColumn;
         private List<TableSink>? _following;
 
-        internal TableSink(NativeLayout layout, TableLimits limits)
+        /// <param name="expectedBytes">The bytes this sink will see, if known: fixed-width lines make that a row count.</param>
+        internal TableSink(NativeLayout layout, TableLimits limits, long expectedBytes = 0)
         {
             _layout = layout;
             _limits = limits;
-            _columns = [.. layout.Columns.Select(c => new ColumnBuilder(c, limits.MaxTextBytes))];
+            long expectedRows = Math.Min(expectedBytes / (layout.LineLength + 1), limits.MaxRows);
+            _columns = [.. layout.Columns.Select(c => new ColumnBuilder(c, limits.MaxTextBytes, expectedRows))];
             _requiredLength = layout.Columns.Max(c => c.Start + c.Length);
             _failedColumn = -1;
             _following = null;
@@ -90,14 +93,16 @@ namespace FixedWidthParser.Native.Reading
             table->ColumnCount = _columns.Length;
             try
             {
-                var parts = new ColumnBuilder[chunks.Length];
-                for (int i = 0; i < _columns.Length; i++)
+                if (chunks.Length == 1)
                 {
-                    for (int c = 0; c < chunks.Length; c++)
+                    for (int i = 0; i < _columns.Length; i++)
                     {
-                        parts[c] = chunks[c][i];
+                        chunks[0][i].Publish(columns + i);
                     }
-                    ColumnBuilder.Concat(parts, columns + i);
+                }
+                else
+                {
+                    ConcatInParallel(chunks, columns);
                 }
                 table->RowCount = TotalRows;
             }
@@ -105,6 +110,29 @@ namespace FixedWidthParser.Native.Reading
             {
                 NativeTable.Free(table);
                 throw;
+            }
+        }
+
+        // A concatenated column is all fresh memory, and its page faults are most of the copy's cost: one
+        // column per thread spreads them out.
+        private static unsafe void ConcatInParallel(ColumnBuilder[][] chunks, NativeColumnRaw* columns)
+        {
+            nint target = (nint)columns;
+            try
+            {
+                Parallel.For(0, chunks[0].Length, i =>
+                {
+                    var parts = new ColumnBuilder[chunks.Length];
+                    for (int c = 0; c < chunks.Length; c++)
+                    {
+                        parts[c] = chunks[c][i];
+                    }
+                    ColumnBuilder.Concat(parts, (NativeColumnRaw*)target + i);
+                });
+            }
+            catch (AggregateException ex)
+            {
+                ExceptionDispatchInfo.Throw(ex.InnerExceptions[0]);
             }
         }
 
