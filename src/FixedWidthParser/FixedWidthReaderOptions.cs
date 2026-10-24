@@ -40,6 +40,28 @@ namespace FixedWidthParser
         /// </summary>
         public Func<FixedWidthParseException, bool>? OnParseError { get; init; }
 
+        /// <summary>
+        /// The maximum number of threads <c>AggregateFileAsync</c> and <c>AggregateAsync</c> read with.
+        /// <c>0</c>, the default, means <see cref="Environment.ProcessorCount"/>; <c>1</c> reads in one pass.
+        /// Other reads ignore it.
+        /// </summary>
+        public int DegreeOfParallelism { get; init; }
+
+        // Bytes per partition or chunk; 0 sizes them from the source. Tests set it to cut every boundary.
+        internal int ChunkSize { get; init; }
+
+        internal int Workers
+        {
+            get
+            {
+                if (DegreeOfParallelism == 0)
+                {
+                    return Environment.ProcessorCount;
+                }
+                return DegreeOfParallelism;
+            }
+        }
+
         internal FixedWidthContext Context => new() { FormatProvider = FormatProvider!, Encoding = Encoding!, StringPool = StringPool };
 
         internal bool SkipsByteOrderMark => Encoding is null || Encoding.CodePage == Encoding.UTF8.CodePage;
@@ -54,6 +76,10 @@ namespace FixedWidthParser
             if (options.MaxLineLength < 1)
             {
                 throw new ArgumentOutOfRangeException(nameof(options), options.MaxLineLength, "MaxLineLength must be at least 1.");
+            }
+            if (options.DegreeOfParallelism < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(options), options.DegreeOfParallelism, "DegreeOfParallelism must not be negative.");
             }
             return options;
         }

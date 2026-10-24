@@ -52,10 +52,6 @@ static FixedWidthParser.FixedWidthContext.operator !=(FixedWidthParser.FixedWidt
 static FixedWidthParser.FixedWidthContext.operator ==(FixedWidthParser.FixedWidthContext left, FixedWidthParser.FixedWidthContext right) -> bool
 ~override FixedWidthParser.FixedWidthContext.Equals(object obj) -> bool
 ~override FixedWidthParser.FixedWidthContext.ToString() -> string
-FixedWidthParser.FixedWidthParallelOptions
-FixedWidthParser.FixedWidthParallelOptions.DegreeOfParallelism.get -> int
-FixedWidthParser.FixedWidthParallelOptions.DegreeOfParallelism.init -> void
-FixedWidthParser.FixedWidthParallelOptions.FixedWidthParallelOptions() -> void
 FixedWidthParser.IRecordAccumulator<TSelf, TModel>
 FixedWidthParser.IRecordAccumulator<TSelf, TModel>.Add(in TModel model) -> void
 FixedWidthParser.IRecordAccumulator<TSelf, TModel>.Merge(TSelf following) -> void
@@ -200,7 +196,9 @@ static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryTimeOnlyExact(System
 ~override FixedWidthParser.Infrastructure.ColumnFormatOptions.ToString() -> string
 FixedWidthParser.IFixedWidthConverter<T>.TryFormat(T value, System.Span<byte> destination, in FixedWidthParser.FixedWidthContext context, out int bytesWritten) -> bool
 FixedWidthParser.IFixedWidthConverter<T>.TryParse(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, out T value) -> bool
-static FixedWidthParser.FixedWidth.AggregateAsync<TModel, TAccumulator>(System.IO.Stream! stream, FixedWidthParser.FixedWidthLayout<TModel>! layout, bool leaveOpen = false, FixedWidthParser.FixedWidthReaderOptions? options = null, FixedWidthParser.FixedWidthParallelOptions? parallel = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!
-static FixedWidthParser.FixedWidth.AggregateAsync<TModel, TAccumulator>(System.IO.Stream! stream, bool leaveOpen = false, FixedWidthParser.FixedWidthReaderOptions? options = null, FixedWidthParser.FixedWidthParallelOptions? parallel = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!
-static FixedWidthParser.FixedWidth.AggregateFileAsync<TModel, TAccumulator>(string! path, FixedWidthParser.FixedWidthLayout<TModel>! layout, FixedWidthParser.FixedWidthReaderOptions? options = null, FixedWidthParser.FixedWidthParallelOptions? parallel = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!
-static FixedWidthParser.FixedWidth.AggregateFileAsync<TModel, TAccumulator>(string! path, FixedWidthParser.FixedWidthReaderOptions? options = null, FixedWidthParser.FixedWidthParallelOptions? parallel = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!
+FixedWidthParser.FixedWidthReaderOptions.DegreeOfParallelism.get -> int
+FixedWidthParser.FixedWidthReaderOptions.DegreeOfParallelism.init -> void
+static FixedWidthParser.FixedWidth.AggregateAsync<TModel, TAccumulator>(System.IO.Stream! stream, FixedWidthParser.FixedWidthLayout<TModel>! layout, bool leaveOpen = false, FixedWidthParser.FixedWidthReaderOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!
+static FixedWidthParser.FixedWidth.AggregateAsync<TModel, TAccumulator>(System.IO.Stream! stream, bool leaveOpen = false, FixedWidthParser.FixedWidthReaderOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!
+static FixedWidthParser.FixedWidth.AggregateFileAsync<TModel, TAccumulator>(string! path, FixedWidthParser.FixedWidthLayout<TModel>! layout, FixedWidthParser.FixedWidthReaderOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!
+static FixedWidthParser.FixedWidth.AggregateFileAsync<TModel, TAccumulator>(string! path, FixedWidthParser.FixedWidthReaderOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!

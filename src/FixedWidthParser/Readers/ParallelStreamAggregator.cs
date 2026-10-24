@@ -26,17 +26,17 @@ namespace FixedWidthParser.Readers
 
         /// <summary>Folds <paramref name="source"/>, disposing it afterwards unless <paramref name="leaveOpen"/>.</summary>
         internal static async Task<TAccumulator> RunAsync<TModel, TParser, TAccumulator>(
-            TParser parser, Stream source, bool leaveOpen, FixedWidthReaderOptions options, FixedWidthParallelOptions parallel, CancellationToken ct)
+            TParser parser, Stream source, bool leaveOpen, FixedWidthReaderOptions options, CancellationToken ct)
             where TParser : struct, IRecordLineParser<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             try
             {
-                if (parallel.Workers == 1)
+                if (options.Workers == 1)
                 {
                     return await SequentialAsync<TModel, TParser, TAccumulator>(parser, source, options, ct).ConfigureAwait(false);
                 }
-                return await PartitionedAsync<TModel, TParser, TAccumulator>(parser, source, options, parallel, ct).ConfigureAwait(false);
+                return await PartitionedAsync<TModel, TParser, TAccumulator>(parser, source, options, ct).ConfigureAwait(false);
             }
             finally
             {
@@ -62,11 +62,11 @@ namespace FixedWidthParser.Readers
         }
 
         private static async Task<TAccumulator> PartitionedAsync<TModel, TParser, TAccumulator>(
-            TParser parser, Stream source, FixedWidthReaderOptions options, FixedWidthParallelOptions parallel, CancellationToken ct)
+            TParser parser, Stream source, FixedWidthReaderOptions options, CancellationToken ct)
             where TParser : struct, IRecordLineParser<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
-            int workerCount = parallel.Workers;
+            int workerCount = options.Workers;
             var queue = Channel.CreateBounded<Chunk>(new BoundedChannelOptions(workerCount * 2) { SingleWriter = true });
             var workers = new Task<List<Outcome<TAccumulator>>>[workerCount];
             foreach (ref var worker in workers.AsSpan())
@@ -77,7 +77,7 @@ namespace FixedWidthParser.Readers
             ExceptionDispatchInfo? producerFailure = null;
             try
             {
-                await ProduceAsync(source, queue.Writer, options, parallel.ChunkSize > 0 ? parallel.ChunkSize : DefaultChunkSize, ct).ConfigureAwait(false);
+                await ProduceAsync(source, queue.Writer, options, options.ChunkSize > 0 ? options.ChunkSize : DefaultChunkSize, ct).ConfigureAwait(false);
             }
             // Cancellation too: the workers must finish before the chunks left in the queue are returned.
 #pragma warning disable CA1031 // Rethrown by Merge once the workers have finished.

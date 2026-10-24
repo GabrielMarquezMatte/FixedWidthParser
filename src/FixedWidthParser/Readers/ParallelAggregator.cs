@@ -20,15 +20,15 @@ namespace FixedWidthParser.Readers
         private const int LinesPerCancellationCheck = 4096;
 
         internal static async Task<TAccumulator> RunAsync<TModel, TParser, TAccumulator>(
-            TParser parser, string path, FixedWidthReaderOptions options, FixedWidthParallelOptions parallel, CancellationToken ct)
+            TParser parser, string path, FixedWidthReaderOptions options, CancellationToken ct)
             where TParser : struct, IRecordLineParser<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            var plan = new ChunkPlan(RandomAccess.GetLength(handle), parallel);
+            var plan = new ChunkPlan(RandomAccess.GetLength(handle), options);
             var results = new TAccumulator[plan.Count];
             var failures = new ExceptionDispatchInfo?[plan.Count];
-            var workers = new Task[Math.Min(parallel.Workers, plan.Count)];
+            var workers = new Task[Math.Min(options.Workers, plan.Count)];
             foreach (ref var worker in workers.AsSpan())
             {
                 worker = Task.Run(() => Drain<TModel, TParser, TAccumulator>(parser, handle, plan, options, results, failures, ct), ct);
@@ -125,10 +125,10 @@ namespace FixedWidthParser.Readers
             private readonly long _chunkSize;
             private int _next = -1;
 
-            internal ChunkPlan(long length, FixedWidthParallelOptions parallel)
+            internal ChunkPlan(long length, FixedWidthReaderOptions options)
             {
                 _length = length;
-                _chunkSize = ChunkSize(length, parallel);
+                _chunkSize = ChunkSize(length, options);
                 Count = (int)Math.Max(1, (length + _chunkSize - 1) / _chunkSize);
             }
 
@@ -150,17 +150,17 @@ namespace FixedWidthParser.Readers
                 return index < Count;
             }
 
-            private static long ChunkSize(long length, FixedWidthParallelOptions parallel)
+            private static long ChunkSize(long length, FixedWidthReaderOptions options)
             {
-                if (parallel.ChunkSize > 0)
+                if (options.ChunkSize > 0)
                 {
-                    return parallel.ChunkSize;
+                    return options.ChunkSize;
                 }
-                if (parallel.Workers == 1)
+                if (options.Workers == 1)
                 {
                     return Math.Max(1, length);
                 }
-                return Math.Clamp(length / ((long)parallel.Workers * ChunksPerWorker), MinChunkBytes, MaxChunkBytes);
+                return Math.Clamp(length / ((long)options.Workers * ChunksPerWorker), MinChunkBytes, MaxChunkBytes);
             }
         }
 
