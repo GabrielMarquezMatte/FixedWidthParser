@@ -175,3 +175,12 @@ FixedWidthParser.Readers.FixedWidthReader<TModel>.AggregateFileAsync<TAccumulato
 static FixedWidthParser.FixedWidth.AggregateFileAsync<TModel, TAccumulator>(string! path, FixedWidthParser.FixedWidthReaderOptions? options = null, FixedWidthParser.FixedWidthParallelOptions? parallel = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!
 FixedWidthParser.Readers.FixedWidthReader<TModel>.AggregateAsync<TAccumulator>(System.IO.Stream! stream, bool leaveOpen = false, FixedWidthParser.FixedWidthParallelOptions? parallel = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!
 static FixedWidthParser.FixedWidth.AggregateAsync<TModel, TAccumulator>(System.IO.Stream! stream, bool leaveOpen = false, FixedWidthParser.FixedWidthReaderOptions? options = null, FixedWidthParser.FixedWidthParallelOptions? parallel = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!
+FixedWidthParser.ColumnGetter<TModel, TValue>
+FixedWidthParser.ColumnSetter<TModel, TValue>
+FixedWidthParser.FixedWidthLayout
+FixedWidthParser.FixedWidthLayout<TModel>
+static FixedWidthParser.FixedWidth.TryFormat<TModel>(in TModel model, FixedWidthParser.FixedWidthLayout<TModel>! layout, System.Span<byte> destination, in FixedWidthParser.FixedWidthContext context, out int bytesWritten) -> bool
+static FixedWidthParser.FixedWidth.TryParse<TModel>(System.ReadOnlySpan<byte> line, FixedWidthParser.FixedWidthLayout<TModel>! layout, in FixedWidthParser.FixedWidthContext context, out TModel model) -> bool
+static FixedWidthParser.FixedWidthLayout.FromAttributes<TModel>() -> FixedWidthParser.FixedWidthLayout<TModel>!
+virtual FixedWidthParser.ColumnGetter<TModel, TValue>.Invoke(in TModel model) -> TValue
+virtual FixedWidthParser.ColumnSetter<TModel, TValue>.Invoke(ref TModel model, TValue value) -> void

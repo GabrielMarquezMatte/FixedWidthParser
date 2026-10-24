@@ -1,4 +1,4 @@
-using System.Runtime.ExceptionServices;
+using System.Diagnostics.CodeAnalysis;
 
 namespace FixedWidthParser.Parsers
 {
@@ -9,40 +9,15 @@ namespace FixedWidthParser.Parsers
     /// </summary>
     public sealed class FixedWidthParser<TModel> where TModel : new(), allows ref struct
     {
-        private static readonly Func<TModel> _modelFactory;
-        private static readonly ColumnParserInfo<TModel>[] _processors;
-        private static readonly int _requiredLineLength;
-        private static readonly ExceptionDispatchInfo? _buildError;
-
-        // The build is static (once per type). Any layout/configuration error is captured and
-        // rethrown from the instance constructor, so the caller gets a clean exception instead of
-        // a TypeInitializationException on first use.
-#pragma warning disable CA1810, S3963 // The try/catch needs a static constructor.
-        static FixedWidthParser()
-        {
-            try
-            {
-                _modelFactory = ParserBuilder.BuildModelFactory<TModel>();
-                _processors = ParserBuilder.BuildProcessors<TModel>();
-                _requiredLineLength = ParserBuilder.ComputeRequiredLineLength<TModel>(_processors);
-                _buildError = null;
-            }
-#pragma warning disable CA1031 // Rethrown from the instance constructor.
-            catch (Exception ex)
-#pragma warning restore CA1031
-            {
-                _modelFactory = null!;
-                _processors = [];
-                _requiredLineLength = 0;
-                _buildError = ExceptionDispatchInfo.Capture(ex);
-            }
-        }
-#pragma warning restore CA1810, S3963
+        private readonly FixedWidthLayout<TModel> _layout;
 
         /// <summary>Builds the parser, throwing <see cref="InvalidOperationException"/> when the model's layout is invalid.</summary>
+        [RequiresUnreferencedCode("Attribute layouts reflect over TModel's public properties and fields, which trimming may remove.")]
+        [RequiresDynamicCode("Attribute layouts compile member accessors at runtime (Expression.Compile / MakeGenericType).")]
         public FixedWidthParser()
         {
-            _buildError?.Throw();
+            _layout = FixedWidthLayout.FromAttributes<TModel>();
+            _layout.EnsureCanRead();
         }
 
         /// <summary>
@@ -52,23 +27,7 @@ namespace FixedWidthParser.Parsers
         /// </summary>
         public bool TryParse(ReadOnlySpan<byte> line, in FixedWidthContext context, out TModel model)
         {
-            if (line.Length < _requiredLineLength)
-            {
-                context.ReportShortLine(_requiredLineLength);
-                model = default!;
-                return false;
-            }
-
-            model = _modelFactory();
-            foreach (ref readonly var processor in _processors.AsSpan())
-            {
-                if (!processor.Parse(line.Slice(processor.Start, processor.Length), in context, ref model))
-                {
-                    context.ReportFailedColumn(processor.Name, processor.Start, processor.Length);
-                    return false;
-                }
-            }
-            return true;
+            return _layout.TryParse(line, in context, out model);
         }
     }
 }

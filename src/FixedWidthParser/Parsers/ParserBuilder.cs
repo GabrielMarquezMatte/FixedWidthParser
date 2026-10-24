@@ -26,7 +26,7 @@ namespace FixedWidthParser.Parsers
             {
                 var (memberType, model, access) = ModelColumns.MemberAccess(typeof(TModel), member);
                 var value = Expression.Parameter(memberType, "value");
-                var actionType = typeof(RefAction<,>).MakeGenericType(typeof(TModel), memberType);
+                var actionType = typeof(ColumnSetter<,>).MakeGenericType(typeof(TModel), memberType);
                 var setter = Expression.Lambda(actionType, Expression.Assign(access, value), model, value).Compile();
                 var parse = ColumnParserFactory.Create<TModel>(memberType, setter, attribute.Converter, member.Name, attribute.TrimChar, attribute.TrimMode, attribute.Format);
                 processors.Add(new(attribute.Start, attribute.Length, member.Name, parse));

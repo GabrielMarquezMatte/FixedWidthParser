@@ -17,11 +17,46 @@ namespace FixedWidthParser
             return TModel.TryParse(line, in context, out model);
         }
 
+        /// <summary>
+        /// Parses a single line, without its line break, into <typeparamref name="TModel"/> through
+        /// <paramref name="layout"/>. Returns <see langword="false"/> when the line is shorter than the layout
+        /// or a non-string column fails to parse, after reporting why through <paramref name="context"/>.
+        /// </summary>
+        /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a setter.</exception>
+        public static bool TryParse<TModel>(ReadOnlySpan<byte> line, FixedWidthLayout<TModel> layout, in FixedWidthContext context, out TModel model)
+            where TModel : allows ref struct
+        {
+            ArgumentNullException.ThrowIfNull(layout);
+            layout.EnsureCanRead();
+            return layout.TryParse(line, in context, out model);
+        }
+
         /// <summary>Formats <paramref name="model"/> into <paramref name="destination"/>, without a line break.</summary>
         public static bool TryFormat<TModel>(in TModel model, Span<byte> destination, in FixedWidthContext context, out int bytesWritten)
             where TModel : IFixedWidthModel<TModel>, allows ref struct
         {
             return TModel.TryFormat(in model, destination, in context, out bytesWritten);
+        }
+
+        /// <summary>
+        /// Formats <paramref name="model"/> into <paramref name="destination"/> through <paramref name="layout"/>,
+        /// without a line break. Returns <see langword="false"/> only when <paramref name="destination"/> is
+        /// shorter than the line.
+        /// </summary>
+        /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a getter, or a value does not fit a column whose overflow throws.</exception>
+        public static bool TryFormat<TModel>(in TModel model, FixedWidthLayout<TModel> layout, Span<byte> destination, in FixedWidthContext context, out int bytesWritten)
+            where TModel : allows ref struct
+        {
+            ArgumentNullException.ThrowIfNull(layout);
+            layout.EnsureCanWrite();
+            if (destination.Length < layout.LineLength)
+            {
+                bytesWritten = 0;
+                return false;
+            }
+            layout.FormatLine(in model, destination[..layout.LineLength], in context);
+            bytesWritten = layout.LineLength;
+            return true;
         }
 
         /// <summary>Reads from a stream, once. <paramref name="leaveOpen"/> controls whether the stream is disposed when iteration ends.</summary>
