@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using FixedWidthParser.Readers;
 
 namespace FixedWidthParser.Infrastructure
@@ -6,6 +7,7 @@ namespace FixedWidthParser.Infrastructure
     /// Asynchronous record enumerator over a stream. The line scan stays synchronous; only the refill
     /// awaits the stream.
     /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public sealed class AsyncRecordEnumerator<TModel, TParser> : IAsyncEnumerator<TModel>
         where TParser : struct, IRecordLineParser<TModel>
     {

@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace FixedWidthParser.Infrastructure
 {
     /// <summary>
@@ -6,6 +8,7 @@ namespace FixedWidthParser.Infrastructure
     /// devirtualizes <see cref="TryParse"/> into a direct call. Public only because it appears in the
     /// enumerator types; the library is its only implementer.
     /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public interface IRecordLineParser<TModel> where TModel : allows ref struct
     {
         /// <summary>Parses a buffered line into a model.</summary>
@@ -16,6 +19,7 @@ namespace FixedWidthParser.Infrastructure
     // value equality is meaningless for them.
 #pragma warning disable CA1815 // Override equals and operator equals on value types
     /// <summary>Layout parse strategy: forwards to a <see cref="FixedWidthLayout{TModel}"/>, built from attributes or fluently.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public readonly struct LayoutLineParser<TModel> : IRecordLineParser<TModel>
     {
         private readonly FixedWidthLayout<TModel> _layout;
@@ -33,6 +37,7 @@ namespace FixedWidthParser.Infrastructure
     }
 
     /// <summary>Source-generated parse strategy: forwards to the model's static <see cref="IFixedWidthModel{TSelf}.TryParse"/>.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public readonly struct GeneratedLineParser<TModel> : IRecordLineParser<TModel> where TModel : IFixedWidthModel<TModel>
     {
         /// <inheritdoc />

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Globalization;
 using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
@@ -79,6 +80,7 @@ namespace FixedWidthParser
         /// <see cref="FixedWidthParseException"/>. Generated parsers call this before returning
         /// <see langword="false"/>; outside a reader's diagnosis it does nothing.
         /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
         public void ReportFailedColumn(string columnName, int start, int length)
         {
             Failure?.SetColumn(columnName, start, length);
@@ -89,6 +91,7 @@ namespace FixedWidthParser
         /// Generated parsers call this before returning <see langword="false"/>; outside a reader's
         /// diagnosis it does nothing.
         /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
         public void ReportShortLine(int requiredLength)
         {
             Failure?.SetShortLine(requiredLength);

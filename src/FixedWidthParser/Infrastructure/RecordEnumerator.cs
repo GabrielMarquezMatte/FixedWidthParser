@@ -1,4 +1,5 @@
 using System.Collections;
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using FixedWidthParser.Readers;
 
@@ -8,6 +9,7 @@ namespace FixedWidthParser.Infrastructure
     /// Synchronous record enumerator over a stream. A <see langword="struct"/> specialized by
     /// <typeparamref name="TParser"/>, so <c>foreach</c> allocates nothing and parsing devirtualizes.
     /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public struct RecordEnumerator<TModel, TParser> : IEnumerator<TModel>
         where TParser : struct, IRecordLineParser<TModel>
     {

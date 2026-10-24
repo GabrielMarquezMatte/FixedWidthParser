@@ -1,5 +1,6 @@
 using System.Buffers.Text;
 using System.Buffers;
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -15,6 +16,7 @@ namespace FixedWidthParser.Infrastructure
     /// and writer, so both paths share one set of semantics.
     /// <para>Public because the generated code lives in the consumer assembly; not intended for direct use.</para>
     /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public static class FixedWidthRuntime
     {
         private const int StackBufferSize = 256;

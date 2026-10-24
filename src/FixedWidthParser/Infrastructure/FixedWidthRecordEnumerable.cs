@@ -1,4 +1,5 @@
 using System.Collections;
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 
 namespace FixedWidthParser.Infrastructure
@@ -9,6 +10,7 @@ namespace FixedWidthParser.Infrastructure
     /// <see langword="struct"/> enumerator for allocation-free <c>foreach</c>. A stream is read once; a
     /// file is reopened on each enumeration.
     /// </summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public sealed class FixedWidthRecordEnumerable<TModel, TParser> : IEnumerable<TModel>
         where TParser : struct, IRecordLineParser<TModel>
     {
