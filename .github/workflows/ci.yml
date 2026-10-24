@@ -91,6 +91,26 @@ jobs:
           files: ./TestResults/*.cobertura.xml
           fail_ci_if_error: false
 
+  # Ordinary builds never link with NativeAOT. Publishing tests/AotSmoke does, and turns any trimming/AOT
+  # warning (IL2xxx/IL3xxx) into a failure; running the binary proves the fluent layout round-trips.
+  aot-smoke:
+    name: NativeAOT smoke (win-x64)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish AotSmoke (PublishAot)
+        run: dotnet publish tests/AotSmoke/AotSmoke.csproj --configuration Release --runtime win-x64 -p:IlcTreatWarningsAsErrors=true
+
+      - name: Run the published binary
+        run: ./tests/AotSmoke/bin/Release/net10.0/win-x64/publish/AotSmoke.exe
+
   # Surfaces vulnerable transitive/direct packages regardless of NoWarn suppressions
   # in Directory.Build.props (NU190x warnings are silenced there).
   audit:
