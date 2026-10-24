@@ -108,10 +108,7 @@ def _values(kind: ColumnType, spec: Column, array: Any, pa: Any, np: Any) -> Any
     if kind is ColumnType.FLOAT64:
         return array.cast(pa.float64()).fill_null(0).to_numpy(zero_copy_only=False)
     if kind is ColumnType.DECIMAL:
-        if pa.types.is_decimal(array.type):
-            return np.array([_unscaled(v, spec) for v in array.to_pylist()], dtype=np.int64)
-        floats = array.cast(pa.float64()).fill_null(0).to_numpy(zero_copy_only=False)
-        return np.round(floats * 10**spec.scale).astype(np.int64)
+        return _decimals(spec, array, pa, np)
     if kind is ColumnType.DATE:
         return array.cast(pa.date32()).cast(pa.int32()).fill_null(0).to_numpy(zero_copy_only=False)
     if kind is ColumnType.TIME:
@@ -121,6 +118,33 @@ def _values(kind: ColumnType, spec: Column, array: Any, pa: Any, np: Any) -> Any
     return array.cast(pa.timestamp("us")).cast(pa.int64()).fill_null(0).to_numpy(zero_copy_only=False)
 
 
+def _decimals(spec: Column, array: Any, pa: Any, np: Any) -> Any:
+    """The unscaled integers a DECIMAL column stores, each of which must fit an int64.
+
+    Decimals and integers scale exactly, and a decimal with more digits than the scale fails. Floats, binary
+    approximations to begin with, round half to even to the scale; NaN and infinity fail."""
+    if pa.types.is_decimal(array.type):
+        return np.array([_unscaled(v, spec) for v in array.to_pylist()], dtype=np.int64)
+    factor = 10**spec.scale
+    if pa.types.is_integer(array.type):
+        import pyarrow.compute
+
+        bounds = pyarrow.compute.min_max(array).as_py()
+        for value in (bounds["min"], bounds["max"]):
+            if value is not None:
+                _check_int64(value * factor, value, spec)
+        return array.cast(pa.int64()).fill_null(0).to_numpy(zero_copy_only=False) * factor
+    floats = array.cast(pa.float64()).fill_null(0).to_numpy(zero_copy_only=False)
+    with np.errstate(over="ignore", invalid="ignore"):
+        scaled = np.round(floats * factor)
+    # Written so NaN fails too; 2**63 is exact in a float64, the int64 range is not.
+    outside = ~((scaled >= -(2.0**63)) & (scaled < 2.0**63))
+    if outside.any():
+        value = floats[int(np.argmax(outside))]
+        raise FixedWidthError(f"value {value} of column '{spec.name}' is not finite or does not fit an int64 at scale {spec.scale}")
+    return scaled.astype(np.int64)
+
+
 def _unscaled(value: Any, spec: Column) -> int:
     """A decimal as the integer the column stores; more decimals than its scale would be lost, so they fail."""
     if value is None:
@@ -128,7 +152,13 @@ def _unscaled(value: Any, spec: Column) -> int:
     scaled = value.scaleb(spec.scale)
     if scaled != scaled.to_integral_value():
         raise FixedWidthError(f"value {value} of column '{spec.name}' has more decimals than its scale {spec.scale}")
-    return int(scaled)
+    return _check_int64(int(scaled), value, spec)
+
+
+def _check_int64(unscaled: int, value: Any, spec: Column) -> int:
+    if not -(2**63) <= unscaled < 2**63:
+        raise FixedWidthError(f"value {value} of column '{spec.name}' does not fit an int64 at scale {spec.scale}")
+    return unscaled
 
 
 def _fill_strings(target: _native.Column, array: Any, keep: list[object]) -> None:

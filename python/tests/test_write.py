@@ -67,6 +67,38 @@ def test_write_decimal_with_more_digits_than_the_scale_raises():
         fw.write_bytes(lossy, columns)
 
 
+def test_write_decimal_from_integers_is_exact():
+    columns = fw.Layout([fw.Column("v", 0, 20, fw.Decimal, scale=1)])
+    data = pa.table({"v": pa.array([9007199254740991, None, -3], type=pa.int64())})
+
+    assert fw.write_bytes(data, columns) == b"   90071992547409910\n                    \n                 -30\n"
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        pa.array([1e30]),
+        pa.array([float("nan")]),
+        pa.array([float("-inf")]),
+        pa.array([2**62], type=pa.int64()),
+        pa.array([2**64 - 1], type=pa.uint64()),
+        pa.array([10**17], type=pa.decimal128(38, 0)),
+    ],
+)
+def test_write_decimal_out_of_range_or_not_finite_raises(values):
+    columns = fw.Layout([fw.Column("v", 0, 20, fw.Decimal, scale=2)])
+
+    with pytest.raises(fw.FixedWidthError, match="column 'v'"):
+        fw.write_bytes(pa.table({"v": values}), columns)
+
+
+def test_write_decimal_from_floats_rounds_half_to_even_to_the_scale():
+    columns = fw.Layout([fw.Column("v", 0, 6, fw.Decimal, scale=2)])
+    data = pa.table({"v": pa.array([1.234, 0.125, -2.5, None])})
+
+    assert fw.write_bytes(data, columns) == b"   123\n    12\n  -250\n      \n"
+
+
 def test_read_invalid_utf8_reaches_polars_and_pandas_as_valid_text():
     columns = fw.Layout([fw.Column("name", 0, 6, fw.String), fw.Column("n", 6, 2, fw.Int64)])
     data = "AÇÃO  01\n".encode("latin-1")
