@@ -1,5 +1,5 @@
 using System.Reflection;
-using FixedWidthParser.Attributes;
+using FixedWidthParser.Infrastructure;
 
 namespace FixedWidthParser.Processors
 {

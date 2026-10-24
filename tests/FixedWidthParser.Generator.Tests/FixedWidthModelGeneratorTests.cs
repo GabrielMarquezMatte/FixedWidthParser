@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using CommunityToolkit.HighPerformance.Buffers;
-using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis;
 
 namespace FixedWidthParser.Generator.Tests
 {
@@ -61,7 +61,7 @@ namespace FixedWidthParser.Generator.Tests
             var result = Run("""
                 public readonly record struct Cents(long Value);
 
-                public sealed class CentsConverter : FixedWidthParser.Processors.IFixedWidthConverter<Cents>
+                public sealed class CentsConverter : FixedWidthParser.IFixedWidthConverter<Cents>
                 {
                     public bool TryParse(System.ReadOnlySpan<byte> field, in FixedWidthContext context, out Cents value) { value = default; return true; }
                     public bool TryFormat(Cents value, System.Span<byte> destination, in FixedWidthContext context, out int written) { written = 0; return true; }
@@ -83,7 +83,7 @@ namespace FixedWidthParser.Generator.Tests
             var generated = Assert.Single(result.GeneratedSources);
             Assert.Contains("FixedWidthRuntime.IsBlank(line.Slice(5, 5), (byte)' ')", generated, StringComparison.Ordinal);
             Assert.Contains("TryDateOnlyExact(line.Slice(10, 8), \"yyyyMMdd\", context", generated, StringComparison.Ordinal);
-            Assert.Contains("(byte)'0', global::FixedWidthParser.Attributes.TrimMode.Leading", generated, StringComparison.Ordinal);
+            Assert.Contains("(byte)'0', global::FixedWidthParser.TrimMode.Leading", generated, StringComparison.Ordinal);
         }
 
         [Fact]
@@ -140,7 +140,7 @@ namespace FixedWidthParser.Generator.Tests
         public void ConverterForAnotherType_ReportsFwp008()
         {
             var result = Run("""
-                public sealed class IntConverter : FixedWidthParser.Processors.IFixedWidthConverter<int>
+                public sealed class IntConverter : FixedWidthParser.IFixedWidthConverter<int>
                 {
                     public bool TryParse(System.ReadOnlySpan<byte> field, in FixedWidthContext context, out int value) { value = 0; return true; }
                     public bool TryFormat(int value, System.Span<byte> destination, in FixedWidthContext context, out int written) { written = 0; return true; }
@@ -417,8 +417,7 @@ namespace FixedWidthParser.Generator.Tests
         {
             string source = """
                 using FixedWidthParser;
-                using FixedWidthParser.Attributes;
-
+                
                 namespace GeneratorSmoke;
 
                 """ + modelSource;
@@ -435,8 +434,7 @@ namespace FixedWidthParser.Generator.Tests
         {
             string source = """
                 using FixedWidthParser;
-                using FixedWidthParser.Attributes;
-
+                
                 namespace GeneratorSmoke;
 
                 """ + modelSource;

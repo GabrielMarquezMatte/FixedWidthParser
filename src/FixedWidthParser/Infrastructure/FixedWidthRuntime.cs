@@ -1,15 +1,13 @@
-using System.Buffers;
 using System.Buffers.Text;
+using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
-using System.Text;
 using System.Text.Unicode;
-using FixedWidthParser.Attributes;
-using FixedWidthParser.Formatters;
+using System.Text;
 using FixedWidthParser.Processors;
 
-namespace FixedWidthParser
+namespace FixedWidthParser.Infrastructure
 {
     /// <summary>
     /// Low-level helpers called by the source-generated <see cref="IFixedWidthModel{TSelf}.TryParse"/>

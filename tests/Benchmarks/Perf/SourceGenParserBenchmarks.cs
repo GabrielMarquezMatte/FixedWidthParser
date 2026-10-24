@@ -1,7 +1,6 @@
 using System.Text;
 using BenchmarkDotNet.Attributes;
 using FixedWidthParser;
-using FixedWidthParser.Attributes;
 
 namespace Benchmarks.Perf
 {

@@ -1,5 +1,4 @@
 using CsCheck;
-using FixedWidthParser.Attributes;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests

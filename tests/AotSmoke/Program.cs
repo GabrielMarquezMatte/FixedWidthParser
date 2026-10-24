@@ -1,6 +1,5 @@
 using AotSmoke;
 using FixedWidthParser;
-using FixedWidthParser.Attributes;
 
 var layout = FixedWidthLayout.Build<Order>(b => b
     .Factory(() => new Order())

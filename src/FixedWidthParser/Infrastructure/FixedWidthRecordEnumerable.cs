@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 
-namespace FixedWidthParser.Readers
+namespace FixedWidthParser.Infrastructure
 {
     /// <summary>
     /// A lazily-read sequence of models from a stream or a file, without a string per line: bytes are

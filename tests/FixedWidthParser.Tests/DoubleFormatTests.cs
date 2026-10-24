@@ -1,8 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
-using FixedWidthParser.Attributes;
-using FixedWidthParser.Formatters;
+using FixedWidthParser.Infrastructure;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests

@@ -7,7 +7,7 @@ namespace FixedWidthParser
 {
     /// <summary>
     /// Settings a model parser, model writer or converter needs for one line, handed to every
-    /// generated <c>TryParse</c>/<c>TryFormat</c> and every <see cref="Processors.IFixedWidthConverter{T}"/> call.
+    /// generated <c>TryParse</c>/<c>TryFormat</c> and every <see cref="IFixedWidthConverter{T}"/> call.
     /// </summary>
     /// <remarks>
     /// Passed by <see langword="in"/> reference. New settings arrive as new properties, so a converter

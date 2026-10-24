@@ -3,7 +3,7 @@ using static FixedWidthParser.Tests.TestHelpers;
 namespace FixedWidthParser.Tests
 {
     /// <summary>
-    /// <see cref="Attributes.FixedColumnAttribute.Converter"/>: a per-property converter that takes
+    /// <see cref="FixedColumnAttribute.Converter"/>: a per-property converter that takes
     /// priority over the built-in parsers, on the reflection and generated paths, for parse and write,
     /// plus the build-time mismatch check.
     /// </summary>

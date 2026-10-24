@@ -1,3 +1,4 @@
+using FixedWidthParser.Infrastructure;
 using FixedWidthParser.Readers;
 using FixedWidthParser.Writers;
 

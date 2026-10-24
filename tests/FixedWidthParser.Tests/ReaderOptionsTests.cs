@@ -1,5 +1,4 @@
 using System.Text;
-using FixedWidthParser.Readers;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests

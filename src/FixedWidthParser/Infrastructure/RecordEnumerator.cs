@@ -1,7 +1,8 @@
 using System.Collections;
 using System.Diagnostics.CodeAnalysis;
+using FixedWidthParser.Readers;
 
-namespace FixedWidthParser.Readers
+namespace FixedWidthParser.Infrastructure
 {
     /// <summary>
     /// Synchronous record enumerator over a stream. A <see langword="struct"/> specialized by

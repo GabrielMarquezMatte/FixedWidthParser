@@ -1,7 +1,7 @@
 using System.Linq.Expressions;
 using System.Reflection;
 using FixedWidthParser.Attributes;
-using FixedWidthParser.Processors;
+using FixedWidthParser.Infrastructure;
 
 namespace FixedWidthParser.Formatters
 {

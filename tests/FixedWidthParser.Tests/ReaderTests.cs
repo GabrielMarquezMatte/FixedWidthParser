@@ -1,5 +1,5 @@
 using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Readers;
+using FixedWidthParser.Infrastructure;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests

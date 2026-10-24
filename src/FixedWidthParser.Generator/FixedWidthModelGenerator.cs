@@ -1,11 +1,11 @@
-using System;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
+using System;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis;
 
 namespace FixedWidthParser.Generator
 {
@@ -18,10 +18,10 @@ namespace FixedWidthParser.Generator
     public sealed class FixedWidthModelGenerator : IIncrementalGenerator
     {
         private const string MarkerMetadataName = "FixedWidthParser.IFixedWidthModel`1";
-        private const string ColumnAttributeMetadataName = "FixedWidthParser.Attributes.FixedColumnAttribute";
-        private const string ConverterInterfaceMetadataName = "FixedWidthParser.Processors.IFixedWidthConverter`1";
+        private const string ColumnAttributeMetadataName = "FixedWidthParser.FixedColumnAttribute";
+        private const string ConverterInterfaceMetadataName = "FixedWidthParser.IFixedWidthConverter`1";
         private const string SpanFormattableMetadataName = "System.ISpanFormattable";
-        private const string RuntimeFqn = "global::FixedWidthParser.FixedWidthRuntime";
+        private const string RuntimeFqn = "global::FixedWidthParser.Infrastructure.FixedWidthRuntime";
 
         private static readonly DiagnosticDescriptor MustBePartial = new(
             "FWP001", "Fixed-width model must be partial",
@@ -482,7 +482,7 @@ namespace FixedWidthParser.Generator
                     sb.Append(body).Append("private static readonly ").Append(c.ConverterFqn)
                       .Append(" __converter").Append(i).Append(" = new ").Append(c.ConverterFqn).AppendLine("();");
                 }
-                sb.Append(body).Append("private static readonly global::FixedWidthParser.Formatters.ColumnFormatOptions __options").Append(i)
+                sb.Append(body).Append("private static readonly global::FixedWidthParser.Infrastructure.ColumnFormatOptions __options").Append(i)
                   .Append(" = new(").Append(AlignmentLiteral(c.Alignment)).Append(", ").Append(SymbolDisplay.FormatLiteral(c.Padding, true))
                   .Append(", ").Append(c.Format is null ? "null" : SymbolDisplay.FormatLiteral(c.Format, true))
                   .Append(", ").Append(OverflowLiteral(c.Overflow)).AppendLine(");");
@@ -681,17 +681,17 @@ namespace FixedWidthParser.Generator
         private static string AlignmentLiteral(int value)
         {
             return value == 1
-                ? "global::FixedWidthParser.Attributes.Alignment.Right"
-                : "global::FixedWidthParser.Attributes.Alignment.Left";
+                ? "global::FixedWidthParser.Alignment.Right"
+                : "global::FixedWidthParser.Alignment.Left";
         }
 
         private static string OverflowLiteral(int resolvedValue)
         {
             return resolvedValue switch
             {
-                1 => "global::FixedWidthParser.Attributes.OverflowBehavior.Truncate",
-                2 => "global::FixedWidthParser.Attributes.OverflowBehavior.Throw",
-                _ => "global::FixedWidthParser.Attributes.OverflowBehavior.Default",
+                1 => "global::FixedWidthParser.OverflowBehavior.Truncate",
+                2 => "global::FixedWidthParser.OverflowBehavior.Throw",
+                _ => "global::FixedWidthParser.OverflowBehavior.Default",
             };
         }
 
@@ -699,9 +699,9 @@ namespace FixedWidthParser.Generator
         {
             return value switch
             {
-                1 => "global::FixedWidthParser.Attributes.TrimMode.Leading",
-                2 => "global::FixedWidthParser.Attributes.TrimMode.Both",
-                _ => "global::FixedWidthParser.Attributes.TrimMode.Trailing"
+                1 => "global::FixedWidthParser.TrimMode.Leading",
+                2 => "global::FixedWidthParser.TrimMode.Both",
+                _ => "global::FixedWidthParser.TrimMode.Trailing"
             };
         }
 

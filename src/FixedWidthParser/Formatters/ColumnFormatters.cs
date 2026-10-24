@@ -1,4 +1,4 @@
-using FixedWidthParser.Processors;
+using FixedWidthParser.Infrastructure;
 
 namespace FixedWidthParser.Formatters
 {
