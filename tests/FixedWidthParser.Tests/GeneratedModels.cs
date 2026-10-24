@@ -172,4 +172,25 @@ namespace FixedWidthParser.Tests
     {
         [FixedColumn(0, 70_000)] public string Name { get; init; }
     }
+
+    /// <summary>Base class of <see cref="GenDerivedModel"/>: a mapped property, a field, a virtual and a hidden column.</summary>
+    public class GenBaseModel
+    {
+        [FixedColumn(0, 4)] public int Id { get; set; }
+        [FixedColumn(4, 3)] public string Code = "";
+        [FixedColumn(7, 5)] public virtual string Tag { get; set; } = "";
+        [FixedColumn(12, 5)] public string Label { get; set; } = "";
+    }
+
+    /// <summary>Generated model whose columns are partly inherited; its own attribute layout is the reflection counterpart.</summary>
+    public sealed partial class GenDerivedModel : GenBaseModel, IFixedWidthModel<GenDerivedModel>
+    {
+        [FixedColumn(17, 6)] public string Name { get; set; } = "";
+
+        // Inherits [FixedColumn(7, 5)] from the property it overrides.
+        public override string Tag { get; set; } = "";
+
+        // Hides the base column, so only this narrower one is mapped.
+        [FixedColumn(12, 2)] public new string Label { get; set; } = "";
+    }
 }
