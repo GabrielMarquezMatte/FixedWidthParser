@@ -200,7 +200,7 @@ because the reason lives outside the code and no amount of naming can bring it i
 
 ```csharp
 // OK: a dependency's behavior the code cannot express
-// csFastFloat does not fail on trailing content; it stops and returns the prefix it parsed.
+// The BCL's UTF-8 parser does not take a space for fr-FR's no-break-space group separator.
 
 // NOT OK: describes what the code does
 // Loop through each column and parse its value.

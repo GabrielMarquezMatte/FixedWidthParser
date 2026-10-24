@@ -32,7 +32,7 @@ namespace FixedWidthParser
 
         /// <summary>
         /// The provider's decimal separator as one ASCII byte when its negative sign is "-", so a plain
-        /// number can be written or parsed without going through the provider; 0 otherwise.
+        /// number can be written without going through the provider; 0 otherwise.
         /// </summary>
         // ponytail: read once, so a NumberFormatInfo mutated after this context was built is not seen.
         internal byte DecimalSeparator { get => _formatProvider is null ? (byte)'.' : field; private init; }

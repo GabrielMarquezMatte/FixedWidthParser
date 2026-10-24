@@ -47,8 +47,8 @@ namespace FixedWidthParser.Tests
             Assert.Equal(3.14f, model.Value, 2);
         }
 
-        // csFastFloat's single decimal_separator override can't express a thousands separator; the
-        // BCL fallback accepts the value and still rejects real garbage.
+        // The fast path refuses a thousands separator; the BCL fallback accepts the value and still
+        // rejects real garbage.
         [Fact]
         public void Parse_DoubleColumn_DotCultureThousandsSeparator_ParsesFullValue()
         {
@@ -56,7 +56,7 @@ namespace FixedWidthParser.Tests
             Assert.Equal(1234.50, model.Salary, 2);
         }
 
-        // Regression: "1.234,50" under de-DE used to come back as 1.0 from csFastFloat.
+        // Regression: "1.234,50" under de-DE used to come back as 1.0 from a prefix-only fast parse.
         [Fact]
         public void Parse_DoubleColumn_DeDeThousandsSeparator_ParsesFullValue()
         {
@@ -88,6 +88,57 @@ namespace FixedWidthParser.Tests
             }
         }
 
+        // The float fast path rounds once in binary32; going through a double could land one ulp off.
+        [Theory]
+        [InlineData("")]
+        [InlineData("de-DE")]
+        [InlineData("fr-FR")]
+        public void Parse_Float_MatchesTheBcl(string cultureName)
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+            var context = CtxWith(culture);
+            var options = new Infrastructure.ColumnParseOptions(' ', TrimMode.Both, format: null);
+            string separator = culture.NumberFormat.NumberDecimalSeparator;
+            string[] edges = ["-0", "16777216", "16777217", $"1{separator}5e3", $"0{separator}1", $"3{separator}4028235E+38", "1e", "--1"];
+            var random = new Random(42);
+            var shortDecimals = Enumerable.Range(0, 2000).Select(_ => (random.Next(-20_000_000, 20_000_000) / Math.Pow(10, random.Next(0, 11))).ToString("0.##########", culture));
+            var roundTrips = Enumerable.Range(0, 2000).Select(_ => ((float)(random.NextDouble() * Math.Pow(10, random.Next(-8, 12)))).ToString("R", culture));
+
+            foreach (string text in edges.Concat(shortDecimals).Concat(roundTrips))
+            {
+                bool expected = float.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, culture, out float bcl);
+                bool actual = Infrastructure.FixedWidthRuntime.TryFloat(Bytes(text), in context, in options, out float parsed);
+
+                Assert.True(expected == actual, $"'{text}': BCL {expected}, parser {actual}");
+                Assert.True(!expected || bcl.Equals(parsed), $"'{text}': BCL {bcl:R}, parser {parsed:R}");
+            }
+        }
+
+        // The decimal fast path keeps the scale as written, as the BCL does: 1,50 stays 1,50.
+        [Theory]
+        [InlineData("")]
+        [InlineData("de-DE")]
+        [InlineData("fr-FR")]
+        public void Parse_Decimal_MatchesTheBcl(string cultureName)
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+            var context = CtxWith(culture);
+            var options = new Infrastructure.ColumnParseOptions(' ', TrimMode.Both, format: null);
+            string separator = culture.NumberFormat.NumberDecimalSeparator;
+            string[] edges = ["-0", $"1{separator}50", $"{separator}5", $"5{separator}", "9999999999999999999", "99999999999999999999", $"0{separator}0000000000000000001", "1e3", "--1", "+7"];
+            var random = new Random(42);
+            var values = Enumerable.Range(0, 2000).Select(_ => (random.NextInt64(-1_000_000_000_000, 1_000_000_000_000) / (decimal)Math.Pow(10, random.Next(0, 13))).ToString(culture));
+
+            foreach (string text in edges.Concat(values))
+            {
+                bool expected = decimal.TryParse(text, NumberStyles.Number, culture, out decimal bcl);
+                bool actual = Infrastructure.FixedWidthRuntime.TryParse(Bytes(text), in context, in options, out decimal parsed);
+
+                Assert.True(expected == actual, $"'{text}': BCL {expected}, parser {actual}");
+                Assert.True(!expected || bcl.ToString(CultureInfo.InvariantCulture) == parsed.ToString(CultureInfo.InvariantCulture), $"'{text}': BCL {bcl}, parser {parsed}");
+            }
+        }
+
         [Fact]
         public void Parse_DoubleColumn_TrailingGarbageAfterNumber_Fails()
         {
@@ -100,8 +151,7 @@ namespace FixedWidthParser.Tests
             Assert.False(FixedWidth.TryParse("12x     "u8, FixedWidthLayout.FromAttributes<MeasurementModel>(), Ctx, out _));
         }
 
-        // csFastFloat's characters_consumed does not consistently include skipped leading whitespace,
-        // so right-aligned columns must be trimmed before the fast path.
+        // The fast path takes no whitespace, so right-aligned columns must be trimmed before it.
         [Fact]
         public void Parse_DoubleColumn_RightAligned_DotCulture_Parses()
         {

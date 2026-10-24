@@ -22,7 +22,9 @@ fast path against `double.TryParse` in de-DE, pt-BR and fr-FR.
 | `.` separator, invariant | 57.1 ns/line | 58.5 |
 | `,` separator, pt-BR | 98.4 ns/line | 58.5 |
 
-One value: 42.3 ns decoded and BCL-parsed, 7.7 ns through csFastFloat.
+One value: 42.3 ns decoded and BCL-parsed, 7.7 ns through csFastFloat. csFastFloat has since been
+replaced by a port of ExcelReader's `FastDouble`, which keeps the same rule: a fast parse counts only
+when it takes the whole field.
 
 ## `StringPool`
 

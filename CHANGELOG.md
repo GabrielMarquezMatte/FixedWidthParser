@@ -124,9 +124,12 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
   scaled integer, about 5x faster, with the same bytes. A line of a string, an `int` and a `double`
   writes about 2x faster.
 - The generator targets `netstandard2.0`, so Visual Studio's .NET Framework compiler host can load it.
-- `double`/`float` columns parse through csFastFloat under any culture whose decimal separator is one
-  ASCII character and whose negative sign is `-`, not only `'.'`: a pt-BR read is about 40% faster
-  ([docs/reader-performance.md](docs/reader-performance.md)).
+- `double`, `float` and `decimal` columns parse through a built-in fast path (ExcelReader's `FastDouble`
+  and `FastDecimal`) under any culture whose decimal separator is one ASCII character and whose
+  negative sign is `-`, not only `'.'`: a pt-BR read is about 40% faster
+  ([docs/reader-performance.md](docs/reader-performance.md)). Anything the fast path refuses goes to
+  the BCL parser, which decides the result.
+- **Breaking:** the csFastFloat dependency is gone.
 - Reading with a `StringPool` checks a small per-thread cache before the pool, about halving the cost of
   a pooled read.
 - The library, generator and native library build with warnings as errors.

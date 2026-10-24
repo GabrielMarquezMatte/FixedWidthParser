@@ -5,8 +5,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Unicode;
+using System.Numerics;
 using System.Text;
-using FixedWidthParser.Processors;
 
 namespace FixedWidthParser.Infrastructure
 {
@@ -47,18 +47,34 @@ namespace FixedWidthParser.Infrastructure
             return context.StringPool is { } pool ? Utf8StringCache.GetOrAdd(pool, trimmed, context.Encoding) : context.Encoding.GetString(trimmed);
         }
 
-        /// <summary>Parses a <see cref="double"/> column, honoring the provider's decimal separator.</summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        // The fast parsers need the provider's decimal separator as one ASCII byte and "-" as its negative sign
+        // (FixedWidthContext.DecimalSeparator). What they refuse, thousands separators included, goes to the
+        // BCL over the decoded text: its UTF-8 parser does not take a space for a no-break-space group
+        // separator, as fr-FR writes one. Leading spaces are trimmed too, so a right-aligned column stays fast.
+        private const NumberStyles FloatStyles = NumberStyles.Float | NumberStyles.AllowThousands;
+
+        /// <summary>Parses a <see cref="double"/> column, honoring the provider's separators.</summary>
         public static bool TryDouble(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, out double value)
         {
-            return CultureHelpers.TryParseDouble(column, in context, in options, out value);
+            var trimmed = TrimColumn(column, in options).TrimStart((byte)' ');
+            byte separator = context.DecimalSeparator;
+            if (separator != 0 && FastDouble.TryParse(trimmed, separator, out value))
+            {
+                return true;
+            }
+            return ParseDecoded(trimmed, in context, null, static (text, _, provider, out result) => double.TryParse(text, FloatStyles, provider, out result), out value);
         }
 
-        /// <summary>Parses a <see cref="float"/> column, honoring the provider's decimal separator.</summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        /// <summary>Parses a <see cref="float"/> column, honoring the provider's separators.</summary>
         public static bool TryFloat(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, out float value)
         {
-            return CultureHelpers.TryParseFloat(column, in context, in options, out value);
+            var trimmed = TrimColumn(column, in options).TrimStart((byte)' ');
+            byte separator = context.DecimalSeparator;
+            if (separator != 0 && FastDouble.TryParse(trimmed, separator, out value))
+            {
+                return true;
+            }
+            return ParseDecoded(trimmed, in context, null, static (text, _, provider, out result) => float.TryParse(text, FloatStyles, provider, out result), out value);
         }
 
         /// <summary>Parses an <see cref="IUtf8SpanParsable{TSelf}"/> column straight from its bytes.</summary>
@@ -66,24 +82,21 @@ namespace FixedWidthParser.Infrastructure
         public static bool TryParse<TValue>(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, [MaybeNullWhen(false)] out TValue value)
             where TValue : IUtf8SpanParsable<TValue>
         {
-            return TValue.TryParse(TrimColumn(column, in options), context.FormatProvider, out value);
+            var trimmed = TrimColumn(column, in options);
+            if (typeof(TValue) == typeof(decimal) && context.DecimalSeparator is var separator and not 0
+                && FastDecimal.TryParse(trimmed.TrimStart((byte)' '), separator, out decimal fast))
+            {
+                value = Unsafe.As<decimal, TValue>(ref fast);
+                return true;
+            }
+            return TValue.TryParse(trimmed, context.FormatProvider, out value);
         }
 
         /// <summary>Parses an <see cref="ISpanParsable{TSelf}"/> column that has no UTF-8 parser, decoding it with the context's encoding first.</summary>
-        [SkipLocalsInit]
         public static bool TryParseDecoded<TValue>(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, [MaybeNullWhen(false)] out TValue value)
             where TValue : ISpanParsable<TValue>
         {
-            Span<char> stack = stackalloc char[StackBufferSize];
-            var text = Decode(TrimColumn(column, in options), context.Encoding, stack, out char[]? rented);
-            try
-            {
-                return TValue.TryParse(text, context.FormatProvider, out value);
-            }
-            finally
-            {
-                Return(rented);
-            }
+            return ParseDecoded(TrimColumn(column, in options), in context, null, static (text, _, provider, [MaybeNullWhen(false)] out result) => TValue.TryParse(text, provider, out result), out value);
         }
 
         /// <summary>Parses a column through an <see cref="IFixedWidthConverter{T}"/> instance.</summary>
@@ -96,62 +109,40 @@ namespace FixedWidthParser.Infrastructure
         }
 
         /// <summary>Parses a <see cref="DateTime"/> column with exactly <see cref="ColumnParseOptions.Format"/>, decoding it first.</summary>
-        [SkipLocalsInit]
         public static bool TryDateTimeExact(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, out DateTime value)
         {
-            Span<char> stack = stackalloc char[StackBufferSize];
-            var text = Decode(TrimColumn(column, in options), context.Encoding, stack, out char[]? rented);
-            try
-            {
-                return DateTime.TryParseExact(text, options.Format, context.FormatProvider, DateTimeStyles.None, out value);
-            }
-            finally
-            {
-                Return(rented);
-            }
+            return ParseDecoded(TrimColumn(column, in options), in context, options.Format, static (text, format, provider, out result) => DateTime.TryParseExact(text, format, provider, DateTimeStyles.None, out result), out value);
         }
 
         /// <summary>Parses a <see cref="DateOnly"/> column with exactly <see cref="ColumnParseOptions.Format"/>, decoding it first.</summary>
-        [SkipLocalsInit]
         public static bool TryDateOnlyExact(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, out DateOnly value)
         {
-            Span<char> stack = stackalloc char[StackBufferSize];
-            var text = Decode(TrimColumn(column, in options), context.Encoding, stack, out char[]? rented);
-            try
-            {
-                return DateOnly.TryParseExact(text, options.Format, context.FormatProvider, DateTimeStyles.None, out value);
-            }
-            finally
-            {
-                Return(rented);
-            }
+            return ParseDecoded(TrimColumn(column, in options), in context, options.Format, static (text, format, provider, out result) => DateOnly.TryParseExact(text, format, provider, DateTimeStyles.None, out result), out value);
         }
 
         /// <summary>Parses a <see cref="TimeOnly"/> column with exactly <see cref="ColumnParseOptions.Format"/>, decoding it first.</summary>
-        [SkipLocalsInit]
         public static bool TryTimeOnlyExact(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, out TimeOnly value)
         {
-            Span<char> stack = stackalloc char[StackBufferSize];
-            var text = Decode(TrimColumn(column, in options), context.Encoding, stack, out char[]? rented);
-            try
-            {
-                return TimeOnly.TryParseExact(text, options.Format, context.FormatProvider, DateTimeStyles.None, out value);
-            }
-            finally
-            {
-                Return(rented);
-            }
+            return ParseDecoded(TrimColumn(column, in options), in context, options.Format, static (text, format, provider, out result) => TimeOnly.TryParseExact(text, format, provider, DateTimeStyles.None, out result), out value);
         }
 
         /// <summary>Parses a <see cref="DateTimeOffset"/> column with exactly <see cref="ColumnParseOptions.Format"/>, decoding it first.</summary>
-        [SkipLocalsInit]
         public static bool TryDateTimeOffsetExact(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, out DateTimeOffset value)
         {
+            return ParseDecoded(TrimColumn(column, in options), in context, options.Format, static (text, format, provider, out result) => DateTimeOffset.TryParseExact(text, format, provider, DateTimeStyles.None, out result), out value);
+        }
+
+        private delegate bool CharParser<TValue>(ReadOnlySpan<char> text, string? format, IFormatProvider provider, [MaybeNullWhen(false)] out TValue value);
+
+        // Decodes already-trimmed bytes with the context's encoding, on the stack when they fit.
+        [SkipLocalsInit]
+        private static bool ParseDecoded<TValue>(ReadOnlySpan<byte> bytes, in FixedWidthContext context, string? format, CharParser<TValue> parse, [MaybeNullWhen(false)] out TValue value)
+        {
             Span<char> stack = stackalloc char[StackBufferSize];
-            var text = Decode(TrimColumn(column, in options), context.Encoding, stack, out char[]? rented);
+            var text = Decode(bytes, context.Encoding, stack, out char[]? rented);
             try
             {
-                return DateTimeOffset.TryParseExact(text, options.Format, context.FormatProvider, DateTimeStyles.None, out value);
+                return parse(text, format, context.FormatProvider, out value);
             }
             finally
             {
@@ -370,9 +361,15 @@ namespace FixedWidthParser.Infrastructure
             Span<byte> bytes = rented is null ? stackalloc byte[StackBufferSize] : rented;
             try
             {
-                int written = ascii
-                    ? NarrowAscii(text, bytes)
-                    : encoding.GetBytes(text, bytes);
+                int written;
+                if (ascii)
+                {
+                    Ascii.FromUtf16(text, bytes, out written);
+                }
+                else
+                {
+                    written = encoding.GetBytes(text, bytes);
+                }
                 options.WriteInto(bytes[..written], slice, columnName);
             }
             finally
@@ -382,12 +379,6 @@ namespace FixedWidthParser.Infrastructure
                     ArrayPool<byte>.Shared.Return(rented);
                 }
             }
-        }
-
-        private static int NarrowAscii(ReadOnlySpan<char> text, Span<byte> bytes)
-        {
-            Ascii.FromUtf16(text, bytes, out int written);
-            return written;
         }
 
         // The longest run of whole characters, from the alignment side, whose encoding fits in width bytes.
