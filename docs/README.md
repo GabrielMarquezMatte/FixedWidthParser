@@ -16,6 +16,11 @@ a constraint; the numbers that justified it live here, so they can be re-run and
   the classes it replaced.
 - [python-benchmarks.md](python-benchmarks.md) — the Python package reading a COTAHIST-shaped file
   against `pandas.read_fwf`.
+- [performance/benchmarks.md](performance/benchmarks.md) — reading and writing against FileHelpers,
+  FlatFiles and RecordParser.
 
-Usage documentation is the [README](../README.md); the shape of the code is
+Usage documentation lives in [guide/](guide/), split out of the [README](../README.md) so the NuGet
+landing page stays short: [models and layouts](guide/models.md), [reading](guide/reading.md),
+[writing](guide/writing.md) and [versioning](guide/versioning.md). It is prose for a caller deciding how
+to use the library; what each member does is in its `///` comments. The shape of the code is
 [ARCHITECTURE.md](../ARCHITECTURE.md).

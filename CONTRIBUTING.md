@@ -21,7 +21,7 @@ rewrites — see [ARCHITECTURE.md](ARCHITECTURE.md) for the shape of the codebas
   you. At a release, the unshipped entries move to `PublicAPI.Shipped.txt`.
 
 - **Minor versions don't break callers.** The policy is in the README's
-  [Versioning](README.md#versioning) section; in practice:
+  [Versioning](docs/guide/versioning.md) section; in practice:
   - `IFixedWidthModel<TSelf>` and `IFixedWidthConverter<T>` are implemented by users, so a minor
     version never adds a member to them. New information reaches them as a new property on
     `FixedWidthContext`.
