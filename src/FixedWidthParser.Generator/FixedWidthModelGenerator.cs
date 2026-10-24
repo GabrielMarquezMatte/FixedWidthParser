@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -100,12 +101,23 @@ namespace FixedWidthParser.Generator
                 return null;
             }
 
+            // Inherited columns too, as reflection's GetProperties/GetFields see them: walking from the
+            // model to its bases, the first public member of a name wins, so an override or a 'new'
+            // member replaces the base member it hides.
             var columns = ImmutableArray.CreateBuilder<ColumnInfo>();
-            foreach (var member in symbol.GetMembers())
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            for (var type = symbol; type is not null; type = type.BaseType)
             {
-                if (ExtractColumn(member, columnAttribute, compilation) is { } column)
+                foreach (var member in type.GetMembers())
                 {
-                    columns.Add(column);
+                    if (member is not (IPropertySymbol or IFieldSymbol) || member.DeclaredAccessibility != Accessibility.Public || !seen.Add(member.Name))
+                    {
+                        continue;
+                    }
+                    if (ExtractColumn(member, columnAttribute, compilation) is { } column)
+                    {
+                        columns.Add(column);
+                    }
                 }
             }
 
@@ -143,8 +155,7 @@ namespace FixedWidthParser.Generator
                 return null;
             }
 
-            var attribute = member.GetAttributes().FirstOrDefault(a =>
-                SymbolEqualityComparer.Default.Equals(a.AttributeClass, columnAttribute));
+            var attribute = ColumnAttribute(member, columnAttribute);
             if (attribute is null || attribute.ConstructorArguments.Length < 2)
             {
                 return null;
@@ -203,6 +214,21 @@ namespace FixedWidthParser.Generator
             return new ColumnInfo(
                 member.Name, start, length, kind, underlying.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), converterFqn,
                 isNullable, writeKind, alignment, padding, format, resolvedOverflow, trimChar, trimMode);
+        }
+
+        // [FixedColumn] is inherited: an override without one takes it from the property it overrides, as reflection does.
+        private static AttributeData? ColumnAttribute(ISymbol member, INamedTypeSymbol columnAttribute)
+        {
+            for (ISymbol? current = member; current is not null; current = (current as IPropertySymbol)?.OverriddenProperty)
+            {
+                var attribute = current.GetAttributes().FirstOrDefault(a =>
+                    SymbolEqualityComparer.Default.Equals(a.AttributeClass, columnAttribute));
+                if (attribute is not null)
+                {
+                    return attribute;
+                }
+            }
+            return null;
         }
 
         // Implements IFixedWidthModel<ThisType>?

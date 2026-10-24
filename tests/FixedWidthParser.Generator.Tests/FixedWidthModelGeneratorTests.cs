@@ -190,6 +190,30 @@ namespace FixedWidthParser.Generator.Tests
             Assert.DoesNotContain("Ignored2", generated, StringComparison.Ordinal);
         }
 
+        [Fact]
+        public void Model_IncludesInheritedColumns()
+        {
+            var result = Run("""
+                public class BaseModel
+                {
+                    [FixedColumn(0, 5)] public int Id { get; set; }
+                    [FixedColumn(5, 5)] public string Code;
+                }
+
+                public partial class DerivedModel : BaseModel, IFixedWidthModel<DerivedModel>
+                {
+                    [FixedColumn(10, 5)] public string Name { get; set; }
+                }
+                """);
+
+            Assert.Empty(result.GeneratorDiagnostics);
+            Assert.Empty(result.CompilationErrors);
+            var generated = Assert.Single(result.GeneratedSources);
+            Assert.Contains("Id = __v", generated, StringComparison.Ordinal);
+            Assert.Contains("Code = __v", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.FormatString(model.Code,", generated, StringComparison.Ordinal);
+        }
+
         [Theory]
         [InlineData("""
             public readonly record struct BadModel : IFixedWidthModel<BadModel>
@@ -229,6 +253,17 @@ namespace FixedWidthParser.Generator.Tests
             {
                 [FixedColumn(0, 5)] public string Left { get; init; }
                 [FixedColumn(2, 5)] public string Right { get; init; }
+            }
+            """, "FWP006")]
+        [InlineData("""
+            public class BadBase
+            {
+                [FixedColumn(0, 5)] public string Left { get; set; }
+            }
+
+            public partial class BadModel : BadBase, IFixedWidthModel<BadModel>
+            {
+                [FixedColumn(2, 5)] public string Right { get; set; }
             }
             """, "FWP006")]
         public void InvalidModel_ReportsExpectedDiagnostic(string modelSource, string diagnosticId)

@@ -144,5 +144,32 @@ namespace FixedWidthParser.Tests
             Assert.Same(r.Name, g.Name);
             Assert.Same(pool.GetOrAdd("John Doe".AsSpan()), g.Name);
         }
+
+        [Theory]
+        [InlineData("0042ABCtag01XYzzzJohn  ")]
+        [InlineData("   7  Z     Q      Ann   ")]
+        [InlineData("xxxxABCtag01XYzzzJohn  ")]
+        public void InheritedColumns_GeneratedMatchesReflection(string line)
+        {
+            bool okR = FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<GenDerivedModel>(), Ctx, out var r);
+            bool okG = FixedWidth.TryParse<GenDerivedModel>(Bytes(line), Ctx, out var g);
+
+            Assert.Equal(okR, okG);
+            if (okR)
+            {
+                Assert.Equal((r.Id, r.Code, r.Tag, r.Label, r.Name), (g.Id, g.Code, g.Tag, g.Label, g.Name));
+            }
+        }
+
+        [Fact]
+        public void InheritedColumns_ParseAndFormatThroughGeneratedModel()
+        {
+            Assert.True(FixedWidth.TryParse<GenDerivedModel>("0042ABCtag01XYzzzJohn  "u8, Ctx, out var g));
+            Assert.Equal((42, "ABC", "tag01", "XY", "John"), (g.Id, g.Code, g.Tag, g.Label, g.Name));
+
+            var model = new GenDerivedModel { Id = 42, Code = "ABC", Tag = "tag01", Label = "XY", Name = "John" };
+            Assert.Equal(WriteOne(FixedWidthLayout.FromAttributes<GenDerivedModel>(), model), Format(model));
+            Assert.Equal("42  ABCtag01XY   John  ", Format(model));
+        }
     }
 }
