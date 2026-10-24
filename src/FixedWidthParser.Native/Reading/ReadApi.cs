@@ -9,12 +9,13 @@ namespace FixedWidthParser.Native.Reading
     /// <summary><c>fw_read_file</c> and <c>fw_read_memory</c>: a whole source into one columnar table.</summary>
     internal static unsafe class ReadApi
     {
-        internal static int ReadFile(ReadOnlySpan<byte> path, NativeLayout layout, NativeReadOptionsRaw* options, NativeTableRaw* outTable, NativeReadResultRaw* outResult, int chunkSize = 0)
+        internal static int ReadFile(ReadOnlySpan<byte> path, NativeLayout layout, NativeReadOptionsRaw* options, NativeTableRaw* outTable, NativeReadResultRaw* outResult,
+            int chunkSize = 0, TableLimits? limits = null)
         {
             try
             {
                 using var handle = File.OpenHandle(Encoding.UTF8.GetString(path), FileMode.Open, FileAccess.Read, FileShare.Read);
-                return Read(new FileSource(handle), layout, options, outTable, outResult, chunkSize);
+                return Read(new FileSource(handle), layout, options, outTable, outResult, chunkSize, limits ?? TableLimits.Default);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
             {
@@ -24,12 +25,14 @@ namespace FixedWidthParser.Native.Reading
         }
 
         // chunkSize: bytes per partition, 0 sizes them from the source; tests set it to cut every boundary.
-        internal static int ReadMemory(byte* data, long length, NativeLayout layout, NativeReadOptionsRaw* options, NativeTableRaw* outTable, NativeReadResultRaw* outResult, int chunkSize = 0)
+        internal static int ReadMemory(byte* data, long length, NativeLayout layout, NativeReadOptionsRaw* options, NativeTableRaw* outTable, NativeReadResultRaw* outResult,
+            int chunkSize = 0, TableLimits? limits = null)
         {
-            return Read(new PointerSource(data, length), layout, options, outTable, outResult, chunkSize);
+            return Read(new PointerSource(data, length), layout, options, outTable, outResult, chunkSize, limits ?? TableLimits.Default);
         }
 
-        private static int Read(IRandomAccessSource source, NativeLayout layout, NativeReadOptionsRaw* options, NativeTableRaw* outTable, NativeReadResultRaw* outResult, int chunkSize)
+        private static int Read(IRandomAccessSource source, NativeLayout layout, NativeReadOptionsRaw* options, NativeTableRaw* outTable, NativeReadResultRaw* outResult,
+            int chunkSize, TableLimits limits)
         {
             *outTable = default;
             int status = CheckResult(outResult);
@@ -48,7 +51,7 @@ namespace FixedWidthParser.Native.Reading
                 var skipped = new StrongBox<long>(headerLines);
                 var readerOptions = settings.ReaderOptions(skipped, settings.DegreeOfParallelism, chunkSize);
 #pragma warning disable VSTHRD002 // An export is synchronous and runs with no synchronization context.
-                using var table = ParallelAggregator.RunAsync(source, dataStart, () => new TableSink(layout), readerOptions, CancellationToken.None)
+                using var table = ParallelAggregator.RunAsync(source, dataStart, () => new TableSink(layout, limits), readerOptions, CancellationToken.None)
                     .GetAwaiter().GetResult();
 #pragma warning restore VSTHRD002
                 table.Publish(outTable);

@@ -62,7 +62,7 @@ namespace FixedWidthParser.Native.Reading
                 Marshal.FreeHGlobal((IntPtr)column.Validity);
                 Marshal.FreeHGlobal((IntPtr)column.Data);
             }
-            Marshal.FreeHGlobal((IntPtr)table->Columns);
+            NativeMemory.Free(table->Columns);
             *table = default;
         }
     }

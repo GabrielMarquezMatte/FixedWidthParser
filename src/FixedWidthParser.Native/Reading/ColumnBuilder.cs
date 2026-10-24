@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Unicode;
 using FixedWidthParser.Infrastructure;
 using FixedWidthParser.Native.Layouts;
 
@@ -15,10 +16,13 @@ namespace FixedWidthParser.Native.Reading
     internal sealed unsafe class ColumnBuilder : IDisposable
     {
         private const int StackChars = 256;
+        private const long DecimalLimit = 1_000_000_000_000_000_000;
+        private const DateTimeStyles Utc = DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal;
         private static readonly int EpochDay = new DateOnly(1970, 1, 1).DayNumber;
         private static readonly double[] Pow10 = [.. Enumerable.Range(0, NativeType.MaxScale + 1).Select(p => Math.Pow(10, p))];
 
         private readonly NativeColumn _column;
+        private readonly long _maxTextBytes;
         private readonly GrowableNativeBuffer<long> _longs = new();
         private readonly GrowableNativeBuffer<double> _doubles = new();
         private readonly GrowableNativeBuffer<int> _ints = new();
@@ -27,9 +31,10 @@ namespace FixedWidthParser.Native.Reading
         private GrowableNativeBuffer<byte>? _validity;
 #pragma warning restore SS066
 
-        internal ColumnBuilder(NativeColumn column)
+        internal ColumnBuilder(NativeColumn column, long maxTextBytes)
         {
             _column = column;
+            _maxTextBytes = maxTextBytes;
             if (column.Type == NativeType.String)
             {
                 _ints.Add(0);
@@ -37,6 +42,9 @@ namespace FixedWidthParser.Native.Reading
         }
 
         internal int Rows { get; private set; }
+
+        /// <summary>The UTF-8 bytes a STRING column holds.</summary>
+        internal long TextBytes => _bytes.Count;
 
         internal bool TryAppend(ReadOnlySpan<byte> raw, in FixedWidthContext context)
         {
@@ -228,7 +236,8 @@ namespace FixedWidthParser.Native.Reading
 
         private bool AppendFloat(ReadOnlySpan<byte> raw, in FixedWidthContext context, in ColumnParseOptions parse)
         {
-            if (_column.Scale > 0 && long.TryParse(FixedWidthRuntime.TrimColumn(raw, in parse), NumberStyles.Integer, CultureInfo.InvariantCulture, out long digits))
+            var text = FixedWidthRuntime.TrimColumn(raw, in parse);
+            if (_column.Scale > 0 && long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out long digits))
             {
                 _doubles.Add(digits / Pow10[_column.Scale]);
                 return true;
@@ -237,7 +246,9 @@ namespace FixedWidthParser.Native.Reading
             {
                 return false;
             }
-            _doubles.Add(value);
+            // Digits too many for a long still carry the implied decimals.
+            bool impliedDecimals = _column.Scale > 0 && text.IndexOfAny(".,eE"u8) < 0;
+            _doubles.Add(impliedDecimals ? value / Pow10[_column.Scale] : value);
             return true;
         }
 
@@ -245,14 +256,14 @@ namespace FixedWidthParser.Native.Reading
         {
             if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out unscaled))
             {
-                return true;
+                return unscaled is > -DecimalLimit and < DecimalLimit;
             }
             if (!decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal value))
             {
                 return false;
             }
             decimal scaled = value * (decimal)Pow10[scale];
-            if (scaled != decimal.Truncate(scaled) || scaled is < long.MinValue or > long.MaxValue)
+            if (scaled != decimal.Truncate(scaled) || scaled <= -DecimalLimit || scaled >= DecimalLimit)
             {
                 return false;
             }
@@ -276,16 +287,32 @@ namespace FixedWidthParser.Native.Reading
                     bool timeOk = exact ? FixedWidthRuntime.TryTimeOnlyExact(raw, in context, in parse, out var time) : FixedWidthRuntime.TryParseDecoded(raw, in context, in parse, out time);
                     return Add(timeOk, time.Ticks / TimeSpan.TicksPerMicrosecond);
                 default:
-                    bool stampOk = exact ? FixedWidthRuntime.TryDateTimeExact(raw, in context, in parse, out var stamp) : FixedWidthRuntime.TryParseDecoded(raw, in context, in parse, out stamp);
+                    bool stampOk = TryTimestamp(FixedWidthRuntime.TrimColumn(raw, in parse), context.Encoding, parse.Format, out var stamp);
                     return Add(stampOk, (stamp.Ticks - DateTime.UnixEpoch.Ticks) / TimeSpan.TicksPerMicrosecond);
             }
         }
 
+        /// <summary>A timestamp in UTC: a zone or offset in the text is applied, and text without one is taken as UTC.</summary>
+        private static bool TryTimestamp(ReadOnlySpan<byte> text, Encoding encoding, string? format, out DateTime value)
+        {
+            value = default;
+            if (encoding.GetMaxCharCount(text.Length) > StackChars && encoding.GetCharCount(text) > StackChars)
+            {
+                return false;
+            }
+            Span<char> chars = stackalloc char[StackChars];
+            chars = chars[..encoding.GetChars(text, chars)];
+            return format is null
+                ? DateTime.TryParse(chars, CultureInfo.InvariantCulture, Utc, out value)
+                : DateTime.TryParseExact(chars, format, CultureInfo.InvariantCulture, Utc, out value);
+        }
+
         private bool AppendString(ReadOnlySpan<byte> text, in FixedWidthContext context)
         {
-            if (!context.IsUtf8)
+            // Invalid UTF-8 (a split character, or another encoding read as UTF-8) is decoded with U+FFFD, as the core does.
+            if (!context.IsUtf8 || !Utf8.IsValid(text))
             {
-                AppendTranscoded(text, context.Encoding);
+                AppendTranscoded(text, context.IsUtf8 ? Encoding.UTF8 : context.Encoding);
                 _ints.Add(_bytes.Count);
                 return true;
             }
@@ -318,11 +345,16 @@ namespace FixedWidthParser.Native.Reading
 
         private void EnsureTextRoom(int bytes)
         {
-            if ((long)_bytes.Count + bytes > int.MaxValue)
+            if (_bytes.Count + (long)bytes > _maxTextBytes)
             {
-                throw new InvalidOperationException(
-                    $"Column '{_column.Name}' holds more than 2 GiB of text; read in batches (fw_reader_open_*).");
+                throw TooMuchText(_column.Name, _maxTextBytes);
             }
+        }
+
+        internal static InvalidOperationException TooMuchText(string column, long limit)
+        {
+            return new InvalidOperationException(
+                $"Column '{column}' holds more than {limit} bytes of text; read in batches (fw_reader_open_*).");
         }
 
         private void AppendNull()

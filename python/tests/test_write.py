@@ -55,6 +55,27 @@ def test_write_values_from_python_types():
     assert fw.write_bytes(frame, columns) == b"20231024-0001250   7\n"
 
 
+def test_write_decimal_with_more_digits_than_the_scale_raises():
+    import decimal
+
+    columns = fw.Layout([fw.Column("v", 0, 8, fw.Decimal, scale=2)])
+    exact = pa.table({"v": pa.array([decimal.Decimal("1.23"), decimal.Decimal("-0.5")], type=pa.decimal128(10, 3))})
+    lossy = pa.table({"v": pa.array([decimal.Decimal("1.239")], type=pa.decimal128(10, 3))})
+
+    assert fw.write_bytes(exact, columns) == b"     123\n     -50\n"
+    with pytest.raises(fw.FixedWidthError, match="1.239"):
+        fw.write_bytes(lossy, columns)
+
+
+def test_read_invalid_utf8_reaches_polars_and_pandas_as_valid_text():
+    columns = fw.Layout([fw.Column("name", 0, 6, fw.String), fw.Column("n", 6, 2, fw.Int64)])
+    data = "AÇÃO  01\n".encode("latin-1")
+
+    assert fw.read_arrow(data, columns).validate(full=True) is None
+    assert fw.read_polars(data, columns)["name"].to_list()[0].startswith("A")
+    assert fw.read_pandas(data, columns)["name"][0].startswith("A")
+
+
 def test_write_mismatched_columns_raise():
     columns = fw.Layout([fw.Column("a", 0, 2, fw.String), fw.Column("b", 2, 2, fw.Int64)])
 

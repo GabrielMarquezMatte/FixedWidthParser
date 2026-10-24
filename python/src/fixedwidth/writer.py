@@ -109,7 +109,7 @@ def _values(kind: ColumnType, spec: Column, array: Any, pa: Any, np: Any) -> Any
         return array.cast(pa.float64()).fill_null(0).to_numpy(zero_copy_only=False)
     if kind is ColumnType.DECIMAL:
         if pa.types.is_decimal(array.type):
-            return np.array([0 if v is None else int(v.scaleb(spec.scale)) for v in array.to_pylist()], dtype=np.int64)
+            return np.array([_unscaled(v, spec) for v in array.to_pylist()], dtype=np.int64)
         floats = array.cast(pa.float64()).fill_null(0).to_numpy(zero_copy_only=False)
         return np.round(floats * 10**spec.scale).astype(np.int64)
     if kind is ColumnType.DATE:
@@ -119,6 +119,16 @@ def _values(kind: ColumnType, spec: Column, array: Any, pa: Any, np: Any) -> Any
     if pa.types.is_timestamp(array.type) and array.type.tz is not None:
         array = array.cast(pa.timestamp(array.type.unit))
     return array.cast(pa.timestamp("us")).cast(pa.int64()).fill_null(0).to_numpy(zero_copy_only=False)
+
+
+def _unscaled(value: Any, spec: Column) -> int:
+    """A decimal as the integer the column stores; more decimals than its scale would be lost, so they fail."""
+    if value is None:
+        return 0
+    scaled = value.scaleb(spec.scale)
+    if scaled != scaled.to_integral_value():
+        raise FixedWidthError(f"value {value} of column '{spec.name}' has more decimals than its scale {spec.scale}")
+    return int(scaled)
 
 
 def _fill_strings(target: _native.Column, array: Any, keep: list[object]) -> None:

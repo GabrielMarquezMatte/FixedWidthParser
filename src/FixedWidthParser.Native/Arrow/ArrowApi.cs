@@ -212,8 +212,8 @@ namespace FixedWidthParser.Native.Arrow
 
         private static IntPtr WidenDecimals(NativeColumnRaw* column)
         {
-            var values = new ReadOnlySpan<long>(column->Values, (int)column->Length);
-            var wide = (long*)Marshal.AllocHGlobal((int)Math.Max(1, column->Length) * DecimalBytes);
+            var values = new ReadOnlySpan<long>(column->Values, checked((int)column->Length));
+            var wide = (long*)Marshal.AllocHGlobal((nint)DecimalBufferBytes(column->Length));
             for (int i = 0; i < values.Length; i++)
             {
                 wide[2 * i] = values[i];
@@ -222,6 +222,12 @@ namespace FixedWidthParser.Native.Arrow
             Marshal.FreeHGlobal((IntPtr)column->Values);
             column->Values = null;
             return (IntPtr)wide;
+        }
+
+        /// <summary>The bytes of a decimal128 buffer for <paramref name="rows"/> values, in 64-bit arithmetic.</summary>
+        internal static long DecimalBufferBytes(long rows)
+        {
+            return checked(Math.Max(1, rows) * DecimalBytes);
         }
 
         private static long CountUnset(IntPtr validity, long length)
