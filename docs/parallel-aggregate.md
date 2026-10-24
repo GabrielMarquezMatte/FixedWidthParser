@@ -41,7 +41,8 @@ the pipe's own buffer size, not the engine, sets the ceiling.
 
 The stream engine beats the file engine from `dop 2` up on this cached file. The file engine's ranges
 are 3.25 MB at `dop 8` against the stream engine's 256 KB chunks, and each file worker refills a 64 KB
-buffer with one `RandomAccess.Read` call at a time. Which of the two costs more is unmeasured.
+buffer with one `RandomAccess.Read` call at a time. Measured warm, the read size is not it, and the
+gap is nearer 10 % than these figures suggest ([reader-performance.md](reader-performance.md)).
 
 ## Not measured
 

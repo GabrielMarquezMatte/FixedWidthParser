@@ -73,6 +73,41 @@ namespace FixedWidthParser.Tests
             Assert.Same(first.Name, second.Name);
         }
 
+        // More values than the per-thread cache in front of the pool holds, so sets fill, evict and collide:
+        // every value must still decode right. (The pool evicts too, so instances are not compared here.)
+        [Fact]
+        public void TryParse_WithStringPool_ManyValues_DecodeRight()
+        {
+            var layout = FixedWidthLayout.FromAttributes<PersonModel>();
+            var pool = new StringPool();
+            var context = CtxWith(pool: pool);
+            var names = Enumerable.Range(0, 5000).Select(i => i % 3 == 0 ? "é" + i : "N" + i).ToArray();
+
+            for (int round = 0; round < 2; round++)
+            {
+                foreach (string name in names)
+                {
+                    byte[] line = [.. Bytes(name), .. Enumerable.Repeat((byte)' ', 10 - Bytes(name).Length), .. "25   100.00    "u8];
+                    Assert.True(FixedWidth.TryParse(line, layout, context, out var model));
+                    Assert.Equal(name, model.Name);
+                }
+            }
+        }
+
+        [Fact]
+        public void TryParse_WithStringPool_OtherEncodingsAndStrictUtf8_DecodeAsWithoutIt()
+        {
+            var layout = FixedWidthLayout.FromAttributes<CodeModel>();
+            var latin1 = CtxWith(pool: new StringPool(), encoding: System.Text.Encoding.Latin1);
+            var strict = CtxWith(pool: new StringPool(), encoding: new System.Text.UTF8Encoding(false, true));
+
+            Assert.True(FixedWidth.TryParse([0xC9, 0x41, 0x42], layout, latin1, out var model));
+            Assert.Equal("ÉAB", model.Code);
+            Assert.True(FixedWidth.TryParse("éA"u8, layout, strict, out model));
+            Assert.Equal("éA", model.Code);
+            Assert.Throws<System.Text.DecoderFallbackException>(() => FixedWidth.TryParse([0xC3, 0x41, 0x42], layout, strict, out _));
+        }
+
         [Fact]
         public void TryParse_WithoutPool_ReturnsDistinctInstances()
         {
