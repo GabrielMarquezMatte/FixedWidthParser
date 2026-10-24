@@ -123,7 +123,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void GetEnumerator_IsStruct_ForAllocationFreeForeach()
         {
-            Assert.True(typeof(RecordEnumerator<CodeModel, ReflectionLineParser<CodeModel>>).IsValueType);
+            Assert.True(typeof(RecordEnumerator<CodeModel, LayoutLineParser<CodeModel>>).IsValueType);
 
             int count = 0;
             foreach (var _ in new FixedWidthReader<CodeModel>().Read(StreamOf("ABC\nDEF\n")))
