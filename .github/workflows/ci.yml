@@ -45,7 +45,7 @@ jobs:
       - name: Build (Release)
         run: dotnet build FixedWidthParser.slnx --configuration Release --no-restore -p:DeterministicSourcePaths=false
 
-      - name: Validate package against the last release
+      - name: Pack (validates against the baseline when package validation is on)
         if: matrix.os == 'ubuntu-latest'
         run: dotnet pack src/FixedWidthParser/FixedWidthParser.csproj --configuration Release --no-restore --output ./package-validation
 
