@@ -61,6 +61,10 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
   `ColumnLength` and `RawValue`. A short line says how long it is and how long the layout needs it to
   be. A line that parses pays nothing for this: a failed line is parsed again to find the column.
 - `FixedWidthReaderOptions.OnParseError`: return `true` to skip a line that fails to parse.
+- `ref struct` models on `Read`, `ReadFile`, `ReadAsync`, `ReadFileAsync`, `AggregateFileAsync` and
+  `AggregateAsync`, generated and through a layout. The enumerators parse a line when `Current` is
+  read, so reading it twice parses twice; with `OnParseError` set, each line is parsed once more to
+  decide whether to skip it.
 - `FixedWidthReaderOptions.MaxLineLength` (default 1 MiB): a longer line throws
   `InvalidDataException`. Before, a source without line breaks doubled the read buffer until memory ran
   out, which a request body made reachable from the network.
@@ -92,6 +96,9 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
   generated code or allocation-free enumeration (`FixedWidthRuntime`, `ColumnFormatOptions`, the new
   `ColumnParseOptions`, the record enumerables and enumerators, `IRecordLineParser<T>` and the
   line-parser structs) moved to `FixedWidthParser.Infrastructure` and are hidden from IntelliSense.
+- **Breaking:** without `OnParseError`, a line that fails to parse throws when the enumerator's
+  `Current` is read, not from `MoveNext`. A `foreach` sees no difference. The non-generic
+  `IEnumerator.Current` throws `NotSupportedException`.
 - **Breaking:** targets `net10.0` only. .NET 8 reaches end of support on 10 November 2026.
 - **Breaking:** a `null` format provider means the invariant culture for every column type, on parse and
   write. 1.x used it for `double`/`float` only and fell back to `CurrentCulture` for the rest.

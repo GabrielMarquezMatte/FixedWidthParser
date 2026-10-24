@@ -9,6 +9,7 @@ namespace FixedWidthParser.Infrastructure
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public sealed class AsyncRecordEnumerator<TModel, TParser> : IAsyncEnumerator<TModel>
+        where TModel : allows ref struct
         where TParser : struct, IRecordLineParser<TModel>
     {
         private readonly TParser _parser;
@@ -18,7 +19,6 @@ namespace FixedWidthParser.Infrastructure
         private readonly bool _ownsStream;
         private readonly CancellationToken _cancellationToken;
         private LineBufferState _lines;
-        private TModel _current;
         private bool _disposed;
 
         internal AsyncRecordEnumerator(TParser parser, Stream stream, bool ownsStream, FixedWidthReaderOptions options, CancellationToken cancellationToken)
@@ -31,11 +31,16 @@ namespace FixedWidthParser.Infrastructure
             _cancellationToken = cancellationToken;
             _lines = default;
             _lines.Rent(options);
-            _current = default!;
         }
 
-        /// <inheritdoc />
-        public TModel Current => _current;
+        /// <summary>The record on the line the enumerator sits on, parsed on access.</summary>
+        /// <remarks>
+        /// Parsed here rather than by <see cref="MoveNextAsync"/> because the enumerator cannot hold a field
+        /// of a <c>ref struct</c> <typeparamref name="TModel"/>. <c>await foreach</c> reads it once per line,
+        /// so each line is still parsed once; reading it twice parses twice.
+        /// </remarks>
+        /// <exception cref="FixedWidthParseException">The line does not parse.</exception>
+        public TModel Current => ParseErrors.Parse<TModel, TParser>(_parser, _lines.CurrentLine, _lines.LineNumber, in _context);
 
         /// <inheritdoc />
         public ValueTask<bool> MoveNextAsync()
@@ -73,11 +78,10 @@ namespace FixedWidthParser.Infrastructure
             while (true)
             {
                 var status = _lines.TryGetLine(out var line);
-                if (status != LineStatus.Line || _parser.TryParse(line, in _context, out _current))
+                if (status != LineStatus.Line || ParseErrors.Accepts<TModel, TParser>(_parser, line, _lines.LineNumber, in _context, _onParseError))
                 {
                     return status;
                 }
-                ParseErrors.HandleFailure<TModel, TParser>(_parser, line, _lines.LineNumber, in _context, _onParseError);
             }
         }
 

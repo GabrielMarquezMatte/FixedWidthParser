@@ -21,6 +21,7 @@ namespace FixedWidthParser.Infrastructure
     /// <summary>Layout parse strategy: forwards to a <see cref="FixedWidthLayout{TModel}"/>, built from attributes or fluently.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public readonly struct LayoutLineParser<TModel> : IRecordLineParser<TModel>
+        where TModel : allows ref struct
     {
         private readonly FixedWidthLayout<TModel> _layout;
 
@@ -38,7 +39,8 @@ namespace FixedWidthParser.Infrastructure
 
     /// <summary>Source-generated parse strategy: forwards to the model's static <see cref="IFixedWidthModel{TSelf}.TryParse"/>.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public readonly struct GeneratedLineParser<TModel> : IRecordLineParser<TModel> where TModel : IFixedWidthModel<TModel>
+    public readonly struct GeneratedLineParser<TModel> : IRecordLineParser<TModel>
+        where TModel : IFixedWidthModel<TModel>, allows ref struct
     {
         /// <inheritdoc />
         public bool TryParse(ReadOnlySpan<byte> line, in FixedWidthContext context, out TModel model)

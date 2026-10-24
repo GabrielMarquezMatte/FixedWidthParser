@@ -9,6 +9,7 @@ namespace FixedWidthParser.Infrastructure
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public sealed class FixedWidthAsyncRecordEnumerable<TModel, TParser> : IAsyncEnumerable<TModel>
+        where TModel : allows ref struct
         where TParser : struct, IRecordLineParser<TModel>
     {
         private readonly TParser _parser;

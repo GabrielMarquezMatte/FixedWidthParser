@@ -29,7 +29,7 @@ Upgrading from 1.x? See [the 2.0 entry in the changelog](CHANGELOG.md#200).
 - **Configurable formatting** per column: alignment, padding character, format string and explicit overflow policy.
 - **Culture-aware** numbers and dates, including `double`/`float` via csFastFloat and any `IUtf8SpanParsable`/`ISpanParsable` type.
 - **Layout validation** when a layout is built or generated: negative `Start`, non-positive `Length`, overlapping columns and non-ASCII padding fail clearly.
-- **`ref struct` model support** on single-line parsing and formatting.
+- **`ref struct` model support** on single-line parsing and formatting, on every reader and on parallel aggregation.
 
 ## Requirements
 

@@ -1,6 +1,7 @@
 using System.Collections;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using FixedWidthParser.Readers;
 
 namespace FixedWidthParser.Infrastructure
@@ -11,6 +12,7 @@ namespace FixedWidthParser.Infrastructure
     /// </summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public struct RecordEnumerator<TModel, TParser> : IEnumerator<TModel>
+        where TModel : allows ref struct
         where TParser : struct, IRecordLineParser<TModel>
     {
         private readonly TParser _parser;
@@ -19,7 +21,6 @@ namespace FixedWidthParser.Infrastructure
         private readonly Stream _stream;
         private readonly bool _ownsStream;
         private LineBufferState _lines;
-        private TModel _current;
         private bool _disposed;
 
         internal RecordEnumerator(TParser parser, Stream stream, bool ownsStream, FixedWidthReaderOptions options)
@@ -31,15 +32,21 @@ namespace FixedWidthParser.Infrastructure
             _ownsStream = ownsStream;
             _lines = default;
             _lines.Rent(options);
-            _current = default!;
             _disposed = false;
         }
 
-        /// <inheritdoc />
-        public readonly TModel Current => _current;
+        /// <summary>The record on the line the enumerator sits on, parsed on access.</summary>
+        /// <remarks>
+        /// Parsed here rather than by <see cref="MoveNext"/> because the enumerator cannot hold a field of a
+        /// <c>ref struct</c> <typeparamref name="TModel"/>. <c>foreach</c> reads it once per line, so each
+        /// line is still parsed once; reading it twice parses twice.
+        /// </remarks>
+        /// <exception cref="FixedWidthParseException">The line does not parse.</exception>
+        // AsRef: a parser never keeps a reference to the context, so the record cannot capture this struct.
+        public readonly TModel Current => ParseErrors.Parse<TModel, TParser>(_parser, _lines.CurrentLine, _lines.LineNumber, in Unsafe.AsRef(in _context));
 
         [ExcludeFromCodeCoverage]
-        readonly object IEnumerator.Current => _current!;
+        readonly object IEnumerator.Current => throw new NotSupportedException("Use the generic Current.");
 
         /// <inheritdoc />
         public bool MoveNext()
@@ -50,11 +57,10 @@ namespace FixedWidthParser.Infrastructure
                 var status = _lines.TryGetLine(out var line);
                 if (status == LineStatus.Line)
                 {
-                    if (_parser.TryParse(line, in _context, out _current))
+                    if (ParseErrors.Accepts<TModel, TParser>(_parser, line, _lines.LineNumber, in _context, _onParseError))
                     {
                         return true;
                     }
-                    ParseErrors.HandleFailure<TModel, TParser>(_parser, line, _lines.LineNumber, in _context, _onParseError);
                     continue;
                 }
                 if (status == LineStatus.End)

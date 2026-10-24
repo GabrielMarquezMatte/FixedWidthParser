@@ -27,6 +27,7 @@ namespace FixedWidthParser.Readers
         /// <summary>Folds <paramref name="source"/>, disposing it afterwards unless <paramref name="leaveOpen"/>.</summary>
         internal static async Task<TAccumulator> RunAsync<TModel, TParser, TAccumulator>(
             TParser parser, Stream source, bool leaveOpen, FixedWidthReaderOptions options, CancellationToken ct)
+            where TModel : allows ref struct
             where TParser : struct, IRecordLineParser<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
@@ -49,6 +50,7 @@ namespace FixedWidthParser.Readers
 
         private static async Task<TAccumulator> SequentialAsync<TModel, TParser, TAccumulator>(
             TParser parser, Stream source, FixedWidthReaderOptions options, CancellationToken ct)
+            where TModel : allows ref struct
             where TParser : struct, IRecordLineParser<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
@@ -63,6 +65,7 @@ namespace FixedWidthParser.Readers
 
         private static async Task<TAccumulator> PartitionedAsync<TModel, TParser, TAccumulator>(
             TParser parser, Stream source, FixedWidthReaderOptions options, CancellationToken ct)
+            where TModel : allows ref struct
             where TParser : struct, IRecordLineParser<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
@@ -107,6 +110,7 @@ namespace FixedWidthParser.Readers
 
         // Every chunk precedes the point where the producer failed, so a worker's failure comes first in the source.
         private static TAccumulator Merge<TModel, TAccumulator>(IEnumerable<Outcome<TAccumulator>> outcomes, ExceptionDispatchInfo? producerFailure)
+            where TModel : allows ref struct
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             TAccumulator? merged = default;
@@ -204,6 +208,7 @@ namespace FixedWidthParser.Readers
 
         private static async Task<List<Outcome<TAccumulator>>> ConsumeAsync<TModel, TParser, TAccumulator>(
             TParser parser, ChannelReader<Chunk> queue, FixedWidthReaderOptions options, CancellationToken ct)
+            where TModel : allows ref struct
             where TParser : struct, IRecordLineParser<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
@@ -225,6 +230,7 @@ namespace FixedWidthParser.Readers
 
         private static TAccumulator Fold<TModel, TParser, TAccumulator>(
             TParser parser, Chunk chunk, FixedWidthReaderOptions options, in FixedWidthContext context, CancellationToken ct)
+            where TModel : allows ref struct
             where TParser : struct, IRecordLineParser<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
