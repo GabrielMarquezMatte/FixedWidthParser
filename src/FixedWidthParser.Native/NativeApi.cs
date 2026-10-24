@@ -44,6 +44,11 @@ namespace FixedWidthParser.Native
             column = _lastError is null ? -1 : _parseColumn;
         }
 
+        internal static string LastErrorText()
+        {
+            return _lastError ?? "";
+        }
+
         internal static int LastError(Span<byte> buffer, out int length)
         {
             string? message = _lastError;
