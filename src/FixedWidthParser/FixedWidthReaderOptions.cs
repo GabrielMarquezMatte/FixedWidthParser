@@ -64,6 +64,11 @@ namespace FixedWidthParser
 
         internal FixedWidthContext Context => new() { FormatProvider = FormatProvider!, Encoding = Encoding!, StringPool = StringPool };
 
+        // Skips a line that does not parse and calls this, instead of building the exception OnParseError gets:
+        // the native library's skip_invalid only counts lines, and numbering one in a partition re-reads the
+        // source from its start.
+        internal Action? OnSkip { get; init; }
+
         // Overrides whether a leading UTF-8 byte order mark is skipped; null decides from the encoding.
         internal bool? ByteOrderMark { get; init; }
 

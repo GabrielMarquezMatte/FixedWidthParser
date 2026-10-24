@@ -92,6 +92,11 @@ namespace FixedWidthParser.Native.Reading
                 }
                 if (!sink.TryAdd(line, in _context))
                 {
+                    if (_options.OnSkip is { } skip)
+                    {
+                        skip();
+                        continue;
+                    }
                     ParseErrors.Reject(sink.Diagnose(line, _lines.LineNumber, in _context), _options.OnParseError);
                 }
             }

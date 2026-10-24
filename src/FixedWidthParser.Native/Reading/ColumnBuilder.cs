@@ -29,13 +29,27 @@ namespace FixedWidthParser.Native.Reading
         private GrowableNativeBuffer<byte>? _validity;
 #pragma warning restore SS066
 
-        internal ColumnBuilder(NativeColumn column, long maxTextBytes)
+        /// <param name="expectedRows">How many rows to size the buffers for up front, so a partition does not grow them row by row.</param>
+        internal ColumnBuilder(NativeColumn column, long maxTextBytes, long expectedRows)
         {
             _column = column;
             _maxTextBytes = maxTextBytes;
-            if (column.Type == NativeType.String)
+            switch (column.Type)
             {
-                _ints.Add(0);
+                case NativeType.String:
+                    _ints.Reserve(expectedRows + 1);
+                    _bytes.Reserve(Math.Min(expectedRows * column.Length, maxTextBytes));
+                    _ints.Add(0);
+                    break;
+                case NativeType.Float64:
+                    _doubles.Reserve(expectedRows);
+                    break;
+                case NativeType.Date:
+                    _ints.Reserve(expectedRows);
+                    break;
+                default:
+                    _longs.Reserve(expectedRows);
+                    break;
             }
         }
 

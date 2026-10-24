@@ -134,6 +134,9 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
   and `int`/`long` columns of plain digits parse straight from the bytes, about 5x and 1.5x faster; any
   other text still goes to the BCL. A single-threaded B3 COTAHIST read through Python is 26% faster
   ([docs/python-benchmarks.md](docs/python-benchmarks.md)).
+- Native and Python whole-file reads size their column buffers once per partition, skip bad lines under
+  `skip_invalid` without numbering them, and concatenate the partitions' columns in parallel: a parallel
+  COTAHIST read is about 32% faster.
 - Reading with a `StringPool` checks a small per-thread cache before the pool, about halving the cost of
   a pooled read.
 - The library, generator and native library build with warnings as errors.

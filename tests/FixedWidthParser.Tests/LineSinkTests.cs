@@ -66,7 +66,7 @@ namespace FixedWidthParser.Tests
         {
             var source = new ArraySource("HDR\nA1\nA2\n"u8.ToArray());
 
-            var lines = await ParallelAggregator.RunAsync(source, dataStart: 4, () => new Lines(), Options(chunkSize), CancellationToken.None);
+            var lines = await ParallelAggregator.RunAsync(source, dataStart: 4, _ => new Lines(), Options(chunkSize), CancellationToken.None);
 
             Assert.Equal(["A1", "A2"], lines.Values);
         }
@@ -79,7 +79,7 @@ namespace FixedWidthParser.Tests
             var source = new ArraySource("HDR\nA1\nXX\nA3\n"u8.ToArray());
 
             var ex = await Assert.ThrowsAsync<FixedWidthParseException>(() =>
-                ParallelAggregator.RunAsync(source, dataStart: 4, () => new Lines(), Options(chunkSize), CancellationToken.None));
+                ParallelAggregator.RunAsync(source, dataStart: 4, _ => new Lines(), Options(chunkSize), CancellationToken.None));
 
             Assert.Equal(3, ex.LineNumber);
         }
@@ -91,8 +91,8 @@ namespace FixedWidthParser.Tests
             await File.WriteAllBytesAsync(_path, content);
             using var handle = File.OpenHandle(_path);
 
-            var fromFile = await ParallelAggregator.RunAsync(new FileSource(handle), 0, () => new Lines(), Options(3), CancellationToken.None);
-            var fromMemory = await ParallelAggregator.RunAsync(new ArraySource(content), 0, () => new Lines(), Options(3), CancellationToken.None);
+            var fromFile = await ParallelAggregator.RunAsync(new FileSource(handle), 0, _ => new Lines(), Options(3), CancellationToken.None);
+            var fromMemory = await ParallelAggregator.RunAsync(new ArraySource(content), 0, _ => new Lines(), Options(3), CancellationToken.None);
 
             Assert.Equal(["A1", "A2", "A3"], fromFile.Values);
             Assert.Equal(fromFile.Values, fromMemory.Values);

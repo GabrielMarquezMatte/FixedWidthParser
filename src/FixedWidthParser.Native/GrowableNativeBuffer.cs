@@ -23,6 +23,16 @@ namespace FixedWidthParser.Native
 
         internal ReadOnlySpan<T> Span => new(_data, Count);
 
+        /// <summary>Grows once to hold at least <paramref name="capacity"/> elements, clamped to what a buffer can hold.</summary>
+        internal void Reserve(long capacity)
+        {
+            capacity = Math.Min(capacity, int.MaxValue);
+            if (capacity > _capacity)
+            {
+                Grow(capacity);
+            }
+        }
+
         /// <summary>Drops every element from <paramref name="count"/> on.</summary>
         internal void Truncate(int count)
         {

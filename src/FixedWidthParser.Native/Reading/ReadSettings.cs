@@ -60,7 +60,7 @@ namespace FixedWidthParser.Native.Reading
                 DegreeOfParallelism = degreeOfParallelism,
                 ChunkSize = chunkSize,
                 ByteOrderMark = ByteOrderMark,
-                OnParseError = SkipInvalid ? _ => Interlocked.Increment(ref skipped.Value) > 0 : null,
+                OnSkip = SkipInvalid ? () => Interlocked.Increment(ref skipped.Value) : null,
             });
         }
 
