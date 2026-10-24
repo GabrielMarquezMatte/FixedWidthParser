@@ -63,8 +63,8 @@ namespace FixedWidthParser.Generator.Tests
 
                 public sealed class CentsConverter : FixedWidthParser.IFixedWidthConverter<Cents>
                 {
-                    public bool TryParse(System.ReadOnlySpan<byte> field, in FixedWidthContext context, out Cents value) { value = default; return true; }
-                    public bool TryFormat(Cents value, System.Span<byte> destination, in FixedWidthContext context, out int written) { written = 0; return true; }
+                    public bool TryParse(System.ReadOnlySpan<byte> column, in FixedWidthContext context, out Cents value) { value = default; return true; }
+                    public bool TryFormat(Cents value, System.Span<byte> destination, in FixedWidthContext context, out int bytesWritten) { bytesWritten = 0; return true; }
                 }
 
                 public readonly partial record struct AllKinds : IFixedWidthModel<AllKinds>
@@ -142,8 +142,8 @@ namespace FixedWidthParser.Generator.Tests
             var result = Run("""
                 public sealed class IntConverter : FixedWidthParser.IFixedWidthConverter<int>
                 {
-                    public bool TryParse(System.ReadOnlySpan<byte> field, in FixedWidthContext context, out int value) { value = 0; return true; }
-                    public bool TryFormat(int value, System.Span<byte> destination, in FixedWidthContext context, out int written) { written = 0; return true; }
+                    public bool TryParse(System.ReadOnlySpan<byte> column, in FixedWidthContext context, out int value) { value = 0; return true; }
+                    public bool TryFormat(int value, System.Span<byte> destination, in FixedWidthContext context, out int bytesWritten) { bytesWritten = 0; return true; }
                 }
 
                 public readonly partial record struct MismatchModel : IFixedWidthModel<MismatchModel>

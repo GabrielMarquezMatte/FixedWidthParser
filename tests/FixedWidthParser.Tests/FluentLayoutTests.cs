@@ -270,7 +270,7 @@ namespace FixedWidthParser.Tests
             var layout = Person();
 
             var parallel = await FixedWidth.AggregateFileAsync<MutablePersonModel, Ages>(
-                _path, layout, parallel: new FixedWidthParallelOptions { DegreeOfParallelism = 4 }, ct: TestContext.Current.CancellationToken);
+                _path, layout, parallel: new FixedWidthParallelOptions { DegreeOfParallelism = 4 }, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Equal(FixedWidth.ReadFile(_path, layout).Select(p => p.Age), parallel.Values);
             Assert.Equal(100_000, parallel.Values.Count);

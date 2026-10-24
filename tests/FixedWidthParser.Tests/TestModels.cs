@@ -10,9 +10,9 @@ namespace FixedWidthParser.Tests
     /// <summary>Stateless <see cref="IFixedWidthConverter{T}"/> for <see cref="CentsValue"/>: stores cents as a plain integer.</summary>
     public sealed class CentsConverter : IFixedWidthConverter<CentsValue>
     {
-        public bool TryParse(ReadOnlySpan<byte> field, in FixedWidthContext context, out CentsValue value)
+        public bool TryParse(ReadOnlySpan<byte> column, in FixedWidthContext context, out CentsValue value)
         {
-            if (!long.TryParse(field, context.FormatProvider, out long cents))
+            if (!long.TryParse(column, context.FormatProvider, out long cents))
             {
                 value = default;
                 return false;
@@ -21,23 +21,23 @@ namespace FixedWidthParser.Tests
             return true;
         }
 
-        public bool TryFormat(CentsValue value, Span<byte> destination, in FixedWidthContext context, out int written)
+        public bool TryFormat(CentsValue value, Span<byte> destination, in FixedWidthContext context, out int bytesWritten)
         {
-            return value.Cents.TryFormat(destination, out written, provider: context.FormatProvider);
+            return value.Cents.TryFormat(destination, out bytesWritten, provider: context.FormatProvider);
         }
     }
 
     /// <summary>Converter for <c>int</c>, attached to a <c>string</c> column to prove the mismatch is rejected.</summary>
     public sealed class IntOnlyConverter : IFixedWidthConverter<int>
     {
-        public bool TryParse(ReadOnlySpan<byte> field, in FixedWidthContext context, out int value)
+        public bool TryParse(ReadOnlySpan<byte> column, in FixedWidthContext context, out int value)
         {
-            return int.TryParse(field, context.FormatProvider, out value);
+            return int.TryParse(column, context.FormatProvider, out value);
         }
 
-        public bool TryFormat(int value, Span<byte> destination, in FixedWidthContext context, out int written)
+        public bool TryFormat(int value, Span<byte> destination, in FixedWidthContext context, out int bytesWritten)
         {
-            return value.TryFormat(destination, out written, provider: context.FormatProvider);
+            return value.TryFormat(destination, out bytesWritten, provider: context.FormatProvider);
         }
     }
     /// <summary>Single custom-converted column, exercised by both the reflection parser/writer and the generator.</summary>
@@ -312,21 +312,21 @@ namespace FixedWidthParser.Tests
     /// <summary>Converter for <see cref="BigValue"/>; emits N 'x' bytes on format.</summary>
     public sealed class BigConverter : IFixedWidthConverter<BigValue>
     {
-        public bool TryParse(ReadOnlySpan<byte> field, in FixedWidthContext context, out BigValue value)
+        public bool TryParse(ReadOnlySpan<byte> column, in FixedWidthContext context, out BigValue value)
         {
-            value = new BigValue(field.Trim((byte)' ').Length);
+            value = new BigValue(column.Trim((byte)' ').Length);
             return true;
         }
 
-        public bool TryFormat(BigValue value, Span<byte> destination, in FixedWidthContext context, out int written)
+        public bool TryFormat(BigValue value, Span<byte> destination, in FixedWidthContext context, out int bytesWritten)
         {
             if (destination.Length < value.Length)
             {
-                written = 0;
+                bytesWritten = 0;
                 return false;
             }
             destination[..value.Length].Fill((byte)'x');
-            written = value.Length;
+            bytesWritten = value.Length;
             return true;
         }
     }

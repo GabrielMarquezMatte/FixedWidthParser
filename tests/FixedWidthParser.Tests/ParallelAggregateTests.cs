@@ -109,8 +109,8 @@ namespace FixedWidthParser.Tests
             var ct = TestContext.Current.CancellationToken;
             return source switch
             {
-                Source.File => FixedWidth.AggregateFileAsync<GenNameAgeModel, GenAges>(_path, parallel: parallel, ct: ct),
-                _ => FixedWidth.AggregateAsync<GenNameAgeModel, GenAges>(File.OpenRead(_path), parallel: parallel, ct: ct),
+                Source.File => FixedWidth.AggregateFileAsync<GenNameAgeModel, GenAges>(_path, parallel: parallel, cancellationToken: ct),
+                _ => FixedWidth.AggregateAsync<GenNameAgeModel, GenAges>(File.OpenRead(_path), parallel: parallel, cancellationToken: ct),
             };
         }
 
