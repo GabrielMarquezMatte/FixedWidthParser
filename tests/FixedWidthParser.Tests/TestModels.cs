@@ -459,5 +459,7 @@ namespace FixedWidthParser.Tests
         [FixedColumn(27, 10)] public decimal? NullableAmount { get; set; }
         [FixedColumn(37, 8, Converter = typeof(CentsConverter))] public CentsValue Cents { get; set; }
         [FixedColumn(45, 8, Format = "yyyyMMdd")] public DateOnly Date { get; set; }
+        [FixedColumn(53, 8, Format = "yyyyMMdd")] public DateOnly? NullableDate { get; set; }
+        [FixedColumn(61, 8, Converter = typeof(CentsConverter))] public CentsValue? NullableCents { get; set; }
     }
 }

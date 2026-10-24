@@ -41,7 +41,11 @@ namespace FixedWidthParser.Tests
                 .NullableColumn<decimal>("NullableAmount", 27, 10, (in MutableOptionsModel m) => m.NullableAmount, (ref MutableOptionsModel m, decimal? v) => m.NullableAmount = v)
                 .ConvertedColumn("Cents", 37, 8, (in MutableOptionsModel m) => m.Cents, (ref MutableOptionsModel m, CentsValue v) => m.Cents = v, new CentsConverter())
                 .DecodedColumn<DateOnly>("Date", 45, 8, (in MutableOptionsModel m) => m.Date, (ref MutableOptionsModel m, DateOnly v) => m.Date = v,
-                    new FixedWidthColumnOptions { Format = "yyyyMMdd" }));
+                    new FixedWidthColumnOptions { Format = "yyyyMMdd" })
+                .NullableDecodedColumn<DateOnly>("NullableDate", 53, 8, (in MutableOptionsModel m) => m.NullableDate, (ref MutableOptionsModel m, DateOnly? v) => m.NullableDate = v,
+                    new FixedWidthColumnOptions { Format = "yyyyMMdd" })
+                .NullableConvertedColumn("NullableCents", 61, 8, (in MutableOptionsModel m) => m.NullableCents, (ref MutableOptionsModel m, CentsValue? v) => m.NullableCents = v,
+                    new CentsConverter()));
         }
 
         [Theory]
@@ -85,6 +89,8 @@ namespace FixedWidthParser.Tests
                 NullableAmount = amount is null ? null : decimal.Parse(amount, Inv),
                 Cents = new CentsValue(1234),
                 Date = new DateOnly(2026, 10, 23),
+                NullableDate = age is null ? null : new DateOnly(2027, 1, 2),
+                NullableCents = age is null ? null : new CentsValue(99),
             };
             var attributes = FixedWidthLayout.FromAttributes<MutableOptionsModel>();
 
@@ -100,7 +106,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Fluent_StarTrim_ParsesLikeAttributes()
         {
-            byte[] line = Bytes("00042" + "3.14    " + "ABCD" + "42***" + new string(' ', 15) + "1234    " + "20261023");
+            byte[] line = Bytes("00042" + "3.14    " + "ABCD" + "42***" + new string(' ', 15) + "1234    " + "20261023" + new string(' ', 16));
 
             Assert.True(FixedWidth.TryParse(line, FixedWidthLayout.FromAttributes<MutableOptionsModel>(), Ctx, out var a));
             Assert.True(FixedWidth.TryParse(line, Options(), Ctx, out var f));

@@ -71,6 +71,34 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
+        public async Task LongRecords_AsyncTwinsMatchSync()
+        {
+            GenHugeNameModel[] huge = [new() { Name = "A" }, new() { Name = "B" }];
+            var hugeLayout = FixedWidthLayout.Build<GenHugeNameModel>(b => b.Column("Name", 0, 70_000, (in GenHugeNameModel m) => m.Name, null));
+            var ct = TestContext.Current.CancellationToken;
+            using var genSync = new MemoryStream();
+            await using var genAsync = new MemoryStream();
+            using var layoutSync = new MemoryStream();
+            await using var layoutAsync = new MemoryStream();
+            using var oneSync = new MemoryStream();
+            await using var oneAsync = new MemoryStream();
+
+            FixedWidth.WriteMany(genSync, huge, Lf);
+            await FixedWidth.WriteManyAsync(genAsync, huge, Lf, ct);
+            FixedWidth.WriteMany(layoutSync, huge, hugeLayout, Lf);
+            await FixedWidth.WriteManyAsync(layoutAsync, huge, hugeLayout, Lf, ct);
+            FixedWidth.Write(oneSync, new GenLongNameModel { Name = "Wide" }, Lf);
+            await FixedWidth.WriteAsync(oneAsync, new GenLongNameModel { Name = "Wide" }, Lf, ct);
+
+            string expected = "A".PadRight(70_000) + "\n" + "B".PadRight(70_000) + "\n";
+            Assert.Equal(expected, Decode(genSync));
+            Assert.Equal(expected, Decode(genAsync));
+            Assert.Equal(expected, Decode(layoutSync));
+            Assert.Equal(expected, Decode(layoutAsync));
+            Assert.Equal(Decode(oneSync), Decode(oneAsync));
+        }
+
+        [Fact]
         public void Layout_WriteMany_MatchesWriter()
         {
             using var stream = new MemoryStream();
