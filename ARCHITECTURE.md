@@ -10,14 +10,14 @@ and [`STYLEGUIDE.md`](STYLEGUIDE.md#comments) says why.
 
 ## Two paths over one set of helpers
 
-Every model is parsed and written by one of two paths:
+Every model is parsed and written by one of two paths, both behind the static `FixedWidth` class
+(`src/FixedWidthParser/FixedWidth.cs`), where each method has one overload per path:
 
-| | Runtime (reflection-built) | Generated |
+| | Layout | Generated |
 |---|---|---|
-| Model | any class or struct with `[FixedColumn]` members | a `partial` type implementing `IFixedWidthModel<TSelf>` |
-| One line | `FixedWidthParser<T>.TryParse`, `FixedWidthWriter<T>.TryFormat` | `FixedWidth.TryParse`/`TryFormat`, calling the generated statics |
-| Many lines | `FixedWidthReader<T>`, `FixedWidthWriter<T>` | `FixedWidth.Read*`; writing goes through `TryFormat` |
-| Built | once per type, in a static constructor, from compiled expression trees | at compile time by `FixedWidthModelGenerator` |
+| Model | any type, through a `FixedWidthLayout<T>` from `[FixedColumn]` attributes or from `FixedWidthLayout.Build` | a `partial` type implementing `IFixedWidthModel<TSelf>` |
+| Call | `FixedWidth.X(…, layout, …)` | `FixedWidth.X<T>(…)`, calling the generated statics |
+| Built | when the layout is built: by reflection and compiled expression trees for attributes, from delegates for `Build` | at compile time by `FixedWidthModelGenerator` |
 
 Both paths call the same helpers in `FixedWidthRuntime` (`src/FixedWidthParser/FixedWidthRuntime.cs`)
 for every column: trim, decode a string, parse a number, format a value, pad and align. That class is
@@ -30,7 +30,7 @@ characters alone, is decoded with the configured encoding.
 
 ## Settings: options and the context
 
-Readers take a `FixedWidthReaderOptions` and the writer a `FixedWidthWriterOptions`. Both reduce to a
+Reads take a `FixedWidthReaderOptions` and writes a `FixedWidthWriterOptions`, validated on each call. Both reduce to a
 `FixedWidthContext` (`src/FixedWidthParser/FixedWidthContext.cs`), a `readonly record struct` passed
 by `in` to every parse and format call, generated or not, and to every `IFixedWidthConverter<T>`.
 
@@ -39,28 +39,41 @@ implemented by users, so a minor version cannot add a member to them; a new sett
 property on the context instead. The context also caches what the hot path would otherwise recompute
 per column, such as whether the encoding is UTF-8 and the provider's decimal separator.
 
-## Building a runtime layout
+## The layout object
 
-`ModelColumns.ForEachColumn` (`src/FixedWidthParser/Attributes/`) walks the `[FixedColumn]` properties,
-then fields, and hands each to a visitor; `ColumnLayoutValidator` then rejects a negative start, a
-non-positive length and overlapping columns. The parser and the writer share this walk.
+A `FixedWidthLayout<T>` (`src/FixedWidthParser/Layouts/`) holds, per column, a `ColumnParserInfo<T>`
+(start, length, name and a `ColumnParser<T>` closure that parses and assigns) and an
+`IColumnFormatter<T>` (`Formatters/ColumnFormatters.cs`), plus the line length and the model factory.
+It is immutable, so one instance serves every read, write and worker thread. A layout that lacks the
+parsers or the formatters reads or writes nothing; `EnsureCanRead`/`EnsureCanWrite` throw before the
+first line.
 
-- **Parser.** `ParserBuilder` compiles a model factory and, per column, a setter delegate.
-  `ColumnParserFactory` wraps each setter with the parse it needs into one `ColumnParser<TModel>`
-  closure. Its resolution order — converter, date/time with a `Format`, `string`, `double`/`float`,
-  `IUtf8SpanParsable<T>`, then `ISpanParsable<T>` over decoded text — is the order the generator's
-  `Classify` mirrors.
-- **Writer.** `FixedWidthWriter<T>` compiles a getter per column and wraps it in an
-  `IColumnFormatter<TModel>` (`Formatters/ColumnFormatters.cs`): string, `IUtf8SpanFormattable`,
-  `ISpanFormattable`, converter, and a nullable wrapper over any of them. `ClassifyWrite` in the
-  generator mirrors that choice.
+Two sources fill it, and both reach the same parse and format closures:
 
-The build runs once per closed generic type in a static constructor. A layout error is captured there
-and rethrown from the instance constructor, so the caller sees an `InvalidOperationException` rather
-than a `TypeInitializationException` on first use.
+- **`FromAttributes<T>()`.** `ModelColumns.ForEachColumn` (`Attributes/`) walks the `[FixedColumn]`
+  properties, then fields; `ColumnLayoutValidator` rejects a negative start, a non-positive length and
+  overlapping columns. `ParserBuilder` compiles a model factory and a setter per column, and
+  `ColumnParserFactory` picks the parse for the member's runtime `Type` through `MakeGenericMethod`.
+  `FormatterBuilder` compiles a getter per column and picks its formatter the same way. The result is
+  cached once per `T` in a static constructor. The read side and the write side build independently:
+  a model only one side can handle (a column type that formats but does not parse, say) still gets a
+  layout, and the other side's error is rethrown on its first use. Only an error both sides hit, such
+  as an overlap, throws from `FromAttributes`.
+- **`Build<T>(configure)`.** `FixedWidthLayoutBuilder<T>` receives a `ColumnGetter`/`ColumnSetter`
+  pair per column, already typed, so it selects the parse and the formatter by generic constraints
+  (`Column<T>` for UTF-8 parsable types, `DecodedColumn<T>`, `NullableColumn<T>`, `ConvertedColumn<T>`)
+  and `typeof(T) ==` checks the JIT folds. No reflection: this is the trimming- and AOT-safe source,
+  which `tests/AotSmoke` publishes with NativeAOT to prove.
 
-`FixedWidthParser<T>` accepts `ref struct` models (`allows ref struct`); the readers do not, since an
-enumerator has to hold its current model in a field.
+`ColumnParserFactory`'s resolution order — converter, date/time with a `Format`, `string`,
+`double`/`float`, `IUtf8SpanParsable<T>`, then `ISpanParsable<T>` over decoded text — is shared by both
+sources (`TryBuildSpecial`) and mirrored by the generator's `Classify`; the formatter choice (converter,
+string, `IUtf8SpanFormattable`, `ISpanFormattable`, a nullable wrapper) is mirrored by `ClassifyWrite`.
+Column options are validated by `FormatterBuilder.ResolveOptions` for both.
+
+A layout accepts `ref struct` models (`allows ref struct`) for `TryParse` and `TryFormat`; the readers
+do not, since an enumerator has to hold its current model in a field, and an attribute layout over a
+`ref struct` does not write.
 
 ## Reading
 
@@ -71,7 +84,7 @@ source -> line splitter -> IRecordLineParser<TModel> -> model
 ```
 
 Two enumerators share one shape, each specialized by a `struct` parse strategy
-(`IRecordLineParser<TModel>`: `ReflectionLineParser<T>` or `GeneratedLineParser<T>`, in
+(`IRecordLineParser<TModel>`: `LayoutLineParser<T>` or `GeneratedLineParser<T>`, in
 `Readers/ILineParser.cs`). Because the strategy is a `struct` type argument, the JIT compiles one
 enumerator per `(TModel, TParser)` pair and the parse call devirtualizes.
 
@@ -142,10 +155,13 @@ result is a `FixedWidthParseException` naming the line, column, position and raw
 
 ## Writing
 
-`FixedWidthWriter<T>` formats each record into a fixed-length slot: the line, then the encoded
-`NewLine`. `WriteMany` and `WriteManyAsync` fill one pooled 64 KB batch with whole records and write it
-to the stream when the next record would not fit, so a write allocates nothing per record. Each line is
-filled with spaces first, then every column formats into its own slice.
+`RecordWriter` (`Writers/RecordWriter.cs`) writes for both paths, specialized like the readers by a
+`struct` strategy (`IRecordFormatter<T>`: `LayoutRecordFormatter<T>` or `GeneratedRecordFormatter<T>`,
+in `Writers/RecordFormatters.cs`). Each record is formatted, followed by the encoded `NewLine`, into one
+pooled 64 KB batch. A generated model does not declare its line length, so the batch does not reserve
+a slot: a record that does not fit the rest of the batch flushes it, and one that does not fit an empty
+batch grows it. A write allocates nothing per record. A layout line is filled with spaces first, then
+every column formats into its own slice.
 
 Per column, `FixedWidthRuntime` picks the cheapest route that keeps the bytes the encoding would
 produce:

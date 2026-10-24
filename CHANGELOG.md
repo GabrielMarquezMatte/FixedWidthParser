@@ -9,9 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Not released yet.
 
-2.0 reads and writes **bytes only**: one parser, one reader, one writer and one generated
-`TryParse`/`TryFormat`, where 1.x had a `char` and a UTF-8 version of each. Column positions are
-bytes; text columns are decoded with an ASCII-compatible encoding, UTF-8 by default. Settings travel
+2.0 reads and writes **bytes only**, where 1.x had a `char` and a UTF-8 version of each reader,
+parser and writer, and goes through **one entry point**: every `FixedWidth` method comes in an
+overload for generated models and one that takes a `FixedWidthLayout<T>`, built from the attributes or
+fluently in code. The 1.x runtime classes are gone. Column positions are bytes; text columns are decoded with an ASCII-compatible encoding, UTF-8 by default. Settings travel
 in options objects and a `FixedWidthContext`, so later versions can add to them without another break.
 2.0 targets `net10.0` only.
 
@@ -19,16 +20,16 @@ in options objects and a `FixedWidthContext`, so later versions can add to them 
 
 | 1.x | 2.0 |
 |---|---|
-| `FixedWidthReader<T>` over a `TextReader`, `FixedWidthByteReader<T>` | `FixedWidthReader<T>` over a `Stream` or a file |
+| `FixedWidthReader<T>` over a `TextReader`, `FixedWidthByteReader<T>` | `FixedWidth.Read(stream, FixedWidthLayout.FromAttributes<T>(), …)` or `FixedWidth.ReadFile(path, FixedWidthLayout.FromAttributes<T>(), …)` |
 | `FixedWidthUtf8.Read*`, `FixedWidth.Read*` over a `TextReader` | `FixedWidth.Read*` over a `Stream` or a file |
-| `new FixedWidthReader<T>(provider, pool, bufferSize)` | `new FixedWidthReader<T>(new FixedWidthReaderOptions { FormatProvider = …, StringPool = …, BufferSize = … })` |
+| `new FixedWidthReader<T>(provider, pool, bufferSize).Read(…)` | `FixedWidth.Read(…, FixedWidthLayout.FromAttributes<T>(), options: new FixedWidthReaderOptions { FormatProvider = …, StringPool = …, BufferSize = … })` |
 | `FixedWidth.Read<T>(stream, encoding, leaveOpen, provider, pool, bufferSize)` | `FixedWidth.Read<T>(stream, leaveOpen, options)`; the encoding is `FixedWidthReaderOptions.Encoding` |
-| `FixedWidthParser<T>`, `Utf8FixedWidthParser<T>` `.TryParse(line, provider, pool, out m)` | `FixedWidthParser<T>.TryParse(ReadOnlySpan<byte> line, in FixedWidthContext context, out m)` |
+| `FixedWidthParser<T>`, `Utf8FixedWidthParser<T>` `.TryParse(line, provider, pool, out m)` | `FixedWidth.TryParse(ReadOnlySpan<byte> line, FixedWidthLayout.FromAttributes<T>(), in FixedWidthContext context, out m)` |
 | `FixedWidth.TryParse<T>(chars, provider, pool, out m)`, `FixedWidthUtf8.TryParse<T>(bytes, …)` | `FixedWidth.TryParse<T>(bytes, in FixedWidthContext context, out m)` |
 | `FixedWidth.TryFormat<T>(in m, Span<char>, provider, out n)` | `FixedWidth.TryFormat<T>(in m, Span<byte>, in FixedWidthContext context, out n)` |
 | `IFixedWidthModel<T>` + `IUtf8FixedWidthModel<T>` | `IFixedWidthModel<T>`, whose generated members take bytes and a context |
 | `IFixedWidthConverter<T>` + `IUtf8FixedWidthConverter<T>` with `IFormatProvider?` | `IFixedWidthConverter<T>` over bytes, with `in FixedWidthContext` |
-| `FixedWidthWriter<T>.Write*(StreamWriter or Stream, …, provider)` | `new FixedWidthWriter<T>(new FixedWidthWriterOptions { FormatProvider = …, Encoding = …, NewLine = … })`, then `Write*(Stream, …)` |
+| `FixedWidthWriter<T>.Write*(StreamWriter or Stream, …, provider)` | `FixedWidth.Write*(Stream, …, FixedWidthLayout.FromAttributes<T>(), new FixedWidthWriterOptions { FormatProvider = …, Encoding = …, NewLine = … })` |
 | `catch (FormatException)` on a bad line | still works; the exception is now `FixedWidthParseException` |
 
 A UTF-8 file with multi-byte text whose layout counts characters no longer lines up: positions are
@@ -36,8 +37,15 @@ bytes. Read files written in a single-byte encoding with that encoding (`Encodin
 Windows-1252 after registering `CodePagesEncodingProvider`).
 
 ### Added
-- Parallel aggregation: `FixedWidthReader<T>.AggregateFileAsync` and `FixedWidth.AggregateFileAsync`
-  read a file in byte-range partitions on several threads and fold each into an
+- `FixedWidthLayout<T>`: how a model maps to the columns of a line, for reading and writing, passed to
+  the `FixedWidth` methods. `FixedWidthLayout.FromAttributes<T>()` builds it from `[FixedColumn]`
+  attributes; `FixedWidthLayout.Build<T>(b => …)` describes it in code, binding each column with a
+  `ColumnGetter`/`ColumnSetter` delegate and `FixedWidthColumnOptions`, with no reflection, so it works
+  under trimming and NativeAOT. A layout can read only or write only.
+- `FixedWidth.Write`, `WriteMany`, `WriteAsync` and `WriteManyAsync` for generated models, which had no
+  stream writer.
+- Parallel aggregation: `FixedWidth.AggregateFileAsync`, for generated models and layouts alike,
+  reads a file in byte-range partitions on several threads and fold each into an
   `IRecordAccumulator<TSelf, TModel>`, merged in file order. Every line is parsed exactly once, and
   errors carry the same line number as a sequential read. `FixedWidthParallelOptions.DegreeOfParallelism`
   sets the thread count. `AggregateAsync` does the same over a `Stream`: one thread
@@ -58,19 +66,19 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
   from characters. A UTF-8 byte order mark is skipped only when the encoding is UTF-8.
 - Columns of any `ISpanParsable<T>` type without a UTF-8 parser, decoded first (they used to be
   refused on the byte path).
-- `FixedWidthWriter<T>.TryFormat(in model, Span<byte>, out int)`.
+- `FixedWidth.TryFormat(in model, layout, Span<byte>, in FixedWidthContext, out int)`.
 - `FixedColumnAttribute.Converter`: a per-property `IFixedWidthConverter<T>` that takes priority over the
   built-in parsing and formatting, with diagnostic `FWP008` when it targets the wrong type.
 - Nullable value-type columns (`int?`, `decimal?`, `DateTime?`, …): a blank column parses to `null`
   without invoking the parser or converter, and `null` writes as a blank column.
 - The source-generated writer: `IFixedWidthModel<TSelf>.TryFormat`, with the same alignment, padding,
-  format, overflow, nullable and converter handling as `FixedWidthWriter<T>`, and diagnostic `FWP010`
+  format, overflow, nullable and converter handling as the model's attribute layout, and diagnostic `FWP010`
   when a column's type cannot be written.
 - `FixedColumnAttribute.TrimChar` and `TrimMode`: what to strip from a column when parsing, and from
   which side.
 - `FixedColumnAttribute.Format` parses `DateTime`, `DateOnly`, `TimeOnly` and `DateTimeOffset` with
   that exact format.
-- Diagnostic `FWP012`: `Padding` or `TrimChar` is not ASCII. The runtime parser and writer throw
+- Diagnostic `FWP012`: `Padding` or `TrimChar` is not ASCII. Layouts throw
   `InvalidOperationException` for the same models.
 - Public API tracking (`PublicAPI.*.txt`) and package validation against the last release, run by CI on
   every pull request.
@@ -96,6 +104,9 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
 - The library and generator build with warnings as errors.
 
 ### Removed
+- **Breaking:** `FixedWidthParser<T>`, `FixedWidthReader<T>` and `FixedWidthWriter<T>`. Pass
+  `FixedWidthLayout.FromAttributes<T>()` to the matching `FixedWidth` method instead (see the table above); the layout is
+  built once per type and shared.
 - **Breaking:** reading from a `PipeReader` (`ReadAsync(PipeReader)` and its enumerator types). Pass
   `pipeReader.AsStream()` to the `Stream` overloads instead; it reads twice as fast as the dedicated
   path did ([docs/pipe-reader.md](docs/pipe-reader.md)).

@@ -177,12 +177,11 @@ Common splits:
 
 ### The runtime and generated paths are peers
 
-A model is parsed and written either by the runtime path (`FixedWidthParser<T>`, `FixedWidthReader<T>`,
-`FixedWidthWriter<T>`) or by the generated one (`FixedWidth.*` over `IFixedWidthModel<TSelf>`). A
-capability on one gets the same name shape on the other: `FixedWidth.ReadFile<T>` mirrors
-`FixedWidthReader<T>.ReadFile`, and the same options object configures both. A caller who learns one
-path should be able to guess the other. When you add a member to one, grep the other and match, or add
-the missing sibling in the same change.
+A model is parsed and written either through a layout (`FixedWidth.X(…, FixedWidthLayout<T> layout, …)`)
+or by the generated path (`FixedWidth.X<T>(…)` over `IFixedWidthModel<TSelf>`). Every `FixedWidth`
+operation has both overloads, side by side, with the same parameters in the same order apart from the
+layout, and the same options object configures both. A caller who learns one path should be able to
+guess the other. When you add an overload for one, add its sibling in the same change.
 
 ---
 
@@ -267,9 +266,11 @@ Never answer a malformed file with `ArgumentException`/`ArgumentOutOfRangeExcept
 caller they made a mistake when the input is what is broken. If file bytes can reach a .NET throw
 helper, you are missing a validation step upstream.
 
-The runtime path builds its layout once per type in a static constructor. A layout error there is
-captured and rethrown from the instance constructor, never left to surface as a
-`TypeInitializationException`.
+A layout error throws `InvalidOperationException` from `FixedWidthLayout.Build` or `FromAttributes`.
+`FromAttributes` builds once per type in a static constructor; an error there is captured and rethrown
+from every call, never left to surface as a `TypeInitializationException`. An error only one side of an
+attribute layout hits (it can read but not write, or the reverse) is rethrown when that side is first
+used, before any line is touched.
 
 ---
 
@@ -312,7 +313,7 @@ not a performance nit.
 Three sets of code paths in this library must stay behaviorally identical, and nothing in the compiler
 keeps them honest:
 
-- **Runtime and generated.** `FixedWidthParser<T>`/`FixedWidthWriter<T>` and the generator's
+- **Layout and generated.** `FixedWidthLayout<T>` (from attributes or `Build`) and the generator's
   `TryParse`/`TryFormat` call the same `FixedWidthRuntime` helpers. Put shared behavior there, not in
   either side.
 - **Sequential and parallel reads.** `AggregateFileAsync` and `AggregateAsync` must return what a
@@ -365,4 +366,7 @@ formatting a column):
 - Optimize against a measurement, and record what it showed in [`docs/`](docs/README.md) — never in a comment.
   An optimization with no number behind it is a guess that costs readability.
 
-Outside the hot path (building a layout, the static constructors), ordinary allocations and reflection are fine.
+Outside the hot path (building a layout), ordinary allocations are fine, and reflection is fine in
+`FromAttributes`. `FixedWidthLayout.Build` and the generated overloads must stay free of reflection,
+`MakeGenericMethod` and `Expression.Compile`, so they keep working under trimming and NativeAOT;
+`tests/AotSmoke` checks it.
