@@ -48,33 +48,33 @@ namespace FixedWidthParser.Processors
             {
                 if (valueType == typeof(DateTime))
                 {
-                    return BuildDateTime((RefAction<TModel, DateTime>)setter, format, trim, trimMode);
+                    return BuildDateTime((ColumnSetter<TModel, DateTime>)setter, format, trim, trimMode);
                 }
                 if (valueType == typeof(DateOnly))
                 {
-                    return BuildDateOnly((RefAction<TModel, DateOnly>)setter, format, trim, trimMode);
+                    return BuildDateOnly((ColumnSetter<TModel, DateOnly>)setter, format, trim, trimMode);
                 }
                 if (valueType == typeof(TimeOnly))
                 {
-                    return BuildTimeOnly((RefAction<TModel, TimeOnly>)setter, format, trim, trimMode);
+                    return BuildTimeOnly((ColumnSetter<TModel, TimeOnly>)setter, format, trim, trimMode);
                 }
                 if (valueType == typeof(DateTimeOffset))
                 {
-                    return BuildDateTimeOffset((RefAction<TModel, DateTimeOffset>)setter, format, trim, trimMode);
+                    return BuildDateTimeOffset((ColumnSetter<TModel, DateTimeOffset>)setter, format, trim, trimMode);
                 }
             }
 
             if (valueType == typeof(string))
             {
-                return BuildString((RefAction<TModel, string>)setter, trim, trimMode);
+                return BuildString((ColumnSetter<TModel, string>)setter, trim, trimMode);
             }
             if (valueType == typeof(double))
             {
-                return BuildDouble((RefAction<TModel, double>)setter, trim, trimMode);
+                return BuildDouble((ColumnSetter<TModel, double>)setter, trim, trimMode);
             }
             if (valueType == typeof(float))
             {
-                return BuildFloat((RefAction<TModel, float>)setter, trim, trimMode);
+                return BuildFloat((ColumnSetter<TModel, float>)setter, trim, trimMode);
             }
             if (Implements(valueType, typeof(IUtf8SpanParsable<>)))
             {
@@ -106,8 +106,8 @@ namespace FixedWidthParser.Processors
             where TModel : allows ref struct
             where TUnderlying : struct
         {
-            var nullableSetter = (RefAction<TModel, TUnderlying?>)setter;
-            RefAction<TModel, TUnderlying> adapted = (ref TModel model, TUnderlying value) => nullableSetter(ref model, value);
+            var nullableSetter = (ColumnSetter<TModel, TUnderlying?>)setter;
+            ColumnSetter<TModel, TUnderlying> adapted = (ref TModel model, TUnderlying value) => nullableSetter(ref model, value);
             var inner = CreateValue<TModel>(typeof(TUnderlying), adapted, converterType, memberName, trim, trimMode, format);
 
             return (column, in context, ref model) =>
@@ -121,7 +121,7 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildUtf8Parsable<TModel, TValue>(RefAction<TModel, TValue> setter, byte trim, TrimMode trimMode)
+        private static ColumnParser<TModel> BuildUtf8Parsable<TModel, TValue>(ColumnSetter<TModel, TValue> setter, byte trim, TrimMode trimMode)
             where TModel : allows ref struct
             where TValue : IUtf8SpanParsable<TValue>
         {
@@ -136,7 +136,7 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildDecodedParsable<TModel, TValue>(RefAction<TModel, TValue> setter, byte trim, TrimMode trimMode)
+        private static ColumnParser<TModel> BuildDecodedParsable<TModel, TValue>(ColumnSetter<TModel, TValue> setter, byte trim, TrimMode trimMode)
             where TModel : allows ref struct
             where TValue : ISpanParsable<TValue>
         {
@@ -151,7 +151,7 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildConverter<TModel, TValue, TConverter>(RefAction<TModel, TValue> setter, TConverter converter, byte trim, TrimMode trimMode)
+        private static ColumnParser<TModel> BuildConverter<TModel, TValue, TConverter>(ColumnSetter<TModel, TValue> setter, TConverter converter, byte trim, TrimMode trimMode)
             where TModel : allows ref struct
             where TConverter : IFixedWidthConverter<TValue>
         {
@@ -166,7 +166,7 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildString<TModel>(RefAction<TModel, string> setter, byte trim, TrimMode trimMode)
+        private static ColumnParser<TModel> BuildString<TModel>(ColumnSetter<TModel, string> setter, byte trim, TrimMode trimMode)
             where TModel : allows ref struct
         {
             return (column, in context, ref model) =>
@@ -176,7 +176,7 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildDouble<TModel>(RefAction<TModel, double> setter, byte trim, TrimMode trimMode)
+        private static ColumnParser<TModel> BuildDouble<TModel>(ColumnSetter<TModel, double> setter, byte trim, TrimMode trimMode)
             where TModel : allows ref struct
         {
             return (column, in context, ref model) =>
@@ -190,7 +190,7 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildFloat<TModel>(RefAction<TModel, float> setter, byte trim, TrimMode trimMode)
+        private static ColumnParser<TModel> BuildFloat<TModel>(ColumnSetter<TModel, float> setter, byte trim, TrimMode trimMode)
             where TModel : allows ref struct
         {
             return (column, in context, ref model) =>
@@ -204,7 +204,7 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildDateTime<TModel>(RefAction<TModel, DateTime> setter, string format, byte trim, TrimMode trimMode)
+        private static ColumnParser<TModel> BuildDateTime<TModel>(ColumnSetter<TModel, DateTime> setter, string format, byte trim, TrimMode trimMode)
             where TModel : allows ref struct
         {
             return (column, in context, ref model) =>
@@ -218,7 +218,7 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildDateOnly<TModel>(RefAction<TModel, DateOnly> setter, string format, byte trim, TrimMode trimMode)
+        private static ColumnParser<TModel> BuildDateOnly<TModel>(ColumnSetter<TModel, DateOnly> setter, string format, byte trim, TrimMode trimMode)
             where TModel : allows ref struct
         {
             return (column, in context, ref model) =>
@@ -232,7 +232,7 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildTimeOnly<TModel>(RefAction<TModel, TimeOnly> setter, string format, byte trim, TrimMode trimMode)
+        private static ColumnParser<TModel> BuildTimeOnly<TModel>(ColumnSetter<TModel, TimeOnly> setter, string format, byte trim, TrimMode trimMode)
             where TModel : allows ref struct
         {
             return (column, in context, ref model) =>
@@ -246,7 +246,7 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildDateTimeOffset<TModel>(RefAction<TModel, DateTimeOffset> setter, string format, byte trim, TrimMode trimMode)
+        private static ColumnParser<TModel> BuildDateTimeOffset<TModel>(ColumnSetter<TModel, DateTimeOffset> setter, string format, byte trim, TrimMode trimMode)
             where TModel : allows ref struct
         {
             return (column, in context, ref model) =>

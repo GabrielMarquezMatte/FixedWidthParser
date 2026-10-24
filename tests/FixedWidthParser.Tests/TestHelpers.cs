@@ -36,28 +36,28 @@ namespace FixedWidthParser.Tests
         }
 
         /// <summary>Writes a model and returns the line without the trailing newline.</summary>
-        public static string WriteOne<T>(FixedWidthWriter<T> writer, in T model)
+        public static string WriteOne<T>(FixedWidthWriter<T> writer, in T model) where T : new()
         {
             using var ms = new MemoryStream();
             writer.Write(ms, in model);
             return Decode(ms).TrimEnd('\r', '\n');
         }
 
-        public static async Task<string> WriteOneAsync<T>(FixedWidthWriter<T> writer, T model)
+        public static async Task<string> WriteOneAsync<T>(FixedWidthWriter<T> writer, T model) where T : new()
         {
             await using var ms = new MemoryStream();
             await writer.WriteAsync(ms, model, TestContext.Current.CancellationToken).ConfigureAwait(false);
             return Decode(ms).TrimEnd('\r', '\n');
         }
 
-        public static string WriteMany<T>(FixedWidthWriter<T> writer, ReadOnlySpan<T> models)
+        public static string WriteMany<T>(FixedWidthWriter<T> writer, ReadOnlySpan<T> models) where T : new()
         {
             using var ms = new MemoryStream();
             writer.WriteMany(ms, models);
             return Decode(ms);
         }
 
-        public static string WriteMany<T>(FixedWidthWriter<T> writer, IEnumerable<T> models)
+        public static string WriteMany<T>(FixedWidthWriter<T> writer, IEnumerable<T> models) where T : new()
         {
             using var ms = new MemoryStream();
             writer.WriteMany(ms, models);
