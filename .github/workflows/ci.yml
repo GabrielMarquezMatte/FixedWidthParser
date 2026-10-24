@@ -1,14 +1,11 @@
 name: CI
 
-# Roda em PRs direcionados à master (o status check que bloqueia o merge) e em
-# pushes na master (mantém o branch padrão verde e registra o check no histórico).
 on:
   pull_request:
     branches: [ master, develop ]
   push:
     branches: [ master ]
 
-# Cancela runs antigas do mesmo PR/branch quando um novo push chega.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -34,9 +31,6 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # Cache restored NuGet packages keyed on the project/props files.
-      # (setup-dotnet's built-in cache needs a packages.lock.json, which this repo
-      # does not use, so we cache the global packages folder directly.)
       - name: Cache NuGet packages
         uses: actions/cache@v6
         with:
@@ -48,16 +42,9 @@ jobs:
       - name: Restore
         run: dotnet restore FixedWidthParser.slnx
 
-      # DeterministicSourcePaths is disabled here so the Microsoft code-coverage
-      # collector can map IL back to source. With it on (it is enabled on CI via
-      # ContinuousIntegrationBuild in FixedWidthParser.csproj), source paths get
-      # remapped and coverage for the library comes out empty. This build is only
-      # used for test/coverage; the pack/publish pipeline lives in release.yml.
       - name: Build (Release)
         run: dotnet build FixedWidthParser.slnx --configuration Release --no-restore -p:DeterministicSourcePaths=false
 
-      # Packing runs package validation, which fails on any binary break against the last release.
-      # No --no-build: the generator's analyzer ProjectReference trips NETSDK1085 otherwise (see release.yml).
       - name: Validate package against the last release
         if: matrix.os == 'ubuntu-latest'
         run: dotnet pack src/FixedWidthParser/FixedWidthParser.csproj --configuration Release --no-restore --output ./package-validation
@@ -82,7 +69,6 @@ jobs:
           path: ./TestResults/**/*.trx
           if-no-files-found: ignore
 
-      # Coverage is uploaded once, from the Linux leg only, to avoid duplicate reports.
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest'
         uses: codecov/codecov-action@v7
@@ -91,8 +77,6 @@ jobs:
           files: ./TestResults/*.cobertura.xml
           fail_ci_if_error: false
 
-  # Ordinary builds never link with NativeAOT. Publishing tests/AotSmoke does, and turns any trimming/AOT
-  # warning (IL2xxx/IL3xxx) into a failure; running the binary proves the fluent layout round-trips.
   aot-smoke:
     name: NativeAOT smoke (win-x64)
     runs-on: windows-latest
@@ -111,8 +95,6 @@ jobs:
       - name: Run the published binary
         run: ./tests/AotSmoke/bin/Release/net10.0/win-x64/publish/AotSmoke.exe
 
-  # Surfaces vulnerable transitive/direct packages regardless of NoWarn suppressions
-  # in Directory.Build.props (NU190x warnings are silenced there).
   audit:
     name: Dependency audit
     runs-on: ubuntu-latest
