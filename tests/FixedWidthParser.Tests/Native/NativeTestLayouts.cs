@@ -60,6 +60,13 @@ namespace FixedWidthParser.Tests.Native
             return layout!;
         }
 
+        internal static NativeLayout Build(NativeLayoutOptionsRaw options, params Col[] columns)
+        {
+            int status = Create(out var layout, options, columns);
+            Assert.True(status == NativeStatus.Ok, $"status {status}: {LastError()}");
+            return layout!;
+        }
+
         internal static NativeLayoutOptionsRaw LayoutOptions(int lineLength = 0, int filler = 0)
         {
             return new NativeLayoutOptionsRaw { StructSize = sizeof(NativeLayoutOptionsRaw), LineLength = lineLength, Filler = filler };
