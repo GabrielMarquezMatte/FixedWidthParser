@@ -91,6 +91,25 @@ namespace FixedWidthParser
     public static class FixedWidthLayout
     {
         /// <summary>
+        /// Builds a layout column by column through <paramref name="configure"/>, binding each column with
+        /// delegates. Trimming and AOT safe.
+        /// </summary>
+        /// <remarks>
+        /// For a type you cannot annotate, or a layout known only at run time. Each call builds its own
+        /// layout, so differently configured layouts for the same <typeparamref name="TModel"/> coexist.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="configure"/> is <see langword="null"/>.</exception>
+        /// <exception cref="InvalidOperationException">The layout is invalid: no columns, a negative start, a length below 1, overlapping columns, a non-ASCII padding or trim character, a truncated non-string column, or a reference-type model with setters and no factory.</exception>
+        public static FixedWidthLayout<TModel> Build<TModel>(Action<FixedWidthLayoutBuilder<TModel>> configure)
+            where TModel : allows ref struct
+        {
+            ArgumentNullException.ThrowIfNull(configure);
+            var builder = new FixedWidthLayoutBuilder<TModel>();
+            configure(builder);
+            return builder.Build();
+        }
+
+        /// <summary>
         /// Returns the layout declared by <typeparamref name="TModel"/>'s <c>[FixedColumn]</c> properties
         /// and fields, built once per type by reflection.
         /// </summary>
@@ -119,7 +138,7 @@ namespace FixedWidthParser
             {
                 try
                 {
-                    Layout = Build();
+                    Layout = BuildLayout();
                 }
 #pragma warning disable CA1031 // Rethrown from FromAttributes on every call.
                 catch (Exception ex)
@@ -132,7 +151,7 @@ namespace FixedWidthParser
 
             // A model may be readable and not writable (or the reverse): one side's error waits for that
             // side's first use. Only a model neither side can use fails here.
-            private static FixedWidthLayout<TModel> Build()
+            private static FixedWidthLayout<TModel> BuildLayout()
             {
                 var readError = TryBuildReader(out var parsers, out var factory);
                 IColumnFormatter<TModel>[]? formatters = null;

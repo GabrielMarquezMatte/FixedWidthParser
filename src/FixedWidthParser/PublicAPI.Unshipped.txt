@@ -200,3 +200,25 @@ static FixedWidthParser.FixedWidth.WriteMany<TModel>(System.IO.Stream! stream, S
 static FixedWidthParser.FixedWidth.WriteMany<TModel>(System.IO.Stream! stream, System.ReadOnlySpan<TModel> models, FixedWidthParser.FixedWidthWriterOptions? options = null) -> void
 static FixedWidthParser.FixedWidth.WriteManyAsync<TModel>(System.IO.Stream! stream, System.Collections.Generic.IEnumerable<TModel>! models, FixedWidthParser.FixedWidthLayout<TModel>! layout, FixedWidthParser.FixedWidthWriterOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 static FixedWidthParser.FixedWidth.WriteManyAsync<TModel>(System.IO.Stream! stream, System.Collections.Generic.IEnumerable<TModel>! models, FixedWidthParser.FixedWidthWriterOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+FixedWidthParser.FixedWidthColumnOptions
+FixedWidthParser.FixedWidthColumnOptions.Alignment.get -> FixedWidthParser.Attributes.Alignment
+FixedWidthParser.FixedWidthColumnOptions.Alignment.init -> void
+FixedWidthParser.FixedWidthColumnOptions.FixedWidthColumnOptions() -> void
+FixedWidthParser.FixedWidthColumnOptions.Format.get -> string?
+FixedWidthParser.FixedWidthColumnOptions.Format.init -> void
+FixedWidthParser.FixedWidthColumnOptions.Overflow.get -> FixedWidthParser.Attributes.OverflowBehavior
+FixedWidthParser.FixedWidthColumnOptions.Overflow.init -> void
+FixedWidthParser.FixedWidthColumnOptions.Padding.get -> char
+FixedWidthParser.FixedWidthColumnOptions.Padding.init -> void
+FixedWidthParser.FixedWidthColumnOptions.TrimChar.get -> char
+FixedWidthParser.FixedWidthColumnOptions.TrimChar.init -> void
+FixedWidthParser.FixedWidthColumnOptions.TrimMode.get -> FixedWidthParser.Attributes.TrimMode
+FixedWidthParser.FixedWidthColumnOptions.TrimMode.init -> void
+FixedWidthParser.FixedWidthLayoutBuilder<TModel>
+FixedWidthParser.FixedWidthLayoutBuilder<TModel>.Column(string! name, int start, int length, FixedWidthParser.ColumnGetter<TModel, string!>? get, FixedWidthParser.ColumnSetter<TModel, string!>? set, FixedWidthParser.FixedWidthColumnOptions? options = null) -> FixedWidthParser.FixedWidthLayoutBuilder<TModel>!
+FixedWidthParser.FixedWidthLayoutBuilder<TModel>.Column<TValue>(string! name, int start, int length, FixedWidthParser.ColumnGetter<TModel, TValue>? get, FixedWidthParser.ColumnSetter<TModel, TValue>? set, FixedWidthParser.FixedWidthColumnOptions? options = null) -> FixedWidthParser.FixedWidthLayoutBuilder<TModel>!
+FixedWidthParser.FixedWidthLayoutBuilder<TModel>.ConvertedColumn<TValue>(string! name, int start, int length, FixedWidthParser.ColumnGetter<TModel, TValue>? get, FixedWidthParser.ColumnSetter<TModel, TValue>? set, FixedWidthParser.Processors.IFixedWidthConverter<TValue>! converter, FixedWidthParser.FixedWidthColumnOptions? options = null) -> FixedWidthParser.FixedWidthLayoutBuilder<TModel>!
+FixedWidthParser.FixedWidthLayoutBuilder<TModel>.DecodedColumn<TValue>(string! name, int start, int length, FixedWidthParser.ColumnGetter<TModel, TValue>? get, FixedWidthParser.ColumnSetter<TModel, TValue>? set, FixedWidthParser.FixedWidthColumnOptions? options = null) -> FixedWidthParser.FixedWidthLayoutBuilder<TModel>!
+FixedWidthParser.FixedWidthLayoutBuilder<TModel>.Factory(System.Func<TModel>! factory) -> FixedWidthParser.FixedWidthLayoutBuilder<TModel>!
+FixedWidthParser.FixedWidthLayoutBuilder<TModel>.NullableColumn<TValue>(string! name, int start, int length, FixedWidthParser.ColumnGetter<TModel, TValue?>? get, FixedWidthParser.ColumnSetter<TModel, TValue?>? set, FixedWidthParser.FixedWidthColumnOptions? options = null) -> FixedWidthParser.FixedWidthLayoutBuilder<TModel>!
+static FixedWidthParser.FixedWidthLayout.Build<TModel>(System.Action<FixedWidthParser.FixedWidthLayoutBuilder<TModel>!>! configure) -> FixedWidthParser.FixedWidthLayout<TModel>!

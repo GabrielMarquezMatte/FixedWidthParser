@@ -20,17 +20,9 @@ namespace FixedWidthParser.Formatters
             where TModel : allows ref struct
         {
             var (memberType, model, access) = ModelColumns.MemberAccess(typeof(TModel), member);
-            FixedWidthRuntime.ToAsciiByte(attribute.Padding, member.Name, nameof(FixedColumnAttribute.Padding));
+            var options = ResolveOptions(member.Name, memberType, attribute.Alignment, attribute.Padding, attribute.Format, attribute.Overflow);
             byte fill = FixedWidthRuntime.ToAsciiByte(attribute.TrimChar, member.Name, nameof(FixedColumnAttribute.TrimChar));
-
-            if (attribute.Overflow == OverflowBehavior.Truncate && memberType != typeof(string))
-            {
-                throw new InvalidOperationException(
-                    $"OverflowBehavior.Truncate is not supported for non-string column '{member.Name}' of type '{memberType.Name}'.");
-            }
-
             var getter = Expression.Lambda(typeof(ColumnGetter<,>).MakeGenericType(typeof(TModel), memberType), access, model).Compile();
-            var options = new ColumnFormatOptions(attribute.Alignment, attribute.Padding, attribute.Format, ResolveOverflow(attribute.Overflow, memberType));
 
             var underlyingType = Nullable.GetUnderlyingType(memberType);
             if (underlyingType is null)
@@ -44,8 +36,20 @@ namespace FixedWidthParser.Formatters
                 attribute.Start, attribute.Length, fill, getter, inner)!;
         }
 
+        /// <summary>Validates a column's write options and resolves its overflow; shared by attribute and fluent layouts.</summary>
+        internal static ColumnFormatOptions ResolveOptions(string columnName, Type valueType, Alignment alignment, char padding, string? format, OverflowBehavior overflow)
+        {
+            FixedWidthRuntime.ToAsciiByte(padding, columnName, nameof(FixedColumnAttribute.Padding));
+            if (overflow == OverflowBehavior.Truncate && valueType != typeof(string))
+            {
+                throw new InvalidOperationException(
+                    $"OverflowBehavior.Truncate is not supported for non-string column '{columnName}' of type '{valueType.Name}'.");
+            }
+            return new ColumnFormatOptions(alignment, padding, format, ResolveOverflow(overflow, valueType));
+        }
+
         // Default overflow resolves per type: string truncates, everything else throws.
-        internal static OverflowBehavior ResolveOverflow(OverflowBehavior overflow, Type valueType)
+        private static OverflowBehavior ResolveOverflow(OverflowBehavior overflow, Type valueType)
         {
             if (overflow != OverflowBehavior.Default)
             {
