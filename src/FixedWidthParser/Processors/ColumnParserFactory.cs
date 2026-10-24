@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using FixedWidthParser.Infrastructure;
 
@@ -42,7 +43,7 @@ namespace FixedWidthParser.Processors
                 }
                 var converter = Activator.CreateInstance(converterType)
                     ?? throw new InvalidOperationException($"Could not instantiate converter '{converterType}' for column '{memberName}'.");
-                return (ColumnParser<TModel>)Method(nameof(BuildConverter), typeof(TModel), valueType, converterType)
+                return (ColumnParser<TModel>)Method(nameof(ForConverter), typeof(TModel), valueType, converterType)
                     .Invoke(null, [setter, converter, options])!;
             }
 
@@ -53,15 +54,15 @@ namespace FixedWidthParser.Processors
             }
             if (valueType == typeof(string))
             {
-                return BuildString((ColumnSetter<TModel, string>)setter, options);
+                return ForString((ColumnSetter<TModel, string>)setter, options);
             }
             if (Implements(valueType, typeof(IUtf8SpanParsable<>)))
             {
-                return (ColumnParser<TModel>)Method(nameof(BuildUtf8Parsable), typeof(TModel), valueType).Invoke(null, [setter, options])!;
+                return (ColumnParser<TModel>)Method(nameof(ForUtf8Parsable), typeof(TModel), valueType).Invoke(null, [setter, options])!;
             }
             if (Implements(valueType, typeof(ISpanParsable<>)))
             {
-                return (ColumnParser<TModel>)Method(nameof(BuildDecodedParsable), typeof(TModel), valueType).Invoke(null, [setter, options])!;
+                return (ColumnParser<TModel>)Method(nameof(ForDecodedParsable), typeof(TModel), valueType).Invoke(null, [setter, options])!;
             }
 
             throw new InvalidOperationException(
@@ -71,27 +72,34 @@ namespace FixedWidthParser.Processors
         internal static ColumnParser<TModel> ForString<TModel>(ColumnSetter<TModel, string> setter, ColumnParseOptions options)
             where TModel : allows ref struct
         {
-            return BuildString(setter, options);
+            return (column, in context, ref model) =>
+            {
+                setter(ref model, FixedWidthRuntime.String(column, in context, in options));
+                return true;
+            };
         }
 
         internal static ColumnParser<TModel> ForUtf8Parsable<TModel, TValue>(ColumnSetter<TModel, TValue> setter, ColumnParseOptions options)
             where TModel : allows ref struct
             where TValue : IUtf8SpanParsable<TValue>
         {
-            return TryBuildSpecial<TModel>(typeof(TValue), setter, options) ?? BuildUtf8Parsable(setter, options);
+            return TryBuildSpecial<TModel>(typeof(TValue), setter, options) ?? Bind(setter, options, FixedWidthRuntime.TryParse);
         }
 
         internal static ColumnParser<TModel> ForDecodedParsable<TModel, TValue>(ColumnSetter<TModel, TValue> setter, ColumnParseOptions options)
             where TModel : allows ref struct
             where TValue : ISpanParsable<TValue>
         {
-            return TryBuildSpecial<TModel>(typeof(TValue), setter, options) ?? BuildDecodedParsable(setter, options);
+            return TryBuildSpecial<TModel>(typeof(TValue), setter, options) ?? Bind(setter, options, FixedWidthRuntime.TryParseDecoded);
         }
 
-        internal static ColumnParser<TModel> ForConverter<TModel, TValue>(ColumnSetter<TModel, TValue> setter, IFixedWidthConverter<TValue> converter, ColumnParseOptions options)
+        // TConverter is the concrete type on the attribute path, so its calls devirtualize there.
+        internal static ColumnParser<TModel> ForConverter<TModel, TValue, TConverter>(ColumnSetter<TModel, TValue> setter, TConverter converter, ColumnParseOptions options)
             where TModel : allows ref struct
+            where TConverter : IFixedWidthConverter<TValue>
         {
-            return BuildConverter(setter, converter, options);
+            return Bind(setter, options, (ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions o, [MaybeNullWhen(false)] out TValue value) =>
+                FixedWidthRuntime.TryConvert(column, in context, converter, in o, out value));
         }
 
         internal static ColumnParser<TModel> ForNullable<TModel, TValue>(
@@ -118,11 +126,11 @@ namespace FixedWidthParser.Processors
             }
             if (valueType == typeof(double))
             {
-                return BuildDouble((ColumnSetter<TModel, double>)setter, options);
+                return Bind((ColumnSetter<TModel, double>)setter, options, FixedWidthRuntime.TryDouble);
             }
             if (valueType == typeof(float))
             {
-                return BuildFloat((ColumnSetter<TModel, float>)setter, options);
+                return Bind((ColumnSetter<TModel, float>)setter, options, FixedWidthRuntime.TryFloat);
             }
             return null;
         }
@@ -132,19 +140,19 @@ namespace FixedWidthParser.Processors
         {
             if (valueType == typeof(DateTime))
             {
-                return BuildDateTime((ColumnSetter<TModel, DateTime>)setter, options);
+                return Bind((ColumnSetter<TModel, DateTime>)setter, options, FixedWidthRuntime.TryDateTimeExact);
             }
             if (valueType == typeof(DateOnly))
             {
-                return BuildDateOnly((ColumnSetter<TModel, DateOnly>)setter, options);
+                return Bind((ColumnSetter<TModel, DateOnly>)setter, options, FixedWidthRuntime.TryDateOnlyExact);
             }
             if (valueType == typeof(TimeOnly))
             {
-                return BuildTimeOnly((ColumnSetter<TModel, TimeOnly>)setter, options);
+                return Bind((ColumnSetter<TModel, TimeOnly>)setter, options, FixedWidthRuntime.TryTimeOnlyExact);
             }
             if (valueType == typeof(DateTimeOffset))
             {
-                return BuildDateTimeOffset((ColumnSetter<TModel, DateTimeOffset>)setter, options);
+                return Bind((ColumnSetter<TModel, DateTimeOffset>)setter, options, FixedWidthRuntime.TryDateTimeOffsetExact);
             }
             return null;
         }
@@ -185,137 +193,12 @@ namespace FixedWidthParser.Processors
             };
         }
 
-        private static ColumnParser<TModel> BuildUtf8Parsable<TModel, TValue>(ColumnSetter<TModel, TValue> setter, ColumnParseOptions options)
-            where TModel : allows ref struct
-            where TValue : IUtf8SpanParsable<TValue>
-        {
-            return (column, in context, ref model) =>
-            {
-                if (!FixedWidthRuntime.TryParse<TValue>(column, in context, in options, out var value))
-                {
-                    return false;
-                }
-                setter(ref model, value);
-                return true;
-            };
-        }
-
-        private static ColumnParser<TModel> BuildDecodedParsable<TModel, TValue>(ColumnSetter<TModel, TValue> setter, ColumnParseOptions options)
-            where TModel : allows ref struct
-            where TValue : ISpanParsable<TValue>
-        {
-            return (column, in context, ref model) =>
-            {
-                if (!FixedWidthRuntime.TryParseDecoded<TValue>(column, in context, in options, out var value))
-                {
-                    return false;
-                }
-                setter(ref model, value);
-                return true;
-            };
-        }
-
-        private static ColumnParser<TModel> BuildConverter<TModel, TValue, TConverter>(ColumnSetter<TModel, TValue> setter, TConverter converter, ColumnParseOptions options)
-            where TModel : allows ref struct
-            where TConverter : IFixedWidthConverter<TValue>
-        {
-            return (column, in context, ref model) =>
-            {
-                if (!FixedWidthRuntime.TryConvert<TValue, TConverter>(column, in context, converter, in options, out var value))
-                {
-                    return false;
-                }
-                setter(ref model, value);
-                return true;
-            };
-        }
-
-        private static ColumnParser<TModel> BuildString<TModel>(ColumnSetter<TModel, string> setter, ColumnParseOptions options)
+        private static ColumnParser<TModel> Bind<TModel, TValue>(ColumnSetter<TModel, TValue> setter, ColumnParseOptions options, ColumnValueParser<TValue> parse)
             where TModel : allows ref struct
         {
             return (column, in context, ref model) =>
             {
-                setter(ref model, FixedWidthRuntime.String(column, in context, in options));
-                return true;
-            };
-        }
-
-        private static ColumnParser<TModel> BuildDouble<TModel>(ColumnSetter<TModel, double> setter, ColumnParseOptions options)
-            where TModel : allows ref struct
-        {
-            return (column, in context, ref model) =>
-            {
-                if (!FixedWidthRuntime.TryDouble(column, in context, in options, out double value))
-                {
-                    return false;
-                }
-                setter(ref model, value);
-                return true;
-            };
-        }
-
-        private static ColumnParser<TModel> BuildFloat<TModel>(ColumnSetter<TModel, float> setter, ColumnParseOptions options)
-            where TModel : allows ref struct
-        {
-            return (column, in context, ref model) =>
-            {
-                if (!FixedWidthRuntime.TryFloat(column, in context, in options, out float value))
-                {
-                    return false;
-                }
-                setter(ref model, value);
-                return true;
-            };
-        }
-
-        private static ColumnParser<TModel> BuildDateTime<TModel>(ColumnSetter<TModel, DateTime> setter, ColumnParseOptions options)
-            where TModel : allows ref struct
-        {
-            return (column, in context, ref model) =>
-            {
-                if (!FixedWidthRuntime.TryDateTimeExact(column, in context, in options, out DateTime value))
-                {
-                    return false;
-                }
-                setter(ref model, value);
-                return true;
-            };
-        }
-
-        private static ColumnParser<TModel> BuildDateOnly<TModel>(ColumnSetter<TModel, DateOnly> setter, ColumnParseOptions options)
-            where TModel : allows ref struct
-        {
-            return (column, in context, ref model) =>
-            {
-                if (!FixedWidthRuntime.TryDateOnlyExact(column, in context, in options, out DateOnly value))
-                {
-                    return false;
-                }
-                setter(ref model, value);
-                return true;
-            };
-        }
-
-        private static ColumnParser<TModel> BuildTimeOnly<TModel>(ColumnSetter<TModel, TimeOnly> setter, ColumnParseOptions options)
-            where TModel : allows ref struct
-        {
-            return (column, in context, ref model) =>
-            {
-                if (!FixedWidthRuntime.TryTimeOnlyExact(column, in context, in options, out TimeOnly value))
-                {
-                    return false;
-                }
-                setter(ref model, value);
-                return true;
-            };
-        }
-
-        private static ColumnParser<TModel> BuildDateTimeOffset<TModel>(ColumnSetter<TModel, DateTimeOffset> setter, ColumnParseOptions options)
-            where TModel : allows ref struct
-        {
-            return (column, in context, ref model) =>
-            {
-                if (!FixedWidthRuntime.TryDateTimeOffsetExact(column, in context, in options, out DateTimeOffset value))
+                if (!parse(column, in context, in options, out var value))
                 {
                     return false;
                 }

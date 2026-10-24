@@ -48,8 +48,6 @@ namespace FixedWidthParser.Infrastructure
         {
             int width = slice.Length;
             int length = content.Length;
-            byte padding = (byte)Padding;
-
             if (length > width)
             {
                 if (Overflow == OverflowBehavior.Throw)
@@ -57,31 +55,11 @@ namespace FixedWidthParser.Infrastructure
                     throw new InvalidOperationException(
                         $"Value \"{Encoding.UTF8.GetString(content)}\" ({length} bytes) exceeds the width {width} of column \"{columnName}\".");
                 }
-                if (Alignment == Alignment.Right)
-                {
-                    content[(length - width)..].CopyTo(slice);
-                    return;
-                }
-                content[..width].CopyTo(slice);
+                (Alignment == Alignment.Right ? content[(length - width)..] : content[..width]).CopyTo(slice);
                 return;
             }
-
-            if (Alignment != Alignment.Right)
-            {
-                content.CopyTo(slice);
-                slice[length..].Fill(padding);
-                return;
-            }
-            int pad = width - length;
-            if (Padding != ' ' && content.Length > 0 && (content[0] == (byte)'-' || content[0] == (byte)'+'))
-            {
-                slice[0] = content[0];
-                slice[1..(pad + 1)].Fill(padding);
-                content[1..].CopyTo(slice[(pad + 1)..]);
-                return;
-            }
-            slice[..pad].Fill(padding);
-            content.CopyTo(slice[pad..]);
+            content.CopyTo(slice);
+            AlignInPlace(slice, length);
         }
 
         /// <summary>

@@ -39,10 +39,9 @@ namespace FixedWidthParser
         public char Padding { get; set; } = ' ';
 
         /// <summary>
-        /// Character trimmed from the end of the column when parsing (e.g. '0' for a zero-padded
-        /// numeric column written by another producer). Ignored for <c>string</c> columns' interning
-        /// identity in the same way as the default — it only changes which character is stripped
-        /// before the value is handed to the parser/converter. Default: space.
+        /// ASCII character trimmed from the column before it is parsed (e.g. '0' for a zero-padded numeric
+        /// column), from the ends <see cref="TrimMode"/> picks, and written for a <see langword="null"/>
+        /// value. Default: space.
         /// </summary>
         public char TrimChar { get; set; } = ' ';
 
@@ -56,10 +55,8 @@ namespace FixedWidthParser
         public OverflowBehavior Overflow { get; set; } = OverflowBehavior.Default;
 
         /// <summary>
-        /// A type implementing <c>IFixedWidthConverter&lt;T&gt;</c> (char parser/writer) and/or
-        /// <c>IUtf8FixedWidthConverter&lt;T&gt;</c> (UTF-8 parser/writer), where <c>T</c> is this
-        /// column's member type. When set, it is used instead of the built-in <c>ISpanParsable</c>
-        /// fallback, for both parsing and writing. A single instance is created once per model type.
+        /// A type implementing <see cref="IFixedWidthConverter{T}"/>, where <c>T</c> is this column's member
+        /// type, used instead of the built-in parsing and formatting. One instance serves every line.
         /// </summary>
         public Type? Converter { get; set; }
     }
