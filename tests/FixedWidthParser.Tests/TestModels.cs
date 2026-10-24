@@ -431,4 +431,33 @@ namespace FixedWidthParser.Tests
     {
         [FixedColumn(0, 8, Alignment = Alignment.Right, Format = "C")] public decimal Price { get; init; }
     }
+
+    /// <summary>Settable <see cref="PersonModel"/> as a class, so a fluent layout and its attributes can bind the same type.</summary>
+    public sealed record class MutablePersonModel
+    {
+        [FixedColumn(0, 10)] public string Name { get; set; } = "";
+        [FixedColumn(10, 5)] public int Age { get; set; }
+        [FixedColumn(15, 10)] public double Salary { get; set; }
+    }
+
+    /// <summary>Settable <see cref="PersonModel"/> as a struct: a fluent setter must reach the returned model, not a copy.</summary>
+    public record struct MutablePersonStruct
+    {
+        [FixedColumn(0, 10)] public string Name { get; set; }
+        [FixedColumn(10, 5)] public int Age { get; set; }
+        [FixedColumn(15, 10)] public double Salary { get; set; }
+    }
+
+    /// <summary>One settable column per formatting and parsing option, for fluent-versus-attribute parity.</summary>
+    public sealed record class MutableOptionsModel
+    {
+        [FixedColumn(0, 5, Alignment = Alignment.Right, Padding = '0')] public int ZeroPadded { get; set; }
+        [FixedColumn(5, 8, Format = "F2")] public double Fixed2 { get; set; }
+        [FixedColumn(13, 4, Alignment = Alignment.Right, Overflow = OverflowBehavior.Truncate)] public string Truncated { get; set; } = "";
+        [FixedColumn(17, 5, TrimChar = '*')] public int Starred { get; set; }
+        [FixedColumn(22, 5)] public int? NullableAge { get; set; }
+        [FixedColumn(27, 10)] public decimal? NullableAmount { get; set; }
+        [FixedColumn(37, 8, Converter = typeof(CentsConverter))] public CentsValue Cents { get; set; }
+        [FixedColumn(45, 8, Format = "yyyyMMdd")] public DateOnly Date { get; set; }
+    }
 }

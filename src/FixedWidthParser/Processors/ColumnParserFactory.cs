@@ -44,37 +44,14 @@ namespace FixedWidthParser.Processors
                     .Invoke(null, [setter, converter, trim, trimMode])!;
             }
 
-            if (format is not null)
+            var special = TryBuildSpecial<TModel>(valueType, setter, trim, trimMode, format);
+            if (special is not null)
             {
-                if (valueType == typeof(DateTime))
-                {
-                    return BuildDateTime((ColumnSetter<TModel, DateTime>)setter, format, trim, trimMode);
-                }
-                if (valueType == typeof(DateOnly))
-                {
-                    return BuildDateOnly((ColumnSetter<TModel, DateOnly>)setter, format, trim, trimMode);
-                }
-                if (valueType == typeof(TimeOnly))
-                {
-                    return BuildTimeOnly((ColumnSetter<TModel, TimeOnly>)setter, format, trim, trimMode);
-                }
-                if (valueType == typeof(DateTimeOffset))
-                {
-                    return BuildDateTimeOffset((ColumnSetter<TModel, DateTimeOffset>)setter, format, trim, trimMode);
-                }
+                return special;
             }
-
             if (valueType == typeof(string))
             {
                 return BuildString((ColumnSetter<TModel, string>)setter, trim, trimMode);
-            }
-            if (valueType == typeof(double))
-            {
-                return BuildDouble((ColumnSetter<TModel, double>)setter, trim, trimMode);
-            }
-            if (valueType == typeof(float))
-            {
-                return BuildFloat((ColumnSetter<TModel, float>)setter, trim, trimMode);
             }
             if (Implements(valueType, typeof(IUtf8SpanParsable<>)))
             {
@@ -87,6 +64,87 @@ namespace FixedWidthParser.Processors
 
             throw new InvalidOperationException(
                 $"Column '{memberName}' has type '{valueType}', which is not string, double, float, IUtf8SpanParsable<T> or ISpanParsable<T>; set a Converter for it.");
+        }
+
+        internal static ColumnParser<TModel> ForString<TModel>(ColumnSetter<TModel, string> setter, byte trim, TrimMode trimMode)
+            where TModel : allows ref struct
+        {
+            return BuildString(setter, trim, trimMode);
+        }
+
+        internal static ColumnParser<TModel> ForUtf8Parsable<TModel, TValue>(ColumnSetter<TModel, TValue> setter, byte trim, TrimMode trimMode, string? format)
+            where TModel : allows ref struct
+            where TValue : IUtf8SpanParsable<TValue>
+        {
+            return TryBuildSpecial<TModel>(typeof(TValue), setter, trim, trimMode, format) ?? BuildUtf8Parsable(setter, trim, trimMode);
+        }
+
+        internal static ColumnParser<TModel> ForDecodedParsable<TModel, TValue>(ColumnSetter<TModel, TValue> setter, byte trim, TrimMode trimMode, string? format)
+            where TModel : allows ref struct
+            where TValue : ISpanParsable<TValue>
+        {
+            return TryBuildSpecial<TModel>(typeof(TValue), setter, trim, trimMode, format) ?? BuildDecodedParsable(setter, trim, trimMode);
+        }
+
+        internal static ColumnParser<TModel> ForConverter<TModel, TValue>(ColumnSetter<TModel, TValue> setter, IFixedWidthConverter<TValue> converter, byte trim, TrimMode trimMode)
+            where TModel : allows ref struct
+        {
+            return BuildConverter(setter, converter, trim, trimMode);
+        }
+
+        internal static ColumnParser<TModel> ForNullable<TModel, TValue>(
+            ColumnSetter<TModel, TValue?> setter, byte trim, Func<ColumnSetter<TModel, TValue>, ColumnParser<TModel>> buildInner)
+            where TModel : allows ref struct
+            where TValue : struct
+        {
+            ColumnSetter<TModel, TValue> adapted = (ref TModel model, TValue value) => setter(ref model, value);
+            return WrapNullable(setter, buildInner(adapted), trim);
+        }
+
+        // The types the attribute path special-cases ahead of the generic parsers, in its order: a date or
+        // time with a Format, then double and float.
+        private static ColumnParser<TModel>? TryBuildSpecial<TModel>(Type valueType, Delegate setter, byte trim, TrimMode trimMode, string? format)
+            where TModel : allows ref struct
+        {
+            if (format is not null)
+            {
+                var date = TryBuildDate<TModel>(valueType, setter, trim, trimMode, format);
+                if (date is not null)
+                {
+                    return date;
+                }
+            }
+            if (valueType == typeof(double))
+            {
+                return BuildDouble((ColumnSetter<TModel, double>)setter, trim, trimMode);
+            }
+            if (valueType == typeof(float))
+            {
+                return BuildFloat((ColumnSetter<TModel, float>)setter, trim, trimMode);
+            }
+            return null;
+        }
+
+        private static ColumnParser<TModel>? TryBuildDate<TModel>(Type valueType, Delegate setter, byte trim, TrimMode trimMode, string format)
+            where TModel : allows ref struct
+        {
+            if (valueType == typeof(DateTime))
+            {
+                return BuildDateTime((ColumnSetter<TModel, DateTime>)setter, format, trim, trimMode);
+            }
+            if (valueType == typeof(DateOnly))
+            {
+                return BuildDateOnly((ColumnSetter<TModel, DateOnly>)setter, format, trim, trimMode);
+            }
+            if (valueType == typeof(TimeOnly))
+            {
+                return BuildTimeOnly((ColumnSetter<TModel, TimeOnly>)setter, format, trim, trimMode);
+            }
+            if (valueType == typeof(DateTimeOffset))
+            {
+                return BuildDateTimeOffset((ColumnSetter<TModel, DateTimeOffset>)setter, format, trim, trimMode);
+            }
+            return null;
         }
 
         private static bool Implements(Type valueType, Type openInterface)
@@ -106,10 +164,14 @@ namespace FixedWidthParser.Processors
             where TModel : allows ref struct
             where TUnderlying : struct
         {
-            var nullableSetter = (ColumnSetter<TModel, TUnderlying?>)setter;
-            ColumnSetter<TModel, TUnderlying> adapted = (ref TModel model, TUnderlying value) => nullableSetter(ref model, value);
-            var inner = CreateValue<TModel>(typeof(TUnderlying), adapted, converterType, memberName, trim, trimMode, format);
+            return ForNullable<TModel, TUnderlying>((ColumnSetter<TModel, TUnderlying?>)setter, trim,
+                adapted => CreateValue<TModel>(typeof(TUnderlying), adapted, converterType, memberName, trim, trimMode, format));
+        }
 
+        private static ColumnParser<TModel> WrapNullable<TModel, TUnderlying>(ColumnSetter<TModel, TUnderlying?> nullableSetter, ColumnParser<TModel> inner, byte trim)
+            where TModel : allows ref struct
+            where TUnderlying : struct
+        {
             return (column, in context, ref model) =>
             {
                 if (FixedWidthRuntime.IsBlank(column, trim))
