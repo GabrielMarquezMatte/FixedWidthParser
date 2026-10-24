@@ -113,9 +113,9 @@ namespace FixedWidthParser.Native.Reading
             {
                 return status;
             }
-            if (raw.BatchRows < 0 || (raw.Read.StructSize != 0 && raw.Read.StructSize != sizeof(NativeReadOptionsRaw)))
+            if (raw.BatchRows is < 0 or > int.MaxValue || (raw.Read.StructSize != 0 && raw.Read.StructSize != sizeof(NativeReadOptionsRaw)))
             {
-                NativeApi.SetLastError("fw_reader_options: batch_rows must not be negative, and read.struct_size must be 0 or sizeof(fw_read_options).");
+                NativeApi.SetLastError("fw_reader_options: batch_rows must be 0..2147483647, and read.struct_size must be 0 or sizeof(fw_read_options).");
                 return NativeStatus.InvalidArgument;
             }
             batchRows = raw.BatchRows;

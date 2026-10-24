@@ -10,13 +10,15 @@ namespace FixedWidthParser.Native.Reading
         private readonly NativeLayout _layout;
         private readonly ColumnBuilder[] _columns;
         private readonly int _requiredLength;
+        private readonly TableLimits _limits;
         private int _failedColumn;
         private List<TableSink>? _following;
 
-        internal TableSink(NativeLayout layout)
+        internal TableSink(NativeLayout layout, TableLimits limits)
         {
             _layout = layout;
-            _columns = [.. layout.Columns.Select(c => new ColumnBuilder(c))];
+            _limits = limits;
+            _columns = [.. layout.Columns.Select(c => new ColumnBuilder(c, limits.MaxTextBytes))];
             _requiredLength = layout.Columns.Max(c => c.Start + c.Length);
             _failedColumn = -1;
             _following = null;
@@ -35,6 +37,10 @@ namespace FixedWidthParser.Native.Reading
             {
                 _failedColumn = -1;
                 return false;
+            }
+            if (Rows >= _limits.MaxRows)
+            {
+                throw _limits.TooManyRows();
             }
             var columns = _layout.Columns;
             for (int i = 0; i < _columns.Length; i++)
@@ -74,22 +80,48 @@ namespace FixedWidthParser.Native.Reading
         internal readonly IEnumerable<ColumnBuilder[]> Chunks => _following is null ? [_columns] : [_columns, .. _following.Select(f => f._columns)];
 
         /// <summary>Hands every column's buffers to <paramref name="table"/>; the caller frees them with <see cref="NativeTable.Free"/>.</summary>
+        /// <remarks>Fails before allocating when the merged partitions exceed the limits; frees what it built if anything else fails.</remarks>
         internal readonly unsafe void Publish(NativeTableRaw* table)
         {
             var chunks = Chunks.ToArray();
-            var columns = (NativeColumnRaw*)Marshal.AllocHGlobal(_columns.Length * sizeof(NativeColumnRaw));
-            var parts = new ColumnBuilder[chunks.Length];
+            CheckLimits(chunks);
+            var columns = (NativeColumnRaw*)NativeMemory.AllocZeroed((nuint)_columns.Length, (nuint)sizeof(NativeColumnRaw));
+            table->Columns = columns;
+            table->ColumnCount = _columns.Length;
+            try
+            {
+                var parts = new ColumnBuilder[chunks.Length];
+                for (int i = 0; i < _columns.Length; i++)
+                {
+                    for (int c = 0; c < chunks.Length; c++)
+                    {
+                        parts[c] = chunks[c][i];
+                    }
+                    ColumnBuilder.Concat(parts, columns + i);
+                }
+                table->RowCount = TotalRows;
+            }
+            catch
+            {
+                NativeTable.Free(table);
+                throw;
+            }
+        }
+
+        private readonly void CheckLimits(ColumnBuilder[][] chunks)
+        {
+            if (TotalRows > _limits.MaxRows)
+            {
+                throw _limits.TooManyRows();
+            }
             for (int i = 0; i < _columns.Length; i++)
             {
-                for (int c = 0; c < chunks.Length; c++)
+                long text = chunks.Sum(chunk => chunk[i].TextBytes);
+                if (text > _limits.MaxTextBytes)
                 {
-                    parts[c] = chunks[c][i];
+                    throw ColumnBuilder.TooMuchText(_layout.Columns[i].Name, _limits.MaxTextBytes);
                 }
-                ColumnBuilder.Concat(parts, columns + i);
             }
-            table->ColumnCount = _columns.Length;
-            table->RowCount = TotalRows;
-            table->Columns = columns;
         }
 
         public readonly void Dispose()

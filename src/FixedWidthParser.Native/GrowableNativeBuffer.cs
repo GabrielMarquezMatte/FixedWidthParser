@@ -37,7 +37,7 @@ namespace FixedWidthParser.Native
         {
             if (count > _capacity - Count)
             {
-                Grow(checked(Count + count));
+                Grow((long)Count + count);
             }
             var span = new Span<T>(_data + Count, count);
             Count += count;
@@ -49,7 +49,7 @@ namespace FixedWidthParser.Native
         {
             if (Count == _capacity)
             {
-                Grow(Count + 1);
+                Grow(Count + 1L);
             }
             _data[Count++] = value;
         }
@@ -58,7 +58,7 @@ namespace FixedWidthParser.Native
         {
             if (values.Length > _capacity - Count)
             {
-                Grow(checked(Count + values.Length));
+                Grow((long)Count + values.Length);
             }
             values.CopyTo(new Span<T>(_data + Count, values.Length));
             Count += values.Length;
@@ -94,10 +94,20 @@ namespace FixedWidthParser.Native
             Count = 0;
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private void Grow(int minimum)
+        /// <summary>Doubles, at least to <paramref name="minimum"/>, clamped to int.MaxValue elements; past that the buffer cannot grow.</summary>
+        internal static int NextCapacity(int capacity, long minimum)
         {
-            int capacity = Math.Max(minimum, Math.Max(_capacity * 2, InitialLength));
+            if (minimum > int.MaxValue)
+            {
+                throw new InvalidOperationException($"A column buffer cannot hold more than {int.MaxValue} elements.");
+            }
+            return (int)Math.Min(int.MaxValue, Math.Max(minimum, Math.Max(capacity * 2L, InitialLength)));
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void Grow(long minimum)
+        {
+            int capacity = NextCapacity(_capacity, minimum);
             nint bytes = checked((nint)capacity * sizeof(T));
             _block ??= new Block();
             _data = (T*)_block.Resize(bytes);

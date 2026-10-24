@@ -51,7 +51,7 @@ namespace FixedWidthParser.Native.Reading
             {
                 return NativeStatus.Eof;
             }
-            var sink = new TableSink(_layout);
+            var sink = new TableSink(_layout, TableLimits.Default);
             try
             {
 #pragma warning disable IDISP003 // Fill appends to the sink; it never replaces it.

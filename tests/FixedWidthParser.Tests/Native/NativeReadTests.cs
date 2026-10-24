@@ -251,6 +251,60 @@ namespace FixedWidthParser.Tests.Native
         }
 
         [Fact]
+        public void Read_InvalidUtf8_IsReplacedLikeTheCore()
+        {
+            var layout = Build(new Col("name", 0, 6, TString), new Col("n", 6, 2, TInt64));
+            byte[] latin1 = Encoding.Latin1.GetBytes("AÇÃO  01\n");
+
+            var outcome = FromMemory(latin1, layout);
+
+            Assert.Equal(NativeStatus.Ok, outcome.Status);
+            Assert.Equal([Encoding.UTF8.GetString(latin1.AsSpan(0, 4))], outcome.Column(0));
+        }
+
+        [Fact]
+        public void Read_SplitMultiByteCharacter_StaysValidUtf8()
+        {
+            var layout = Build(new Col("a", 0, 2, TString), new Col("b", 2, 3, TString));
+            byte[] bytes = Encoding.UTF8.GetBytes("AÇBC\n");
+
+            var outcome = FromMemory(bytes, layout);
+
+            Assert.Equal(["A�", "�BC"], outcome.Column(0).Concat(outcome.Column(1)));
+        }
+
+        [Fact]
+        public void Read_TimestampWithZoneOrOffset_IsUtc()
+        {
+            var layout = Build(new Col("t", 0, 25, TTimestamp) { Nullable = true });
+            long midnight = (new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc) - DateTime.UnixEpoch).Ticks / 10;
+
+            foreach (var outcome in Ok("2024-01-01T00:00:00Z     \n2024-01-01T00:00:00-03:00\n2024-01-01T00:00:00      \n", layout))
+            {
+                Assert.Equal([midnight, midnight + (3L * 3600 * 1_000_000), midnight], outcome.Column(0));
+            }
+        }
+
+        [Fact]
+        public void Read_DecimalOver18Digits_IsParseError()
+        {
+            var layout = Build(new Col("d", 0, 19, TDecimal) { Scale = 2 });
+
+            Assert.All(Both("1234567890123456789\n", layout), o => Assert.Equal(NativeStatus.ParseError, o.Status));
+        }
+
+        [Fact]
+        public void Read_ScaledFloatBeyondInt64_KeepsTheScale()
+        {
+            var layout = Build(new Col("v", 0, 20, TFloat64) { Scale = 2 });
+
+            foreach (var outcome in Ok("99999999999999999999\n", layout))
+            {
+                Assert.Equal([1e18], outcome.Column(0));
+            }
+        }
+
+        [Fact]
         public void Read_EmptyFile_ReturnsZeroRows()
         {
             var layout = Build(new Col("a", 0, 3, TString));
