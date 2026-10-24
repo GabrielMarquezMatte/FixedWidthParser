@@ -120,7 +120,7 @@ namespace FixedWidthParser.Tests.Native
         [Fact]
         public void Options_UnknownStructSize_IsInvalidArgument()
         {
-            var options = Options() with { StructSize = 4 };
+            var options = LayoutOptions() with { StructSize = 4 };
 
             Assert.Equal(NativeStatus.InvalidArgument, Create(out _, options, new Col("a", 0, 5, TString)));
             Assert.Contains("fw_layout_options struct_size is 4", LastError(), StringComparison.Ordinal);
@@ -137,14 +137,14 @@ namespace FixedWidthParser.Tests.Native
         [Fact]
         public void LineLength_ShorterThanColumns_Fails()
         {
-            Assert.Equal(NativeStatus.InvalidArgument, Create(out _, Options(lineLength: 4), new Col("a", 0, 5, TString)));
+            Assert.Equal(NativeStatus.InvalidArgument, Create(out _, LayoutOptions(lineLength: 4), new Col("a", 0, 5, TString)));
             Assert.Contains("line_length", LastError(), StringComparison.Ordinal);
         }
 
         [Fact]
         public void LineLength_AndFiller_AreKept()
         {
-            Assert.Equal(NativeStatus.Ok, Create(out var layout, Options(lineLength: 245, filler: '0'), new Col("a", 0, 5, TString)));
+            Assert.Equal(NativeStatus.Ok, Create(out var layout, LayoutOptions(lineLength: 245, filler: '0'), new Col("a", 0, 5, TString)));
 
             Assert.Equal(245, layout!.LineLength);
             Assert.Equal((byte)'0', layout.Filler);
