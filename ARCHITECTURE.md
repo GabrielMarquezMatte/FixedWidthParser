@@ -19,7 +19,7 @@ Every model is parsed and written by one of two paths, both behind the static `F
 | Call | `FixedWidth.X(…, layout, …)` | `FixedWidth.X<T>(…)`, calling the generated statics |
 | Built | when the layout is built: by reflection and compiled expression trees for attributes, from delegates for `Build` | at compile time by `FixedWidthModelGenerator` |
 
-Both paths call the same helpers in `FixedWidthRuntime` (`src/FixedWidthParser/FixedWidthRuntime.cs`)
+Both paths call the same helpers in `FixedWidthRuntime` (`src/FixedWidthParser/Infrastructure/FixedWidthRuntime.cs`)
 for every column: trim, decode a string, parse a number, format a value, pad and align. That class is
 public only because generated code lives in the consumer's assembly. Keeping the semantics in one place
 is what makes the two paths agree; `SourceGenParityTests` checks that they do.
@@ -85,7 +85,7 @@ source -> line splitter -> IRecordLineParser<TModel> -> model
 
 Two enumerators share one shape, each specialized by a `struct` parse strategy
 (`IRecordLineParser<TModel>`: `LayoutLineParser<T>` or `GeneratedLineParser<T>`, in
-`Readers/ILineParser.cs`). Because the strategy is a `struct` type argument, the JIT compiles one
+`Infrastructure/RecordLineParsers.cs`). Because the strategy is a `struct` type argument, the JIT compiles one
 enumerator per `(TModel, TParser)` pair and the parse call devirtualizes.
 
 | Source | Enumerator |
@@ -187,7 +187,18 @@ change a model's columns does not regenerate it.
 `Emit` validates the model — partial, top-level, a supported type for each column, layout, converter
 type, overflow, ASCII padding — and reports diagnostics `FWP001`–`FWP012` instead of generating code
 for an invalid model. Otherwise it writes `TryParse` and `TryFormat` as straight-line code: one
-`FixedWidthRuntime` call per column, with every attribute setting emitted as a constant.
+`FixedWidthRuntime` call per column. Each column's settings become two `static readonly` fields, a
+`ColumnParseOptions` and a `ColumnFormatOptions`, passed to the helpers by `in`.
+
+## Public surface
+
+User-facing types live in the root `FixedWidthParser` namespace. `FixedWidthParser.Infrastructure`
+holds what is public only because generated code in the consumer's assembly calls it, or because a
+`FixedWidth` method returns it so `foreach` allocates nothing; it is marked
+`[EditorBrowsable(Never)]`. Compiled consumer code binds to those signatures, so they evolve only by
+addition: a new per-column setting is a new constructor overload and property on `ColumnParseOptions`
+or `ColumnFormatOptions`, never a change to an existing helper. Internal types keep their folder
+namespaces (`Readers`, `Writers`, `Parsers`, `Processors`, `Formatters`, `Attributes`).
 
 ## Further reading
 

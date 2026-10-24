@@ -50,7 +50,7 @@ The package ships the Roslyn source generator bundled as an analyzer. Models tha
 An attribute model needs a public parameterless constructor and mapped fields or properties; `FixedWidthLayout.FromAttributes<Person>()` turns it into a layout, built once per type by reflection:
 
 ```csharp
-using FixedWidthParser.Attributes;
+using FixedWidthParser;
 
 public readonly record struct Person
 {
@@ -71,7 +71,6 @@ For source generation, make the model `partial` and implement the marker interfa
 
 ```csharp
 using FixedWidthParser;
-using FixedWidthParser.Attributes;
 
 public readonly partial record struct GeneratedPerson : IFixedWidthModel<GeneratedPerson>
 {
@@ -87,7 +86,6 @@ For a type you cannot annotate, or a layout known only at run time, describe the
 
 ```csharp
 using FixedWidthParser;
-using FixedWidthParser.Attributes;
 
 var layout = FixedWidthLayout.Build<Order>(b => b
     .Factory(() => new Order())
@@ -173,8 +171,8 @@ var generated = await FixedWidth.AggregateFileAsync<GeneratedPerson, GeneratedPa
 The file is cut into byte ranges, each folded into its own accumulator on a worker thread, and the
 accumulators are merged left to right in file order. `Add` must touch only its own instance; `Merge`
 runs on one thread. Every line is parsed exactly once, and a failing line reports the same line number
-as a sequential read. `FixedWidthParallelOptions.DegreeOfParallelism` caps the threads (`0`, the
-default, means one per processor; `1` reads the file in one pass). `OnParseError`, when set, runs on
+as a sequential read. `FixedWidthReaderOptions.DegreeOfParallelism` caps the threads (`0`, the
+default, means one per processor; `1` reads the file in one pass); other reads ignore it. `OnParseError`, when set, runs on
 the worker threads.
 
 `AggregateAsync` does the same over a `Stream`, which is read once: one thread reads it into chunks
@@ -205,6 +203,7 @@ var people = FixedWidth.ReadFile("people.txt", layout, options);
 | `BufferSize` | 65,536 | Bytes read from the source at a time. |
 | `MaxLineLength` | 1,048,576 | Longest line accepted; a longer one throws `InvalidDataException`. |
 | `OnParseError` | throw | Return `true` to skip a line that fails to parse. |
+| `DegreeOfParallelism` | processor count | Threads for `AggregateFileAsync`/`AggregateAsync`; `1` reads in one pass. |
 
 ### Errors
 
@@ -285,11 +284,11 @@ Invalid layouts fail fast with an `InvalidOperationException` from `FixedWidthLa
 
 ## Versioning
 
-The package follows [Semantic Versioning](https://semver.org/). A minor version may add types, members, options and enum values, but does not remove or change anything; every pull request checks the package against the last release.
+The package follows [Semantic Versioning](https://semver.org/). A minor version may add types, members, options and enum values, but does not remove or change anything; every pull request checks the package, binary-compatibly, against the last release.
 
-- **Interfaces you implement** — `IFixedWidthModel<TSelf>` (normally through the generator) and `IFixedWidthConverter<T>` — never gain a member in a minor version. New settings arrive as new properties on `FixedWidthContext`, which every call receives.
-- **Types that appear in signatures only so enumeration stays allocation-free** — `IRecordLineParser<TModel>`, the `*LineParser` strategy structs and the `*RecordEnumerable`/`*RecordEnumerator` types — are implemented only by the library. Program against `IEnumerable<T>`/`IAsyncEnumerable<T>`; their shape can change in a minor version.
-- **`FixedWidthRuntime`** and **`ColumnFormatOptions`** are public because generated code calls them; they are not meant to be called directly.
+- **Settings** arrive as new properties on the options objects (`FixedWidthReaderOptions`, `FixedWidthWriterOptions`, `FixedWidthColumnOptions`) or on `FixedWidthContext`, never as a new parameter on an existing method.
+- **Interfaces you implement** — `IFixedWidthModel<TSelf>` (normally through the generator), `IFixedWidthConverter<T>` and `IRecordAccumulator<TSelf, TModel>` — never gain a required member. Anything added comes with a default implementation (`static virtual` or a default interface method).
+- **`FixedWidthParser.Infrastructure`** holds what is public only because generated code calls it (`FixedWidthRuntime`, `ColumnParseOptions`, `ColumnFormatOptions`) or because a method returns it so `foreach` allocates nothing (the `*RecordEnumerable`/`*RecordEnumerator` types and the `*LineParser` strategies). These types are hidden from IntelliSense and not meant for direct use, but they follow the same rules as everything else: code compiled against one 2.x version, generated code included, keeps working with every later 2.x version. A new setting for generated code is a new constructor overload on the options structs.
 
 ## Performance
 

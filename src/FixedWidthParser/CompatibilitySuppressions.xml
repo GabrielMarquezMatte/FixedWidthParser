@@ -3,6 +3,13 @@
 <Suppressions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <Suppression>
     <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:FixedWidthParser.Attributes.Alignment</Target>
+    <Left>lib/net10.0/FixedWidthParser.dll</Left>
+    <Right>lib/net10.0/FixedWidthParser.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:FixedWidthParser.Attributes.ColumnLayoutValidator</Target>
     <Left>lib/net10.0/FixedWidthParser.dll</Left>
     <Right>lib/net10.0/FixedWidthParser.dll</Right>
@@ -10,7 +17,35 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:FixedWidthParser.Attributes.FixedColumnAttribute</Target>
+    <Left>lib/net10.0/FixedWidthParser.dll</Left>
+    <Right>lib/net10.0/FixedWidthParser.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:FixedWidthParser.Attributes.OverflowBehavior</Target>
+    <Left>lib/net10.0/FixedWidthParser.dll</Left>
+    <Right>lib/net10.0/FixedWidthParser.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:FixedWidthParser.FixedWidthRuntime</Target>
+    <Left>lib/net10.0/FixedWidthParser.dll</Left>
+    <Right>lib/net10.0/FixedWidthParser.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:FixedWidthParser.FixedWidthUtf8</Target>
+    <Left>lib/net10.0/FixedWidthParser.dll</Left>
+    <Right>lib/net10.0/FixedWidthParser.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:FixedWidthParser.Formatters.ColumnFormatOptions</Target>
     <Left>lib/net10.0/FixedWidthParser.dll</Left>
     <Right>lib/net10.0/FixedWidthParser.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>
@@ -130,6 +165,13 @@
   <Suppression>
     <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:FixedWidthParser.Readers.GeneratedFixedWidthRecordEnumerable`1</Target>
+    <Left>lib/net10.0/FixedWidthParser.dll</Left>
+    <Right>lib/net10.0/FixedWidthParser.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:FixedWidthParser.Readers.GeneratedLineParser`1</Target>
     <Left>lib/net10.0/FixedWidthParser.dll</Left>
     <Right>lib/net10.0/FixedWidthParser.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>
@@ -304,49 +346,7 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
-    <Target>M:FixedWidthParser.FixedWidthRuntime.String(System.ReadOnlySpan{System.Char},CommunityToolkit.HighPerformance.Buffers.StringPool)</Target>
-    <Left>lib/net10.0/FixedWidthParser.dll</Left>
-    <Right>lib/net10.0/FixedWidthParser.dll</Right>
-    <IsBaselineSuppression>true</IsBaselineSuppression>
-  </Suppression>
-  <Suppression>
-    <DiagnosticId>CP0002</DiagnosticId>
-    <Target>M:FixedWidthParser.FixedWidthRuntime.TryDouble(System.ReadOnlySpan{System.Char},System.IFormatProvider,System.Double@)</Target>
-    <Left>lib/net10.0/FixedWidthParser.dll</Left>
-    <Right>lib/net10.0/FixedWidthParser.dll</Right>
-    <IsBaselineSuppression>true</IsBaselineSuppression>
-  </Suppression>
-  <Suppression>
-    <DiagnosticId>CP0002</DiagnosticId>
-    <Target>M:FixedWidthParser.FixedWidthRuntime.TryFloat(System.ReadOnlySpan{System.Char},System.IFormatProvider,System.Single@)</Target>
-    <Left>lib/net10.0/FixedWidthParser.dll</Left>
-    <Right>lib/net10.0/FixedWidthParser.dll</Right>
-    <IsBaselineSuppression>true</IsBaselineSuppression>
-  </Suppression>
-  <Suppression>
-    <DiagnosticId>CP0002</DiagnosticId>
-    <Target>M:FixedWidthParser.FixedWidthRuntime.TryParse``1(System.ReadOnlySpan{System.Char},System.IFormatProvider,``0@)</Target>
-    <Left>lib/net10.0/FixedWidthParser.dll</Left>
-    <Right>lib/net10.0/FixedWidthParser.dll</Right>
-    <IsBaselineSuppression>true</IsBaselineSuppression>
-  </Suppression>
-  <Suppression>
-    <DiagnosticId>CP0002</DiagnosticId>
-    <Target>M:FixedWidthParser.Formatters.ColumnFormatOptions.WriteInto(System.ReadOnlySpan{System.Char},System.Span{System.Char},System.String)</Target>
-    <Left>lib/net10.0/FixedWidthParser.dll</Left>
-    <Right>lib/net10.0/FixedWidthParser.dll</Right>
-    <IsBaselineSuppression>true</IsBaselineSuppression>
-  </Suppression>
-  <Suppression>
-    <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:FixedWidthParser.IFixedWidthModel`1.TryParse(System.ReadOnlySpan{System.Char},System.IFormatProvider,CommunityToolkit.HighPerformance.Buffers.StringPool,`0@)</Target>
-    <Left>lib/net10.0/FixedWidthParser.dll</Left>
-    <Right>lib/net10.0/FixedWidthParser.dll</Right>
-    <IsBaselineSuppression>true</IsBaselineSuppression>
-  </Suppression>
-  <Suppression>
-    <DiagnosticId>CP0002</DiagnosticId>
-    <Target>M:FixedWidthParser.Readers.GeneratedLineParser`1.TryParse(System.ReadOnlySpan{System.Char},System.IFormatProvider,CommunityToolkit.HighPerformance.Buffers.StringPool,`0@)</Target>
     <Left>lib/net10.0/FixedWidthParser.dll</Left>
     <Right>lib/net10.0/FixedWidthParser.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>
@@ -361,13 +361,6 @@
   <Suppression>
     <DiagnosticId>CP0006</DiagnosticId>
     <Target>M:FixedWidthParser.IFixedWidthModel`1.TryParse(System.ReadOnlySpan{System.Byte},FixedWidthParser.FixedWidthContext@,`0@)</Target>
-    <Left>lib/net10.0/FixedWidthParser.dll</Left>
-    <Right>lib/net10.0/FixedWidthParser.dll</Right>
-    <IsBaselineSuppression>true</IsBaselineSuppression>
-  </Suppression>
-  <Suppression>
-    <DiagnosticId>CP0008</DiagnosticId>
-    <Target>T:FixedWidthParser.Readers.GeneratedLineParser`1</Target>
     <Left>lib/net10.0/FixedWidthParser.dll</Left>
     <Right>lib/net10.0/FixedWidthParser.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>
