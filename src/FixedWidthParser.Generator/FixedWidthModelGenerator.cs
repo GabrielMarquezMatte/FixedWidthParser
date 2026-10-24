@@ -193,7 +193,7 @@ namespace FixedWidthParser.Generator
             string? converterFqn = converterType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
             var kind = Classify(underlying, converterType, format, compilation);
             var writeKind = ClassifyWrite(underlying, converterType, compilation);
-            // Mirrors FixedWidthWriter: an explicit Overflow wins; otherwise string truncates and everything else throws.
+            // Mirrors FormatterBuilder.ResolveOptions: an explicit Overflow wins; otherwise string truncates and everything else throws.
             int resolvedOverflow = overflow;
             if (resolvedOverflow == 0)
             {
@@ -248,7 +248,7 @@ namespace FixedWidthParser.Generator
             return ImplementsGeneric(type, type, compilation, "System.ISpanParsable`1") ? ColumnKind.DecodedParsable : ColumnKind.Unsupported;
         }
 
-        // Mirrors FixedWidthWriter: converter → string → ISpanFormattable.
+        // Mirrors FormatterBuilder: converter → string → ISpanFormattable.
         private static WriteKind ClassifyWrite(ITypeSymbol type, ITypeSymbol? converterType, Compilation compilation)
         {
             if (converterType is not null)

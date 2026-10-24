@@ -1,13 +1,12 @@
 using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Parsers;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
 {
     /// <summary>
     /// The source-generated <c>TryParse</c> (via <see cref="FixedWidth.TryParse{TModel}"/>) produces the
-    /// same results as the runtime <see cref="FixedWidthParser{TModel}"/>, including what each reports
+    /// same results as the type's <see cref="FixedWidthLayout.FromAttributes{TModel}"/> layout, including what each reports
     /// about a rejected line.
     /// </summary>
     public class SourceGenParityTests
@@ -20,7 +19,7 @@ namespace FixedWidthParser.Tests
         [InlineData("Ann       abc  10.5      ")]
         public void Person_GeneratedMatchesReflection(string line)
         {
-            bool okR = new FixedWidthParser<PersonModel>().TryParse(Bytes(line), Ctx, out var r);
+            bool okR = FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<PersonModel>(), Ctx, out var r);
             bool okG = FixedWidth.TryParse<GenPersonModel>(Bytes(line), Ctx, out var g);
 
             Assert.Equal(okR, okG);
@@ -47,7 +46,7 @@ namespace FixedWidthParser.Tests
         [InlineData("AB")]
         public void Product_GeneratedMatchesReflection(string line)
         {
-            bool okR = new FixedWidthParser<ProductModel>().TryParse(Bytes(line), Ctx, out var r);
+            bool okR = FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<ProductModel>(), Ctx, out var r);
             bool okG = FixedWidth.TryParse<GenProductModel>(Bytes(line), Ctx, out var g);
 
             Assert.Equal(okR, okG);
@@ -61,7 +60,7 @@ namespace FixedWidthParser.Tests
         [InlineData("notanum ")]
         public void Measurement_GeneratedMatchesReflection(string line)
         {
-            bool okR = new FixedWidthParser<MeasurementModel>().TryParse(Bytes(line), Ctx, out var r);
+            bool okR = FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<MeasurementModel>(), Ctx, out var r);
             bool okG = FixedWidth.TryParse<GenMeasurementModel>(Bytes(line), Ctx, out var g);
 
             Assert.Equal(okR, okG);
@@ -73,7 +72,7 @@ namespace FixedWidthParser.Tests
         [InlineData("42   short     ")]
         public void TrailingString_GeneratedMatchesReflection(string line)
         {
-            bool okR = new FixedWidthParser<TrailingStringModel>().TryParse(Bytes(line), Ctx, out var r);
+            bool okR = FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<TrailingStringModel>(), Ctx, out var r);
             bool okG = FixedWidth.TryParse<GenTrailingStringModel>(Bytes(line), Ctx, out var g);
 
             Assert.Equal(okR, okG);
@@ -87,7 +86,7 @@ namespace FixedWidthParser.Tests
         [InlineData("bad         ")]
         public void Decimal_GeneratedMatchesReflection(string line)
         {
-            bool okR = new FixedWidthParser<DecimalModel>().TryParse(Bytes(line), Ctx, out var r);
+            bool okR = FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<DecimalModel>(), Ctx, out var r);
             bool okG = FixedWidth.TryParse<GenDecimalModel>(Bytes(line), Ctx, out var g);
 
             Assert.Equal(okR, okG);
@@ -97,7 +96,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void DecodedParsable_GeneratedMatchesReflection()
         {
-            bool okR = new FixedWidthParser<ShoutModel>().TryParse("hey   "u8, Ctx, out var r);
+            bool okR = FixedWidth.TryParse("hey   "u8, FixedWidthLayout.FromAttributes<ShoutModel>(), Ctx, out var r);
             bool okG = FixedWidth.TryParse<GenShoutModel>("hey   "u8, Ctx, out var g);
 
             Assert.True(okR);
@@ -113,7 +112,7 @@ namespace FixedWidthParser.Tests
             var context = CtxWith(encoding: Encoding.Latin1);
             byte[] line = Encoding.Latin1.GetBytes("Joséé 42 ");
 
-            Assert.True(new FixedWidthParser<NameAgeModel>().TryParse(line, context, out var r));
+            Assert.True(FixedWidth.TryParse(line, FixedWidthLayout.FromAttributes<NameAgeModel>(), context, out var r));
             Assert.True(FixedWidth.TryParse<GenNameAgeModel>(line, context, out var g));
 
             Assert.Equal("Joséé", r.Name);
@@ -125,7 +124,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void RefStruct_GeneratedMatchesReflection()
         {
-            Assert.True(new FixedWidthParser<RefPersonModel>().TryParse("John Doe  30   6000000.00"u8, Ctx, out var r));
+            Assert.True(FixedWidth.TryParse("John Doe  30   6000000.00"u8, FixedWidthLayout.FromAttributes<RefPersonModel>(), Ctx, out var r));
             Assert.True(FixedWidth.TryParse<GenRefPersonModel>("John Doe  30   6000000.00"u8, Ctx, out var g));
 
             Assert.Equal(r.Name, g.Name);
@@ -139,7 +138,7 @@ namespace FixedWidthParser.Tests
             var pool = new StringPool();
             var context = CtxWith(pool: pool);
 
-            Assert.True(new FixedWidthParser<PersonModel>().TryParse("John Doe  30   6000000.00"u8, context, out var r));
+            Assert.True(FixedWidth.TryParse("John Doe  30   6000000.00"u8, FixedWidthLayout.FromAttributes<PersonModel>(), context, out var r));
             Assert.True(FixedWidth.TryParse<GenPersonModel>("John Doe  30   6000000.00"u8, context, out var g));
 
             Assert.Same(r.Name, g.Name);

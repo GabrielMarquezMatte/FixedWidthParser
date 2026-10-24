@@ -10,7 +10,7 @@ namespace FixedWidthParser.Parsers
     internal readonly record struct ColumnParserInfo<TModel>(int Start, int Length, string Name, ColumnParser<TModel> Parse)
         where TModel : allows ref struct;
 
-    /// <summary>Static-build logic for <see cref="FixedWidthParser{TModel}"/>: the compiled model factory, the per-column setters and the required line length.</summary>
+    /// <summary>Static-build logic for <see cref="FixedWidthLayout.FromAttributes{TModel}"/>: the compiled model factory, the per-column setters and the required line length.</summary>
     internal static class ParserBuilder
     {
         public static Func<TModel> BuildModelFactory<TModel>() where TModel : new(), allows ref struct

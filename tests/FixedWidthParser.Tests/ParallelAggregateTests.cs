@@ -91,17 +91,17 @@ namespace FixedWidthParser.Tests
 
         private List<int> Sequential(FixedWidthReaderOptions? options = null)
         {
-            return [.. new FixedWidthReader<NameAgeModel>(options).ReadFile(_path).Select(m => m.Age)];
+            return [.. FixedWidth.ReadFile(_path, FixedWidthLayout.FromAttributes<NameAgeModel>(), options).Select(m => m.Age)];
         }
 
         private Task<Ages> Aggregate(Source source, FixedWidthParallelOptions parallel, FixedWidthReaderOptions? options = null)
         {
-            var reader = new FixedWidthReader<NameAgeModel>(options);
+            var layout = FixedWidthLayout.FromAttributes<NameAgeModel>();
             var ct = TestContext.Current.CancellationToken;
             return source switch
             {
-                Source.File => reader.AggregateFileAsync<Ages>(_path, parallel, ct),
-                _ => reader.AggregateAsync<Ages>(File.OpenRead(_path), leaveOpen: false, parallel, ct),
+                Source.File => FixedWidth.AggregateFileAsync<NameAgeModel, Ages>(_path, layout, options, parallel, ct),
+                _ => FixedWidth.AggregateAsync<NameAgeModel, Ages>(File.OpenRead(_path), layout, leaveOpen: false, options, parallel, ct),
             };
         }
 
@@ -206,8 +206,7 @@ namespace FixedWidthParser.Tests
             File.WriteAllText(_path, Content(10));
             await using var stream = File.OpenRead(_path);
 
-            await new FixedWidthReader<NameAgeModel>().AggregateAsync<Ages>(
-                stream, leaveOpen, new FixedWidthParallelOptions { DegreeOfParallelism = 2, ChunkSize = 16 }, TestContext.Current.CancellationToken);
+            await FixedWidth.AggregateAsync<NameAgeModel, Ages>(stream, FixedWidthLayout.FromAttributes<NameAgeModel>(), leaveOpen, null, new FixedWidthParallelOptions { DegreeOfParallelism = 2, ChunkSize = 16 }, TestContext.Current.CancellationToken);
 
             Assert.Equal(leaveOpen, stream.CanRead);
         }
@@ -219,13 +218,13 @@ namespace FixedWidthParser.Tests
             File.WriteAllText(_path, Content(10));
             using var cts = new CancellationTokenSource();
             await cts.CancelAsync();
-            var reader = new FixedWidthReader<NameAgeModel>();
+            var layout = FixedWidthLayout.FromAttributes<NameAgeModel>();
             var parallel = new FixedWidthParallelOptions { DegreeOfParallelism = 2 };
 
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => source switch
             {
-                Source.File => reader.AggregateFileAsync<Ages>(_path, parallel, cts.Token),
-                _ => reader.AggregateAsync<Ages>(File.OpenRead(_path), leaveOpen: false, parallel, cts.Token),
+                Source.File => FixedWidth.AggregateFileAsync<NameAgeModel, Ages>(_path, layout, null, parallel, cts.Token),
+                _ => FixedWidth.AggregateAsync<NameAgeModel, Ages>(File.OpenRead(_path), layout, leaveOpen: false, null, parallel, cts.Token),
             });
         }
 
@@ -234,13 +233,13 @@ namespace FixedWidthParser.Tests
         public async Task NegativeDegreeOfParallelism_Throws()
         {
             File.WriteAllText(_path, Content(10));
-            var reader = new FixedWidthReader<NameAgeModel>();
+            var layout = FixedWidthLayout.FromAttributes<NameAgeModel>();
             var parallel = new FixedWidthParallelOptions { DegreeOfParallelism = -1 };
             var ct = TestContext.Current.CancellationToken;
             await using var stream = File.OpenRead(_path);
 
-            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => reader.AggregateFileAsync<Ages>(_path, parallel, ct));
-            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => reader.AggregateAsync<Ages>(stream, leaveOpen: false, parallel, ct));
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => FixedWidth.AggregateFileAsync<NameAgeModel, Ages>(_path, layout, null, parallel, ct));
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => FixedWidth.AggregateAsync<NameAgeModel, Ages>(stream, layout, leaveOpen: false, null, parallel, ct));
             Assert.True(stream.CanRead);
         }
     }

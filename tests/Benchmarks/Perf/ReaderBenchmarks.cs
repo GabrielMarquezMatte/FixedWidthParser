@@ -2,7 +2,6 @@ using System.Text;
 using BenchmarkDotNet.Attributes;
 using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser;
-using FixedWidthParser.Parsers;
 using FixedWidthParser.Readers;
 
 namespace Benchmarks.Perf
@@ -15,9 +14,8 @@ namespace Benchmarks.Perf
     [Config(typeof(RegressionConfig))]
     public class ReaderBenchmarks
     {
-        private readonly FixedWidthParser<SampleModel> _parser = new();
-        private readonly FixedWidthReader<SampleModel> _reader = new();
-        private readonly FixedWidthReader<SampleModel> _pooledReader = new(new FixedWidthReaderOptions { StringPool = new StringPool() });
+        private static readonly FixedWidthLayout<SampleModel> _layout = FixedWidthLayout.FromAttributes<SampleModel>();
+        private readonly FixedWidthReaderOptions _pooledReaderOptions = new FixedWidthReaderOptions { StringPool = new StringPool() };
         private readonly FixedWidthReaderOptions _generatedPooled = new() { StringPool = new StringPool() };
         private byte[] _bytes = [];
 
@@ -38,7 +36,7 @@ namespace Benchmarks.Perf
             string? line;
             while ((line = reader.ReadLine()) is not null)
             {
-                if (_parser.TryParse(Encoding.UTF8.GetBytes(line), default, out var model))
+                if (FixedWidth.TryParse(Encoding.UTF8.GetBytes(line), _layout, default, out var model))
                 {
                     sum += model.Age;
                 }
@@ -50,7 +48,7 @@ namespace Benchmarks.Perf
         public int Reader_Read()
         {
             int sum = 0;
-            foreach (var model in _reader.Read(new MemoryStream(_bytes, writable: false)))
+            foreach (var model in FixedWidth.Read(new MemoryStream(_bytes, writable: false), _layout))
             {
                 sum += model.Age;
             }
@@ -61,7 +59,7 @@ namespace Benchmarks.Perf
         public int Reader_Read_Pooled()
         {
             int sum = 0;
-            foreach (var model in _pooledReader.Read(new MemoryStream(_bytes, writable: false)))
+            foreach (var model in FixedWidth.Read(new MemoryStream(_bytes, writable: false), _layout, options: _pooledReaderOptions))
             {
                 sum += model.Age;
             }

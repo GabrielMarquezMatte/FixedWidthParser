@@ -18,7 +18,7 @@ namespace Benchmarks.Perf
         public int ReflectionReader_ConstructAndReadOne()
         {
             int sum = 0;
-            foreach (var model in new FixedWidthReader<SampleModel>().Read(new MemoryStream(Text, writable: false)))
+            foreach (var model in FixedWidth.Read(new MemoryStream(Text, writable: false), FixedWidthLayout.FromAttributes<SampleModel>()))
             {
                 sum += model.Age;
             }

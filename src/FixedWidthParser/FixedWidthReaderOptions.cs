@@ -4,8 +4,7 @@ using CommunityToolkit.HighPerformance.Buffers;
 namespace FixedWidthParser
 {
     /// <summary>
-    /// Settings for reading lines: <see cref="Readers.FixedWidthReader{TModel}"/> and the
-    /// <see cref="FixedWidth"/> read methods. Every property has a default, so <see langword="null"/>
+    /// Settings for the <see cref="FixedWidth"/> parse, read and aggregate methods. Every property has a default, so <see langword="null"/>
     /// options and <c>new FixedWidthReaderOptions()</c> read the same way.
     /// </summary>
     public sealed class FixedWidthReaderOptions

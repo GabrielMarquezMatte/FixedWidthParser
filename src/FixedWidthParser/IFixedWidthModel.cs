@@ -4,7 +4,7 @@ namespace FixedWidthParser
     /// Implemented by models that opt into the compile-time generated parser and writer. Declaring
     /// this interface on a <see langword="partial"/> model is the trigger for the source generator,
     /// which fills in <see cref="TryParse"/> and <see cref="TryFormat"/> with reflection-free code
-    /// mirroring <see cref="Parsers.FixedWidthParser{TModel}"/> and <see cref="Writers.FixedWidthWriter{TModel}"/>.
+    /// that reads and writes exactly like the model's <see cref="FixedWidthLayout.FromAttributes{TModel}"/> layout.
     /// <para><b>Column positions are bytes.</b></para>
     /// </summary>
     public interface IFixedWidthModel<TSelf> where TSelf : IFixedWidthModel<TSelf>, allows ref struct
@@ -19,7 +19,7 @@ namespace FixedWidthParser
 
         /// <summary>
         /// Formats <paramref name="model"/> into <paramref name="destination"/>, without a line break,
-        /// mirroring <see cref="Writers.FixedWidthWriter{TModel}"/>. Returns <see langword="false"/> only
+        /// mirroring the model's attribute layout. Returns <see langword="false"/> only
         /// when <paramref name="destination"/> is shorter than the line; a value that does not fit its
         /// column throws or truncates per its <c>FixedColumnAttribute.Overflow</c>.
         /// </summary>

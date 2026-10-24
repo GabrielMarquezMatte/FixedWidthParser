@@ -1,5 +1,3 @@
-using FixedWidthParser.Parsers;
-using FixedWidthParser.Writers;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
@@ -13,11 +11,11 @@ namespace FixedWidthParser.Tests
             var dateOnly = new DateOnly(2026, 7, 16);
             const string input = "2026071620260716";
 
-            var parser = new FixedWidthParser<DateTimeExactModel>();
-            Assert.True(parser.TryParse(Bytes(input), Ctx, out var reflected));
+            var layout = FixedWidthLayout.FromAttributes<DateTimeExactModel>();
+            Assert.True(FixedWidth.TryParse(Bytes(input), layout, Ctx, out var reflected));
             Assert.Equal(date, reflected.Date);
             Assert.Equal(dateOnly, reflected.DateOnlyVal);
-            Assert.Equal(input, WriteOne(new FixedWidthWriter<DateTimeExactModel>(), reflected));
+            Assert.Equal(input, WriteOne(FixedWidthLayout.FromAttributes<DateTimeExactModel>(), reflected));
 
             Assert.True(FixedWidth.TryParse<GenDateTimeExactModel>(Bytes(input), Ctx, out var generated));
             Assert.Equal(date, generated.Date);
@@ -28,8 +26,8 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void ZeroPadded_Leading_TrimMode()
         {
-            var parser = new FixedWidthParser<ZeroPaddedLeadingModel>();
-            Assert.True(parser.TryParse("0004203.14"u8, Ctx, out var reflected));
+            var layout = FixedWidthLayout.FromAttributes<ZeroPaddedLeadingModel>();
+            Assert.True(FixedWidth.TryParse("0004203.14"u8, layout, Ctx, out var reflected));
             Assert.Equal(42, reflected.Value);
             Assert.Equal(3.14, reflected.DoubleValue);
 
@@ -41,7 +39,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void ZeroPadded_Both_TrimMode()
         {
-            Assert.True(new FixedWidthParser<ZeroPaddedBothModel>().TryParse("00420"u8, Ctx, out var reflected));
+            Assert.True(FixedWidth.TryParse("00420"u8, FixedWidthLayout.FromAttributes<ZeroPaddedBothModel>(), Ctx, out var reflected));
             Assert.Equal(42, reflected.Value);
 
             Assert.True(FixedWidth.TryParse<GenZeroPaddedBothModel>("00420"u8, Ctx, out var generated));
@@ -54,14 +52,14 @@ namespace FixedWidthParser.Tests
             const string spaces = "          ";
             const string padded = "00000*****";
 
-            var parser = new FixedWidthParser<NullablePaddingModel>();
-            Assert.True(parser.TryParse(Bytes(spaces), Ctx, out var fromSpaces));
+            var layout = FixedWidthLayout.FromAttributes<NullablePaddingModel>();
+            Assert.True(FixedWidth.TryParse(Bytes(spaces), layout, Ctx, out var fromSpaces));
             Assert.Null(fromSpaces.Value);
             Assert.Null(fromSpaces.DoubleValue);
-            Assert.True(parser.TryParse(Bytes(padded), Ctx, out var fromPadding));
+            Assert.True(FixedWidth.TryParse(Bytes(padded), layout, Ctx, out var fromPadding));
             Assert.Null(fromPadding.Value);
             Assert.Null(fromPadding.DoubleValue);
-            Assert.Equal(padded, WriteOne(new FixedWidthWriter<NullablePaddingModel>(), fromPadding));
+            Assert.Equal(padded, WriteOne(FixedWidthLayout.FromAttributes<NullablePaddingModel>(), fromPadding));
 
             Assert.True(FixedWidth.TryParse<GenNullablePaddingModel>(Bytes(spaces), Ctx, out var generatedSpaces));
             Assert.Null(generatedSpaces.Value);
@@ -74,16 +72,16 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void SignAware_ZeroPadding()
         {
-            var writer = new FixedWidthWriter<SignPaddedModel>();
+            var layout = FixedWidthLayout.FromAttributes<SignPaddedModel>();
 
-            Assert.Equal("-00042", WriteOne(writer, new SignPaddedModel { Value = -42 }));
-            Assert.Equal("000042", WriteOne(writer, new SignPaddedModel { Value = 42 }));
+            Assert.Equal("-00042", WriteOne(layout, new SignPaddedModel { Value = -42 }));
+            Assert.Equal("000042", WriteOne(layout, new SignPaddedModel { Value = 42 }));
         }
 
         [Fact]
         public void Writer_RejectsTruncateOnNonString()
         {
-            Assert.Throws<InvalidOperationException>(() => new FixedWidthWriter<TruncateInvalidModel>());
+            Assert.Throws<InvalidOperationException>(() => FixedWidth.WriteMany(Stream.Null, Array.Empty<TruncateInvalidModel>(), FixedWidthLayout.FromAttributes<TruncateInvalidModel>()));
         }
     }
 }

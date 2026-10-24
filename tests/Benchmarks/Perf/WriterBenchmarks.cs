@@ -1,5 +1,5 @@
+using FixedWidthParser;
 using BenchmarkDotNet.Attributes;
-using FixedWidthParser.Writers;
 
 namespace Benchmarks.Perf
 {
@@ -10,7 +10,7 @@ namespace Benchmarks.Perf
     [Config(typeof(RegressionConfig))]
     public class WriterBenchmarks
     {
-        private readonly FixedWidthWriter<SampleModel> _writer = new();
+        private static readonly FixedWidthLayout<SampleModel> _layout = FixedWidthLayout.FromAttributes<SampleModel>();
         private SampleModel[] _models = [];
 
         [Params(1, 100, 1000)]
@@ -25,21 +25,21 @@ namespace Benchmarks.Perf
         [Benchmark(Baseline = true)]
         public void WriteMany_Enumerable()
         {
-            _writer.WriteMany(Stream.Null, (IEnumerable<SampleModel>)_models);
+            FixedWidth.WriteMany(Stream.Null, (IEnumerable<SampleModel>)_models, _layout);
         }
 
         /// <summary>ReadOnlySpan: no enumerator, each record read by reference. Should be zero-alloc.</summary>
         [Benchmark]
         public void WriteMany_Span()
         {
-            _writer.WriteMany(Stream.Null, _models.AsSpan());
+            FixedWidth.WriteMany(Stream.Null, _models.AsSpan(), _layout);
         }
 
         /// <summary>The async overload: the difference from WriteMany_Enumerable is the async state machine.</summary>
         [Benchmark]
         public Task WriteManyAsync()
         {
-            return _writer.WriteManyAsync(Stream.Null, _models);
+            return FixedWidth.WriteManyAsync(Stream.Null, _models, _layout);
         }
     }
 }
