@@ -12,6 +12,8 @@ a constraint; the numbers that justified it live here, so they can be re-run and
   its own enumerator.
 - [fluent-layout.md](fluent-layout.md) — reading and writing through a `FixedWidthLayout<T>` against
   the classes it replaced.
+- [python-benchmarks.md](python-benchmarks.md) — the Python package reading a COTAHIST-shaped file
+  against `pandas.read_fwf`.
 
 Usage documentation is the [README](../README.md); the shape of the code is
 [ARCHITECTURE.md](../ARCHITECTURE.md).
