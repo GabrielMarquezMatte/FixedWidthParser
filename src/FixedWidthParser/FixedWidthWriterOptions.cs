@@ -2,7 +2,7 @@ using System.Text;
 
 namespace FixedWidthParser
 {
-    /// <summary>Settings for <see cref="Writers.FixedWidthWriter{TModel}"/>. Every property has a default.</summary>
+    /// <summary>Settings for the <see cref="FixedWidth"/> write methods. Every property has a default.</summary>
     public sealed class FixedWidthWriterOptions
     {
         internal static readonly FixedWidthWriterOptions Default = new();
@@ -17,5 +17,18 @@ namespace FixedWidthParser
         public string NewLine { get; init; } = Environment.NewLine;
 
         internal FixedWidthContext Context => new() { FormatProvider = FormatProvider!, Encoding = Encoding! };
+
+        /// <summary><see cref="NewLine"/> in the file's encoding, encoded once per options instance.</summary>
+        internal byte[] NewLineBytes => field ??= Context.Encoding.GetBytes(NewLine);
+
+        internal static FixedWidthWriterOptions Validate(FixedWidthWriterOptions? options)
+        {
+            options ??= Default;
+            if (options.NewLine is null)
+            {
+                throw new ArgumentException("NewLine must not be null.", nameof(options));
+            }
+            return options;
+        }
     }
 }

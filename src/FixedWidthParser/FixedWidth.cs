@@ -1,4 +1,5 @@
 using FixedWidthParser.Readers;
+using FixedWidthParser.Writers;
 
 namespace FixedWidthParser
 {
@@ -47,16 +48,7 @@ namespace FixedWidthParser
         public static bool TryFormat<TModel>(in TModel model, FixedWidthLayout<TModel> layout, Span<byte> destination, in FixedWidthContext context, out int bytesWritten)
             where TModel : allows ref struct
         {
-            ArgumentNullException.ThrowIfNull(layout);
-            layout.EnsureCanWrite();
-            if (destination.Length < layout.LineLength)
-            {
-                bytesWritten = 0;
-                return false;
-            }
-            layout.FormatLine(in model, destination[..layout.LineLength], in context);
-            bytesWritten = layout.LineLength;
-            return true;
+            return WritableLayout(layout).TryFormat(in model, destination, in context, out bytesWritten);
         }
 
         /// <summary>Reads from a stream, once. <paramref name="leaveOpen"/> controls whether the stream is disposed when iteration ends.</summary>
@@ -182,6 +174,104 @@ namespace FixedWidthParser
             ArgumentNullException.ThrowIfNull(stream);
             return ParallelStreamAggregator.RunAsync<TModel, LayoutLineParser<TModel>, TAccumulator>(
                 ReadableLayout(layout), stream, leaveOpen, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), ct);
+        }
+
+
+        /// <summary>Writes one record and its line break.</summary>
+        /// <exception cref="InvalidOperationException">A value does not fit a column whose overflow throws.</exception>
+        public static void Write<TModel>(Stream stream, in TModel model, FixedWidthWriterOptions? options = null)
+            where TModel : IFixedWidthModel<TModel>
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            RecordWriter.Write(stream, in model, default(GeneratedRecordFormatter<TModel>), FixedWidthWriterOptions.Validate(options));
+        }
+
+        /// <summary>Writes one record and its line break through <paramref name="layout"/>.</summary>
+        /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a getter, or a value does not fit a column whose overflow throws.</exception>
+        public static void Write<TModel>(Stream stream, in TModel model, FixedWidthLayout<TModel> layout, FixedWidthWriterOptions? options = null)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            RecordWriter.Write(stream, in model, WritableLayout(layout), FixedWidthWriterOptions.Validate(options));
+        }
+
+        /// <summary>Writes every record, each followed by a line break.</summary>
+        /// <exception cref="InvalidOperationException">A value does not fit a column whose overflow throws.</exception>
+        public static void WriteMany<TModel>(Stream stream, IEnumerable<TModel> models, FixedWidthWriterOptions? options = null)
+            where TModel : IFixedWidthModel<TModel>
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(models);
+            RecordWriter.WriteMany(stream, models, default(GeneratedRecordFormatter<TModel>), FixedWidthWriterOptions.Validate(options));
+        }
+
+        /// <summary>Writes every record through <paramref name="layout"/>, each followed by a line break.</summary>
+        /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a getter, or a value does not fit a column whose overflow throws.</exception>
+        public static void WriteMany<TModel>(Stream stream, IEnumerable<TModel> models, FixedWidthLayout<TModel> layout, FixedWidthWriterOptions? options = null)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(models);
+            RecordWriter.WriteMany(stream, models, WritableLayout(layout), FixedWidthWriterOptions.Validate(options));
+        }
+
+        /// <summary>Writes every record, each followed by a line break, reading each one by reference.</summary>
+        /// <exception cref="InvalidOperationException">A value does not fit a column whose overflow throws.</exception>
+        public static void WriteMany<TModel>(Stream stream, ReadOnlySpan<TModel> models, FixedWidthWriterOptions? options = null)
+            where TModel : IFixedWidthModel<TModel>
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            RecordWriter.WriteMany(stream, models, default(GeneratedRecordFormatter<TModel>), FixedWidthWriterOptions.Validate(options));
+        }
+
+        /// <summary>Writes every record through <paramref name="layout"/>, each followed by a line break, reading each one by reference.</summary>
+        /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a getter, or a value does not fit a column whose overflow throws.</exception>
+        public static void WriteMany<TModel>(Stream stream, ReadOnlySpan<TModel> models, FixedWidthLayout<TModel> layout, FixedWidthWriterOptions? options = null)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            RecordWriter.WriteMany(stream, models, WritableLayout(layout), FixedWidthWriterOptions.Validate(options));
+        }
+
+        /// <summary>Writes one record and its line break.</summary>
+        /// <exception cref="InvalidOperationException">A value does not fit a column whose overflow throws.</exception>
+        public static Task WriteAsync<TModel>(Stream stream, TModel model, FixedWidthWriterOptions? options = null, CancellationToken cancellationToken = default)
+            where TModel : IFixedWidthModel<TModel>
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            return RecordWriter.WriteAsync(stream, model, default(GeneratedRecordFormatter<TModel>), FixedWidthWriterOptions.Validate(options), cancellationToken);
+        }
+
+        /// <summary>Writes one record and its line break through <paramref name="layout"/>.</summary>
+        /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a getter, or a value does not fit a column whose overflow throws.</exception>
+        public static Task WriteAsync<TModel>(Stream stream, TModel model, FixedWidthLayout<TModel> layout, FixedWidthWriterOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            return RecordWriter.WriteAsync(stream, model, WritableLayout(layout), FixedWidthWriterOptions.Validate(options), cancellationToken);
+        }
+
+        /// <summary>Writes every record, each followed by a line break.</summary>
+        /// <exception cref="InvalidOperationException">A value does not fit a column whose overflow throws.</exception>
+        public static Task WriteManyAsync<TModel>(Stream stream, IEnumerable<TModel> models, FixedWidthWriterOptions? options = null, CancellationToken cancellationToken = default)
+            where TModel : IFixedWidthModel<TModel>
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(models);
+            return RecordWriter.WriteManyAsync(stream, models, default(GeneratedRecordFormatter<TModel>), FixedWidthWriterOptions.Validate(options), cancellationToken);
+        }
+
+        /// <summary>Writes every record through <paramref name="layout"/>, each followed by a line break.</summary>
+        /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a getter, or a value does not fit a column whose overflow throws.</exception>
+        public static Task WriteManyAsync<TModel>(Stream stream, IEnumerable<TModel> models, FixedWidthLayout<TModel> layout, FixedWidthWriterOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(models);
+            return RecordWriter.WriteManyAsync(stream, models, WritableLayout(layout), FixedWidthWriterOptions.Validate(options), cancellationToken);
+        }
+
+        private static LayoutRecordFormatter<TModel> WritableLayout<TModel>(FixedWidthLayout<TModel> layout)
+            where TModel : allows ref struct
+        {
+            ArgumentNullException.ThrowIfNull(layout);
+            layout.EnsureCanWrite();
+            return new LayoutRecordFormatter<TModel>(layout);
         }
 
         private static LayoutLineParser<TModel> ReadableLayout<TModel>(FixedWidthLayout<TModel> layout)

@@ -162,4 +162,16 @@ namespace FixedWidthParser.Tests
     {
         [FixedColumn(0, 8, Alignment = Alignment.Right, Format = "C")] public decimal Price { get; init; }
     }
+
+    /// <summary>A line longer than the single-record stack buffer.</summary>
+    public readonly partial record struct GenLongNameModel : IFixedWidthModel<GenLongNameModel>
+    {
+        [FixedColumn(0, 1200)] public string Name { get; init; }
+    }
+
+    /// <summary>A line longer than a whole write batch.</summary>
+    public readonly partial record struct GenHugeNameModel : IFixedWidthModel<GenHugeNameModel>
+    {
+        [FixedColumn(0, 70_000)] public string Name { get; init; }
+    }
 }
