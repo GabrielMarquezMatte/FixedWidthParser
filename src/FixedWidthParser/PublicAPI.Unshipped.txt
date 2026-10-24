@@ -126,18 +126,10 @@ FixedWidthParser.Infrastructure.AsyncRecordEnumerator<TModel, TParser>.DisposeAs
 FixedWidthParser.Infrastructure.AsyncRecordEnumerator<TModel, TParser>.MoveNextAsync() -> System.Threading.Tasks.ValueTask<bool>
 FixedWidthParser.Infrastructure.ColumnFormatOptions
 FixedWidthParser.Infrastructure.ColumnFormatOptions.Alignment.get -> FixedWidthParser.Alignment
-FixedWidthParser.Infrastructure.ColumnFormatOptions.Alignment.init -> void
 FixedWidthParser.Infrastructure.ColumnFormatOptions.ColumnFormatOptions() -> void
-FixedWidthParser.Infrastructure.ColumnFormatOptions.ColumnFormatOptions(FixedWidthParser.Alignment Alignment, char Padding, string? Format, FixedWidthParser.OverflowBehavior Overflow) -> void
-FixedWidthParser.Infrastructure.ColumnFormatOptions.Deconstruct(out FixedWidthParser.Alignment Alignment, out char Padding, out string? Format, out FixedWidthParser.OverflowBehavior Overflow) -> void
-FixedWidthParser.Infrastructure.ColumnFormatOptions.Equals(FixedWidthParser.Infrastructure.ColumnFormatOptions other) -> bool
 FixedWidthParser.Infrastructure.ColumnFormatOptions.Format.get -> string?
-FixedWidthParser.Infrastructure.ColumnFormatOptions.Format.init -> void
 FixedWidthParser.Infrastructure.ColumnFormatOptions.Overflow.get -> FixedWidthParser.OverflowBehavior
-FixedWidthParser.Infrastructure.ColumnFormatOptions.Overflow.init -> void
 FixedWidthParser.Infrastructure.ColumnFormatOptions.Padding.get -> char
-FixedWidthParser.Infrastructure.ColumnFormatOptions.Padding.init -> void
-FixedWidthParser.Infrastructure.ColumnFormatOptions.WriteInto(System.ReadOnlySpan<byte> content, System.Span<byte> slice, string! columnName) -> void
 FixedWidthParser.Infrastructure.FixedWidthAsyncRecordEnumerable<TModel, TParser>
 FixedWidthParser.Infrastructure.FixedWidthAsyncRecordEnumerable<TModel, TParser>.GetAsyncEnumerator(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> FixedWidthParser.Infrastructure.AsyncRecordEnumerator<TModel, TParser>!
 FixedWidthParser.Infrastructure.FixedWidthRecordEnumerable<TModel, TParser>
@@ -165,7 +157,6 @@ FixedWidthParser.TrimMode
 FixedWidthParser.TrimMode.Both = 2 -> FixedWidthParser.TrimMode
 FixedWidthParser.TrimMode.Leading = 1 -> FixedWidthParser.TrimMode
 FixedWidthParser.TrimMode.Trailing = 0 -> FixedWidthParser.TrimMode
-override FixedWidthParser.Infrastructure.ColumnFormatOptions.GetHashCode() -> int
 static FixedWidthParser.FixedWidth.Read<TModel>(System.IO.Stream! stream, FixedWidthParser.FixedWidthLayout<TModel>! layout, bool leaveOpen = false, FixedWidthParser.FixedWidthReaderOptions? options = null) -> FixedWidthParser.Infrastructure.FixedWidthRecordEnumerable<TModel, FixedWidthParser.Infrastructure.LayoutLineParser<TModel>>!
 static FixedWidthParser.FixedWidth.Read<TModel>(System.IO.Stream! stream, bool leaveOpen = false, FixedWidthParser.FixedWidthReaderOptions? options = null) -> FixedWidthParser.Infrastructure.FixedWidthRecordEnumerable<TModel, FixedWidthParser.Infrastructure.GeneratedLineParser<TModel>>!
 static FixedWidthParser.FixedWidth.ReadAsync<TModel>(System.IO.Stream! stream, FixedWidthParser.FixedWidthLayout<TModel>! layout, bool leaveOpen = false, FixedWidthParser.FixedWidthReaderOptions? options = null) -> FixedWidthParser.Infrastructure.FixedWidthAsyncRecordEnumerable<TModel, FixedWidthParser.Infrastructure.LayoutLineParser<TModel>>!
@@ -174,26 +165,10 @@ static FixedWidthParser.FixedWidth.ReadFile<TModel>(string! path, FixedWidthPars
 static FixedWidthParser.FixedWidth.ReadFile<TModel>(string! path, FixedWidthParser.FixedWidthReaderOptions? options = null) -> FixedWidthParser.Infrastructure.FixedWidthRecordEnumerable<TModel, FixedWidthParser.Infrastructure.GeneratedLineParser<TModel>>!
 static FixedWidthParser.FixedWidth.ReadFileAsync<TModel>(string! path, FixedWidthParser.FixedWidthLayout<TModel>! layout, FixedWidthParser.FixedWidthReaderOptions? options = null) -> FixedWidthParser.Infrastructure.FixedWidthAsyncRecordEnumerable<TModel, FixedWidthParser.Infrastructure.LayoutLineParser<TModel>>!
 static FixedWidthParser.FixedWidth.ReadFileAsync<TModel>(string! path, FixedWidthParser.FixedWidthReaderOptions? options = null) -> FixedWidthParser.Infrastructure.FixedWidthAsyncRecordEnumerable<TModel, FixedWidthParser.Infrastructure.GeneratedLineParser<TModel>>!
-static FixedWidthParser.Infrastructure.ColumnFormatOptions.operator !=(FixedWidthParser.Infrastructure.ColumnFormatOptions left, FixedWidthParser.Infrastructure.ColumnFormatOptions right) -> bool
-static FixedWidthParser.Infrastructure.ColumnFormatOptions.operator ==(FixedWidthParser.Infrastructure.ColumnFormatOptions left, FixedWidthParser.Infrastructure.ColumnFormatOptions right) -> bool
 static FixedWidthParser.Infrastructure.FixedWidthRuntime.FormatConvert<TValue, TConverter>(TValue value, System.Span<byte> slice, in FixedWidthParser.FixedWidthContext context, TConverter converter, FixedWidthParser.Infrastructure.ColumnFormatOptions options, string! columnName) -> void
 static FixedWidthParser.Infrastructure.FixedWidthRuntime.FormatString(string! value, System.Span<byte> slice, in FixedWidthParser.FixedWidthContext context, FixedWidthParser.Infrastructure.ColumnFormatOptions options, string! columnName) -> void
 static FixedWidthParser.Infrastructure.FixedWidthRuntime.FormatUtf8Value<TValue>(TValue value, System.Span<byte> slice, in FixedWidthParser.FixedWidthContext context, FixedWidthParser.Infrastructure.ColumnFormatOptions options, string! columnName) -> void
 static FixedWidthParser.Infrastructure.FixedWidthRuntime.FormatValue<TValue>(TValue value, System.Span<byte> slice, in FixedWidthParser.FixedWidthContext context, FixedWidthParser.Infrastructure.ColumnFormatOptions options, string! columnName) -> void
-static FixedWidthParser.Infrastructure.FixedWidthRuntime.IsBlank(System.ReadOnlySpan<byte> column, byte trimChar) -> bool
-static FixedWidthParser.Infrastructure.FixedWidthRuntime.String(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, byte trimChar = 32, FixedWidthParser.TrimMode trimMode = FixedWidthParser.TrimMode.Trailing) -> string!
-static FixedWidthParser.Infrastructure.FixedWidthRuntime.TrimColumn(System.ReadOnlySpan<byte> column, byte trimChar, FixedWidthParser.TrimMode trimMode) -> System.ReadOnlySpan<byte>
-static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryConvert<TValue, TConverter>(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, TConverter converter, out TValue value, byte trimChar = 32, FixedWidthParser.TrimMode trimMode = FixedWidthParser.TrimMode.Trailing) -> bool
-static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryDateOnlyExact(System.ReadOnlySpan<byte> column, string! format, in FixedWidthParser.FixedWidthContext context, out System.DateOnly value, byte trimChar = 32, FixedWidthParser.TrimMode trimMode = FixedWidthParser.TrimMode.Trailing) -> bool
-static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryDateTimeExact(System.ReadOnlySpan<byte> column, string! format, in FixedWidthParser.FixedWidthContext context, out System.DateTime value, byte trimChar = 32, FixedWidthParser.TrimMode trimMode = FixedWidthParser.TrimMode.Trailing) -> bool
-static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryDateTimeOffsetExact(System.ReadOnlySpan<byte> column, string! format, in FixedWidthParser.FixedWidthContext context, out System.DateTimeOffset value, byte trimChar = 32, FixedWidthParser.TrimMode trimMode = FixedWidthParser.TrimMode.Trailing) -> bool
-static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryDouble(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, out double value, byte trimChar = 32, FixedWidthParser.TrimMode trimMode = FixedWidthParser.TrimMode.Trailing) -> bool
-static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryFloat(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, out float value, byte trimChar = 32, FixedWidthParser.TrimMode trimMode = FixedWidthParser.TrimMode.Trailing) -> bool
-static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryParse<TValue>(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, out TValue value, byte trimChar = 32, FixedWidthParser.TrimMode trimMode = FixedWidthParser.TrimMode.Trailing) -> bool
-static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryParseDecoded<TValue>(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, out TValue value, byte trimChar = 32, FixedWidthParser.TrimMode trimMode = FixedWidthParser.TrimMode.Trailing) -> bool
-static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryTimeOnlyExact(System.ReadOnlySpan<byte> column, string! format, in FixedWidthParser.FixedWidthContext context, out System.TimeOnly value, byte trimChar = 32, FixedWidthParser.TrimMode trimMode = FixedWidthParser.TrimMode.Trailing) -> bool
-~override FixedWidthParser.Infrastructure.ColumnFormatOptions.Equals(object obj) -> bool
-~override FixedWidthParser.Infrastructure.ColumnFormatOptions.ToString() -> string
 FixedWidthParser.IFixedWidthConverter<T>.TryFormat(T value, System.Span<byte> destination, in FixedWidthParser.FixedWidthContext context, out int bytesWritten) -> bool
 FixedWidthParser.IFixedWidthConverter<T>.TryParse(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, out T value) -> bool
 FixedWidthParser.FixedWidthReaderOptions.DegreeOfParallelism.get -> int
@@ -202,3 +177,21 @@ static FixedWidthParser.FixedWidth.AggregateAsync<TModel, TAccumulator>(System.I
 static FixedWidthParser.FixedWidth.AggregateAsync<TModel, TAccumulator>(System.IO.Stream! stream, bool leaveOpen = false, FixedWidthParser.FixedWidthReaderOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!
 static FixedWidthParser.FixedWidth.AggregateFileAsync<TModel, TAccumulator>(string! path, FixedWidthParser.FixedWidthLayout<TModel>! layout, FixedWidthParser.FixedWidthReaderOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!
 static FixedWidthParser.FixedWidth.AggregateFileAsync<TModel, TAccumulator>(string! path, FixedWidthParser.FixedWidthReaderOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TAccumulator>!
+FixedWidthParser.Infrastructure.ColumnFormatOptions.ColumnFormatOptions(FixedWidthParser.Alignment alignment, char padding, string? format, FixedWidthParser.OverflowBehavior overflow) -> void
+FixedWidthParser.Infrastructure.ColumnParseOptions
+FixedWidthParser.Infrastructure.ColumnParseOptions.ColumnParseOptions() -> void
+FixedWidthParser.Infrastructure.ColumnParseOptions.ColumnParseOptions(char trimChar, FixedWidthParser.TrimMode trimMode, string? format) -> void
+FixedWidthParser.Infrastructure.ColumnParseOptions.Format.get -> string?
+FixedWidthParser.Infrastructure.ColumnParseOptions.TrimChar.get -> char
+FixedWidthParser.Infrastructure.ColumnParseOptions.TrimMode.get -> FixedWidthParser.TrimMode
+static FixedWidthParser.Infrastructure.FixedWidthRuntime.IsBlank(System.ReadOnlySpan<byte> column, in FixedWidthParser.Infrastructure.ColumnParseOptions options) -> bool
+static FixedWidthParser.Infrastructure.FixedWidthRuntime.String(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, in FixedWidthParser.Infrastructure.ColumnParseOptions options) -> string!
+static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryConvert<TValue, TConverter>(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, TConverter converter, in FixedWidthParser.Infrastructure.ColumnParseOptions options, out TValue value) -> bool
+static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryDateOnlyExact(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, in FixedWidthParser.Infrastructure.ColumnParseOptions options, out System.DateOnly value) -> bool
+static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryDateTimeExact(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, in FixedWidthParser.Infrastructure.ColumnParseOptions options, out System.DateTime value) -> bool
+static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryDateTimeOffsetExact(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, in FixedWidthParser.Infrastructure.ColumnParseOptions options, out System.DateTimeOffset value) -> bool
+static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryDouble(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, in FixedWidthParser.Infrastructure.ColumnParseOptions options, out double value) -> bool
+static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryFloat(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, in FixedWidthParser.Infrastructure.ColumnParseOptions options, out float value) -> bool
+static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryParse<TValue>(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, in FixedWidthParser.Infrastructure.ColumnParseOptions options, out TValue value) -> bool
+static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryParseDecoded<TValue>(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, in FixedWidthParser.Infrastructure.ColumnParseOptions options, out TValue value) -> bool
+static FixedWidthParser.Infrastructure.FixedWidthRuntime.TryTimeOnlyExact(System.ReadOnlySpan<byte> column, in FixedWidthParser.FixedWidthContext context, in FixedWidthParser.Infrastructure.ColumnParseOptions options, out System.TimeOnly value) -> bool

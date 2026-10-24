@@ -44,7 +44,7 @@ namespace FixedWidthParser
             ColumnParser<TModel>? parser = null;
             if (set is not null)
             {
-                parser = ColumnParserFactory.ForString(set, column.Trim, column.TrimMode);
+                parser = ColumnParserFactory.ForString(set, column.Parse);
             }
             IColumnFormatter<TModel>? formatter = null;
             if (get is not null)
@@ -68,7 +68,7 @@ namespace FixedWidthParser
             ColumnParser<TModel>? parser = null;
             if (set is not null)
             {
-                parser = ColumnParserFactory.ForUtf8Parsable(set, column.Trim, column.TrimMode, column.Format);
+                parser = ColumnParserFactory.ForUtf8Parsable(set, column.Parse);
             }
             IColumnFormatter<TModel>? formatter = null;
             if (get is not null)
@@ -92,7 +92,7 @@ namespace FixedWidthParser
             ColumnParser<TModel>? parser = null;
             if (set is not null)
             {
-                parser = ColumnParserFactory.ForDecodedParsable(set, column.Trim, column.TrimMode, column.Format);
+                parser = ColumnParserFactory.ForDecodedParsable(set, column.Parse);
             }
             IColumnFormatter<TModel>? formatter = null;
             if (get is not null)
@@ -115,15 +115,15 @@ namespace FixedWidthParser
             ColumnParser<TModel>? parser = null;
             if (set is not null)
             {
-                parser = ColumnParserFactory.ForNullable(set, column.Trim,
-                    adapted => ColumnParserFactory.ForUtf8Parsable(adapted, column.Trim, column.TrimMode, column.Format));
+                parser = ColumnParserFactory.ForNullable(set, column.Parse,
+                    adapted => ColumnParserFactory.ForUtf8Parsable(adapted, column.Parse));
             }
             IColumnFormatter<TModel>? formatter = null;
             if (get is not null)
             {
                 var inner = new Utf8SpanFormattableColumnFormatter<TModel, TValue>(
                     start, length, column.FormatOptions, name, (in TModel model) => get(in model).GetValueOrDefault());
-                formatter = new NullableColumnFormatter<TModel, TValue>(start, length, column.Trim, get, inner);
+                formatter = new NullableColumnFormatter<TModel, TValue>(start, length, column.Parse.TrimByte, get, inner);
             }
             return Add(column, parser, formatter);
         }
@@ -143,15 +143,15 @@ namespace FixedWidthParser
             ColumnParser<TModel>? parser = null;
             if (set is not null)
             {
-                parser = ColumnParserFactory.ForNullable(set, column.Trim,
-                    adapted => ColumnParserFactory.ForDecodedParsable(adapted, column.Trim, column.TrimMode, column.Format));
+                parser = ColumnParserFactory.ForNullable(set, column.Parse,
+                    adapted => ColumnParserFactory.ForDecodedParsable(adapted, column.Parse));
             }
             IColumnFormatter<TModel>? formatter = null;
             if (get is not null)
             {
                 var inner = new SpanFormattableColumnFormatter<TModel, TValue>(
                     start, length, column.FormatOptions, name, (in TModel model) => get(in model).GetValueOrDefault());
-                formatter = new NullableColumnFormatter<TModel, TValue>(start, length, column.Trim, get, inner);
+                formatter = new NullableColumnFormatter<TModel, TValue>(start, length, column.Parse.TrimByte, get, inner);
             }
             return Add(column, parser, formatter);
         }
@@ -172,15 +172,15 @@ namespace FixedWidthParser
             ColumnParser<TModel>? parser = null;
             if (set is not null)
             {
-                parser = ColumnParserFactory.ForNullable(set, column.Trim,
-                    adapted => ColumnParserFactory.ForConverter(adapted, converter, column.Trim, column.TrimMode));
+                parser = ColumnParserFactory.ForNullable(set, column.Parse,
+                    adapted => ColumnParserFactory.ForConverter(adapted, converter, column.Parse));
             }
             IColumnFormatter<TModel>? formatter = null;
             if (get is not null)
             {
                 var inner = new ConverterColumnFormatter<TModel, TValue, IFixedWidthConverter<TValue>>(
                     start, length, column.FormatOptions, name, (in TModel model) => get(in model).GetValueOrDefault(), converter);
-                formatter = new NullableColumnFormatter<TModel, TValue>(start, length, column.Trim, get, inner);
+                formatter = new NullableColumnFormatter<TModel, TValue>(start, length, column.Parse.TrimByte, get, inner);
             }
             return Add(column, parser, formatter);
         }
@@ -203,7 +203,7 @@ namespace FixedWidthParser
             ColumnParser<TModel>? parser = null;
             if (set is not null)
             {
-                parser = ColumnParserFactory.ForConverter(set, converter, column.Trim, column.TrimMode);
+                parser = ColumnParserFactory.ForConverter(set, converter, column.Parse);
             }
             IColumnFormatter<TModel>? formatter = null;
             if (get is not null)
@@ -269,9 +269,9 @@ namespace FixedWidthParser
             ArgumentException.ThrowIfNullOrEmpty(name);
             options ??= FixedWidthColumnOptions.Default;
             var formatOptions = FormatterBuilder.ResolveOptions(name, valueType, options.Alignment, options.Padding, options.Format, options.Overflow);
-            byte trim = FixedWidthRuntime.ToAsciiByte(options.TrimChar, name, nameof(FixedWidthColumnOptions.TrimChar));
+            FixedWidthRuntime.ToAsciiByte(options.TrimChar, name, nameof(FixedWidthColumnOptions.TrimChar));
             _columns.Add((start, length, name));
-            return new(name, start, length, trim, options.TrimMode, options.Format, formatOptions);
+            return new(name, start, length, new ColumnParseOptions(options.TrimChar, options.TrimMode, options.Format), formatOptions);
         }
 
         private FixedWidthLayoutBuilder<TModel> Add(in PendingColumn column, ColumnParser<TModel>? parser, IColumnFormatter<TModel>? formatter)
@@ -290,7 +290,6 @@ namespace FixedWidthParser
         }
 
         [StructLayout(LayoutKind.Auto)]
-        private readonly record struct PendingColumn(
-            string Name, int Start, int Length, byte Trim, TrimMode TrimMode, string? Format, ColumnFormatOptions FormatOptions);
+        private readonly record struct PendingColumn(string Name, int Start, int Length, ColumnParseOptions Parse, ColumnFormatOptions FormatOptions);
     }
 }

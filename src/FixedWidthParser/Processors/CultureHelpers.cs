@@ -51,12 +51,12 @@ namespace FixedWidthParser.Processors
         }
 
         /// <summary>Parses a (not yet trimmed) column as <see cref="double"/>, honoring the context's provider.</summary>
-        public static bool TryParseDouble(ReadOnlySpan<byte> column, in FixedWidthContext context, out double value, byte trimChar = (byte)' ', TrimMode trimMode = TrimMode.Trailing)
+        public static bool TryParseDouble(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, out double value)
         {
             // Also trim leading spaces: csFastFloat's characters_consumed does not reliably include
             // skipped leading whitespace, so a right-aligned column would otherwise fail the
             // full-consumption check below.
-            var trimmed = FixedWidthRuntime.TrimColumn(column, trimChar, trimMode).TrimStart((byte)' ');
+            var trimmed = FixedWidthRuntime.TrimColumn(column, in options).TrimStart((byte)' ');
             var formatProvider = context.FormatProvider;
             if (GetDecimalSeparator(formatProvider) == '.'
                 && FastDoubleParser.TryParseDouble(trimmed, out int consumed, out value, decimal_separator: (byte)'.')
@@ -68,9 +68,9 @@ namespace FixedWidthParser.Processors
         }
 
         /// <summary>Parses a (not yet trimmed) column as <see cref="float"/>, honoring the context's provider.</summary>
-        public static bool TryParseFloat(ReadOnlySpan<byte> column, in FixedWidthContext context, out float value, byte trimChar = (byte)' ', TrimMode trimMode = TrimMode.Trailing)
+        public static bool TryParseFloat(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, out float value)
         {
-            var trimmed = FixedWidthRuntime.TrimColumn(column, trimChar, trimMode).TrimStart((byte)' ');
+            var trimmed = FixedWidthRuntime.TrimColumn(column, in options).TrimStart((byte)' ');
             var formatProvider = context.FormatProvider;
             if (GetDecimalSeparator(formatProvider) == '.'
                 && FastFloatParser.TryParseFloat(trimmed, out int consumed, out value, decimal_separator: (byte)'.')

@@ -5,55 +5,81 @@ namespace FixedWidthParser.Infrastructure
     /// <summary>
     /// Resolved formatting options for a column (alignment, padding, format string and an overflow
     /// policy already resolved to <see cref="OverflowBehavior.Truncate"/> or
-    /// <see cref="OverflowBehavior.Throw"/>). Centralizes placing the content into the line slice,
-    /// shared by the generated and runtime writers. <see cref="Padding"/> must be ASCII.
+    /// <see cref="OverflowBehavior.Throw"/>), passed by generated code and layouts to
+    /// <see cref="FixedWidthRuntime"/>. <see cref="Padding"/> must be ASCII.
+    /// <para>Public because generated code constructs it; not intended for direct use.</para>
     /// </summary>
-    public readonly record struct ColumnFormatOptions(Alignment Alignment, char Padding, string? Format, OverflowBehavior Overflow)
+    /// <remarks>
+    /// Generated code in consumer assemblies calls the constructor, so a new setting arrives as a new
+    /// constructor overload and a new property; the existing constructor is never changed.
+    /// </remarks>
+#pragma warning disable CA1815 // Never compared; value equality is meaningless for it.
+    public readonly struct ColumnFormatOptions
+#pragma warning restore CA1815
     {
+        /// <summary>Creates the options for one column.</summary>
+        public ColumnFormatOptions(Alignment alignment, char padding, string? format, OverflowBehavior overflow)
+        {
+            Alignment = alignment;
+            Padding = padding;
+            Format = format;
+            Overflow = overflow;
+        }
+
+        /// <summary>Which side a written value is aligned to.</summary>
+        public Alignment Alignment { get; }
+
+        /// <summary>The ASCII character that fills the column around its value.</summary>
+        public char Padding { get; }
+
+        /// <summary>The format string for the value, or <see langword="null"/> for the type's default.</summary>
+        public string? Format { get; }
+
+        /// <summary>The resolved overflow policy: <see cref="OverflowBehavior.Truncate"/> or <see cref="OverflowBehavior.Throw"/>.</summary>
+        public OverflowBehavior Overflow { get; }
+
         /// <summary>
         /// Writes the encoded <paramref name="content"/> into the column slice <paramref name="slice"/>,
         /// applying alignment, padding and overflow.
         /// </summary>
-        public void WriteInto(ReadOnlySpan<byte> content, Span<byte> slice, string columnName)
+        internal void WriteInto(ReadOnlySpan<byte> content, Span<byte> slice, string columnName)
         {
             int width = slice.Length;
             int length = content.Length;
             byte padding = (byte)Padding;
 
-            if (length <= width)
+            if (length > width)
             {
-                if (Alignment != Alignment.Right)
+                if (Overflow == OverflowBehavior.Throw)
                 {
-                    content.CopyTo(slice);
-                    slice[length..].Fill(padding);
+                    throw new InvalidOperationException(
+                        $"Value \"{Encoding.UTF8.GetString(content)}\" ({length} bytes) exceeds the width {width} of column \"{columnName}\".");
+                }
+                if (Alignment == Alignment.Right)
+                {
+                    content[(length - width)..].CopyTo(slice);
                     return;
                 }
-                int pad = width - length;
-                if (Padding != ' ' && content.Length > 0 && (content[0] == (byte)'-' || content[0] == (byte)'+'))
-                {
-                    slice[0] = content[0];
-                    slice[1..(pad + 1)].Fill(padding);
-                    content[1..].CopyTo(slice[(pad + 1)..]);
-                    return;
-                }
-                slice[..pad].Fill(padding);
-                content.CopyTo(slice[pad..]);
+                content[..width].CopyTo(slice);
                 return;
             }
 
-            if (Overflow == OverflowBehavior.Throw)
+            if (Alignment != Alignment.Right)
             {
-                throw new InvalidOperationException(
-                    $"Value \"{Encoding.UTF8.GetString(content)}\" ({length} bytes) exceeds the width {width} of column \"{columnName}\".");
-            }
-
-            // Truncate: keep the bytes on the alignment side.
-            if (Alignment == Alignment.Right)
-            {
-                content[(length - width)..].CopyTo(slice);
+                content.CopyTo(slice);
+                slice[length..].Fill(padding);
                 return;
             }
-            content[..width].CopyTo(slice);
+            int pad = width - length;
+            if (Padding != ' ' && content.Length > 0 && (content[0] == (byte)'-' || content[0] == (byte)'+'))
+            {
+                slice[0] = content[0];
+                slice[1..(pad + 1)].Fill(padding);
+                content[1..].CopyTo(slice[(pad + 1)..]);
+                return;
+            }
+            slice[..pad].Fill(padding);
+            content.CopyTo(slice[pad..]);
         }
 
         /// <summary>
