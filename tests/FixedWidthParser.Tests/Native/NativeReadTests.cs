@@ -50,7 +50,7 @@ namespace FixedWidthParser.Tests.Native
                 Assert.Equal([12345L, -1L], outcome.Column(3));
                 Assert.Equal([Days(2023, 10, 24), 0], outcome.Column(4));
                 Assert.Equal([new TimeOnly(13, 30, 5).Ticks / 10, 0L], outcome.Column(5));
-                Assert.Equal([(new DateTime(2023, 10, 24, 13, 30, 0) - DateTime.UnixEpoch).Ticks / 10, 0L], outcome.Column(6));
+                Assert.Equal([(new DateTime(2023, 10, 24, 13, 30, 0, DateTimeKind.Utc) - DateTime.UnixEpoch).Ticks / 10, 0L], outcome.Column(6));
                 Assert.Equal(2, outcome.Columns[3].Scale);
                 Assert.Equal(2, outcome.LinesRead);
             }

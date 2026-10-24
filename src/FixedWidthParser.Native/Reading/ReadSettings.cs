@@ -50,7 +50,7 @@ namespace FixedWidthParser.Native.Reading
         }
 
         /// <summary>The core's options; a skipped line is counted in <paramref name="skipped"/>.</summary>
-        internal FixedWidthReaderOptions ReaderOptions(StrongBox<long> skipped, int degreeOfParallelism)
+        internal FixedWidthReaderOptions ReaderOptions(StrongBox<long> skipped, int degreeOfParallelism, int chunkSize)
         {
             return FixedWidthReaderOptions.Validate(new FixedWidthReaderOptions
             {
@@ -58,6 +58,7 @@ namespace FixedWidthParser.Native.Reading
                 Encoding = Encoding,
                 MaxLineLength = MaxLineLength,
                 DegreeOfParallelism = degreeOfParallelism,
+                ChunkSize = chunkSize,
                 ByteOrderMark = ByteOrderMark,
                 OnParseError = SkipInvalid ? _ => Interlocked.Increment(ref skipped.Value) > 0 : null,
             });

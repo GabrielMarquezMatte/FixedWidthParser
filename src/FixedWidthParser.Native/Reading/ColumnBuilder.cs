@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text;
 using FixedWidthParser.Infrastructure;
 using FixedWidthParser.Native.Layouts;
@@ -90,6 +91,121 @@ namespace FixedWidthParser.Native.Reading
                 NativeType.String or NativeType.Date => _ints.Detach(),
                 _ => _longs.Detach(),
             });
+        }
+
+        /// <summary>Publishes the same column of several partitions, in order, as one column: the one copy a partitioned read makes.</summary>
+        internal static void Concat(ReadOnlySpan<ColumnBuilder> parts, NativeColumnRaw* target)
+        {
+            if (parts.Length == 1)
+            {
+                parts[0].Publish(target);
+                return;
+            }
+            long rows = 0;
+            foreach (ref readonly var part in parts)
+            {
+                rows += part.Rows;
+            }
+            var column = parts[0]._column;
+            target->Type = column.Type;
+            target->Scale = column.Scale;
+            target->Length = rows;
+            target->Validity = ConcatValidity(parts, rows);
+            target->Data = null;
+            target->DataLen = 0;
+            if (column.Type == NativeType.String)
+            {
+                ConcatStrings(parts, rows, target);
+                return;
+            }
+            target->Values = ConcatValues(parts);
+        }
+
+        private ReadOnlySpan<byte> ValueBytes => _column.Type switch
+        {
+            NativeType.Float64 => MemoryMarshal.AsBytes(_doubles.Span),
+            NativeType.Date => MemoryMarshal.AsBytes(_ints.Span),
+            _ => MemoryMarshal.AsBytes(_longs.Span),
+        };
+
+        private static void* ConcatValues(ReadOnlySpan<ColumnBuilder> parts)
+        {
+            long total = 0;
+            foreach (ref readonly var part in parts)
+            {
+                total += part.ValueBytes.Length;
+            }
+            byte* values = (byte*)Marshal.AllocHGlobal((nint)total);
+            long at = 0;
+            foreach (ref readonly var part in parts)
+            {
+                var bytes = part.ValueBytes;
+                bytes.CopyTo(new Span<byte>(values + at, bytes.Length));
+                at += bytes.Length;
+            }
+            return values;
+        }
+
+        private static void ConcatStrings(ReadOnlySpan<ColumnBuilder> parts, long rows, NativeColumnRaw* target)
+        {
+            long total = 0;
+            foreach (ref readonly var part in parts)
+            {
+                total += part._bytes.Count;
+            }
+            if (total > int.MaxValue)
+            {
+                throw new InvalidOperationException(
+                    $"Column '{parts[0]._column.Name}' holds more than 2 GiB of text; read in batches (fw_reader_open_*).");
+            }
+            int* offsets = (int*)Marshal.AllocHGlobal((nint)((rows + 1) * sizeof(int)));
+            byte* data = (byte*)Marshal.AllocHGlobal((nint)total);
+            offsets[0] = 0;
+            long row = 1;
+            int baseOffset = 0;
+            foreach (ref readonly var part in parts)
+            {
+                var partOffsets = part._ints.Span;
+                foreach (ref readonly int offset in partOffsets[1..])
+                {
+                    offsets[row++] = baseOffset + offset;
+                }
+                part._bytes.Span.CopyTo(new Span<byte>(data + baseOffset, part._bytes.Count));
+                baseOffset += part._bytes.Count;
+            }
+            target->Values = offsets;
+            target->Data = data;
+            target->DataLen = total;
+        }
+
+        private static byte* ConcatValidity(ReadOnlySpan<ColumnBuilder> parts, long rows)
+        {
+            bool any = false;
+            foreach (ref readonly var part in parts)
+            {
+                any |= part._validity is not null;
+            }
+            if (!any)
+            {
+                return null;
+            }
+            long length = (rows + 7) / 8;
+            byte* bits = (byte*)Marshal.AllocHGlobal((nint)length);
+            new Span<byte>(bits, (int)length).Fill(0xFF);
+            long row = 0;
+            foreach (ref readonly var part in parts)
+            {
+                var partBits = part._validity is null ? default : part._validity.Span;
+                for (int r = 0; r < part.Rows && !partBits.IsEmpty; r++)
+                {
+                    if ((partBits[r >> 3] & (1 << (r & 7))) == 0)
+                    {
+                        bits[(row + r) >> 3] &= (byte)~(1 << (int)((row + r) & 7));
+                    }
+                }
+                row += part.Rows;
+            }
+            return bits;
         }
 
         public void Dispose()
