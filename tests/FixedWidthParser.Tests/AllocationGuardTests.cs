@@ -99,8 +99,20 @@ namespace FixedWidthParser.Tests
             return total;
         }
 
-        // Bytes allocated per extra line, isolating per-line cost from fixed per-call overhead.
+        // Bytes allocated per extra line, isolating per-line cost from fixed per-call overhead. The best of
+        // three attempts: while other test classes run, the runtime can make a one-off allocation on this
+        // thread during one read, which a per-line regression would not survive in every attempt.
         private static double MarginalPerLine(Action readSmall, Action readLarge)
+        {
+            double best = double.MaxValue;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                best = Math.Min(best, MarginalPerLineOnce(readSmall, readLarge));
+            }
+            return best;
+        }
+
+        private static double MarginalPerLineOnce(Action readSmall, Action readLarge)
         {
             long b1 = GC.GetAllocatedBytesForCurrentThread();
             readSmall();
