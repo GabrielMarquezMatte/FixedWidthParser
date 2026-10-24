@@ -48,18 +48,39 @@ Same machine and versions; `numpy.savetxt` best of 1 run, the others best of 5.
 
 | Writer | Seconds | vs savetxt |
 |---|---:|---:|
-| numpy.savetxt (pandas) | 4.285 | 1.0x |
-| polars pad + concat_str | 0.722 | 5.9x |
-| fw.write (pandas) | 0.329 | 13x |
-| fw.write (polars) | 0.314 | 14x |
-| fw.write (pyarrow) | 0.259 | 17x |
-| fw.write (pyarrow), 1 thread | 0.838 | 5.1x |
-| fw.write_bytes (pyarrow) | 0.404 | 11x |
+| numpy.savetxt (pandas) | 4.302 | 1.0x |
+| polars pad + concat_str | 0.707 | 6.1x |
+| fw.write (pandas) | 0.219 | 20x |
+| fw.write (polars) | 0.190 | 23x |
+| fw.write (pyarrow) | 0.162 | 27x |
+| fw.write (pyarrow), 1 thread | 0.550 | 7.8x |
+| fw.write_bytes (pyarrow) | 0.342 | 13x |
 
-`fw.write` is 2.8x faster than the polars pipeline. A pandas frame costs ~70 ms more than a pyarrow table, its
+`fw.write` is 4.4x faster than the polars pipeline. A pandas frame costs ~60 ms more than a pyarrow table, its
 conversion to Arrow; `write_bytes` timing includes copying the 235 MB into a `bytes` and writing it to the file.
-Of `fw.write`'s 0.26 s, ~20 ms is the Python side handing the columns over and ~240 ms the native write, which
-16 threads speed up only 3.5x over one (0.84 s).
+Of `fw.write`'s 0.16 s, ~20 ms is the Python side handing the columns over and ~140 ms the native write.
+
+### Making the native write faster
+
+The first run measured 0.259 s, ~240 ms of it native. Per value, a zero-padded integer (16 of the 26 columns)
+cost 19 ns and a `yyyyMMdd` date 47 ns. At 16 threads, `fw_write_file` took 240 ms where `fw_write_memory`
+took 141 ms, with the two equal on one thread. Windows runs one synchronous I/O at a time on a file handle, so
+the parallel batches queued for it.
+
+- The output file is opened for asynchronous I/O. Each batch still waits for its own write, but they run
+  together: 240 → 170 ms.
+- A right-aligned integer with no format writes its digits from the right straight into the column, then the
+  padding, with "-" kept leftmost: 19 → 9 ns. Formatting at the start and aligning afterwards, as before, cost
+  a copy, and counting the digits first cost a second pass.
+- A date or time whose format is only digit fields and `- . T / :` reuses the reader's compiled `FastDate`
+  to write its digits: 47 → 23 ns.
+
+A test checks both against the BCL's char path in four cultures, both alignments, and zero and space padding.
+
+| Writer | Before | After |
+|---|---:|---:|
+| fw.write (pyarrow) | 0.259 s | 0.162 s |
+| fw.write (pyarrow), 1 thread | 0.838 s | 0.550 s |
 
 ## Fast paths for dates and integers
 

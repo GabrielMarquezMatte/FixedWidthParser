@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
@@ -149,6 +150,62 @@ namespace FixedWidthParser.Tests
                 expected = int.TryParse(bytes, culture, out int bclInt);
                 actual = Infrastructure.FixedWidthRuntime.TryParse(bytes, in context, in options, out int parsedInt);
                 Assert.True(expected == actual && (!expected || bclInt == parsedInt), $"int '{text}': BCL {expected} {bclInt}, parser {actual} {parsedInt}");
+            }
+        }
+
+        // The integer and date fast paths for writing must lay out the same bytes as the BCL's char path.
+        [Theory]
+        [InlineData("")]
+        [InlineData("de-DE")]
+        [InlineData("th-TH")]
+        [InlineData("sv-SE")]
+        public void Format_IntegersAndDates_MatchTheBcl(string cultureName)
+        {
+            var context = CtxWith(CultureInfo.GetCultureInfo(cultureName));
+            var random = new Random(42);
+            long[] edges = [0, 1, -1, 9, -9, 10, 123, -171, int.MaxValue, int.MinValue, long.MaxValue, long.MinValue];
+            var longs = edges.Concat(Enumerable.Range(0, 1000).Select(_ => random.NextInt64(long.MinValue, long.MaxValue) >> random.Next(0, 63)));
+            var dates = Enumerable.Range(0, 300).Select(_ => new DateTime(1, 1, 1).AddSeconds(random.NextInt64(0, (long)(DateTime.MaxValue - DateTime.MinValue).TotalSeconds)));
+            string[] formats = ["yyyyMMdd", "yyyy-MM-dd", "dd/MM/yyyy", "yyyy-MM-ddTHH:mm:ss", "HHmmss", "HH:mm:ss"];
+
+            foreach (var alignment in new[] { Alignment.Left, Alignment.Right })
+            {
+                foreach (char padding in new[] { ' ', '0' })
+                {
+                    var plain = new Infrastructure.ColumnFormatOptions(alignment, padding, null, OverflowBehavior.Throw);
+                    foreach (long value in longs)
+                    {
+                        // Room for sv-SE's three-byte minus sign too.
+                        Same(value, plain, 23);
+                        Same((int)value, plain, 14);
+                    }
+                    foreach (string format in formats)
+                    {
+                        var options = new Infrastructure.ColumnFormatOptions(alignment, padding, format, OverflowBehavior.Throw);
+                        foreach (var date in dates)
+                        {
+                            Same(date, options, 24);
+                            if (!format.Contains('H', StringComparison.Ordinal))
+                            {
+                                Same(DateOnly.FromDateTime(date), options, 24);
+                            }
+                            if (!format.Contains('y', StringComparison.Ordinal))
+                            {
+                                Same(TimeOnly.FromDateTime(date), options, 24);
+                            }
+                        }
+                    }
+                }
+            }
+
+            void Same<T>(T value, Infrastructure.ColumnFormatOptions options, int width)
+                where T : IUtf8SpanFormattable, ISpanFormattable
+            {
+                byte[] fast = new byte[width];
+                byte[] bcl = new byte[width];
+                Infrastructure.FixedWidthRuntime.FormatUtf8Value(value, fast, in context, options, "c");
+                Infrastructure.FixedWidthRuntime.FormatValue(value, bcl, in context, options, "c");
+                Assert.True(fast.AsSpan().SequenceEqual(bcl), $"{typeof(T).Name} {value} ({options.Format}, {options.Alignment}, '{options.Padding}'): fast \"{Encoding.UTF8.GetString(fast)}\", BCL \"{Encoding.UTF8.GetString(bcl)}\"");
             }
         }
 

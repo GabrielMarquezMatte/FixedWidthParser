@@ -3,9 +3,10 @@ namespace FixedWidthParser.Infrastructure
     /// <summary>
     /// A date or time format made only of fixed-width digit fields (<c>yyyy</c>, <c>MM</c>, <c>dd</c>, <c>HH</c>,
     /// <c>mm</c>, <c>ss</c>) and the literals <c>- . T / :</c>, read straight from the bytes the way ExcelReader's
-    /// <c>FastDate</c> reads ISO 8601. <see cref="TryCreate"/> compiles it once per column and returns
-    /// <see langword="null"/> for any other format; <see cref="TryParse"/> returns <see langword="false"/> for
-    /// anything it cannot read exactly as <c>TryParseExact</c> would, and the caller falls back to it.
+    /// <c>FastDate</c> reads ISO 8601, and written the same way. <see cref="TryCreate"/> compiles it once per column
+    /// and returns <see langword="null"/> for any other format; <see cref="TryParse"/> and <see cref="TryFormat"/>
+    /// return <see langword="false"/> for anything they cannot do exactly as <c>TryParseExact</c> and <c>ToString</c>
+    /// would, and the caller falls back to those.
     /// </summary>
     internal sealed class FastDate
     {
@@ -115,6 +116,45 @@ namespace FixedWidthParser.Infrastructure
             // Unspecified, as TryParseExact returns text without a zone.
             value = new DateTime(year, month, day, hour, minute, second, DateTimeKind.Unspecified);
             return true;
+        }
+
+        /// <summary>
+        /// Writes <paramref name="value"/> as <c>ToString</c> with the format would, at the start of
+        /// <paramref name="destination"/>; <see langword="false"/> when it does not fit or the provider's calendar or
+        /// separators rule the fast path out.
+        /// </summary>
+        internal bool TryFormat(DateTime value, Span<byte> destination, in FixedWidthContext context, out int written)
+        {
+            written = 0;
+            if (destination.Length < _format.Length || !context.GregorianDates || (_usesSeparators && !context.StandardDateSeparators))
+            {
+                return false;
+            }
+            for (int i = 0; i < _format.Length; i++)
+            {
+                destination[i] = (byte)_format[i];
+            }
+            WriteDigits(destination, _year, 4, value.Year);
+            WriteDigits(destination, _month, 2, value.Month);
+            WriteDigits(destination, _day, 2, value.Day);
+            WriteDigits(destination, _hour, 2, value.Hour);
+            WriteDigits(destination, _minute, 2, value.Minute);
+            WriteDigits(destination, _second, 2, value.Second);
+            written = _format.Length;
+            return true;
+        }
+
+        private static void WriteDigits(Span<byte> destination, int offset, int count, int value)
+        {
+            if (offset < 0)
+            {
+                return;
+            }
+            for (int i = offset + count - 1; i >= offset; i--)
+            {
+                destination[i] = (byte)('0' + (value % 10));
+                value /= 10;
+            }
         }
 
         private static int Digits(ReadOnlySpan<byte> s, int offset, int count)
