@@ -1,32 +1,65 @@
-# Python: fixedwidth against pandas.read_fwf
+# Python: fixedwidth against pandas and polars
 
 `python/benchmarks/bench_read.py` generates a synthetic file shaped like B3's COTAHIST quote history (245-byte
 lines, all 26 fields of record type 01, a 00 header and a 99 trailer; layout in `python/benchmarks/cotahist.py`),
 checks that every reader returns the same values as `pandas.read_fwf` given the same column specs (fixedwidth
 exactly, the polars reference within floating-point rounding), and times each one, best of several runs.
+`python/benchmarks/bench_write.py` writes the same table back out (see [Writing](#writing)).
 
     python python/benchmarks/bench_read.py --lines 1000000 --runs 5
+    python python/benchmarks/bench_write.py --lines 1000000 --runs 5
 
-`read_fwf` uses its Python engine, which `skipfooter` needs to drop the trailer.
+`read_fwf` uses its Python engine, which `skipfooter` needs to drop the trailer. The generator caps a day's
+quantity at 10^9 shares, so a volume has at most 15 digits and survives a FLOAT64 column exactly; the writers
+could not reproduce a 16-digit one from a float64 either.
 
-## Results
+## Reading
 
 1,000,000 lines (235 MiB). AMD Ryzen 7 5700X (8 cores, 16 threads), Windows 10, Python 3.14.7, pandas 3.1.0,
 pyarrow 26.0.0, polars 2.0.0. `read_fwf` best of 1 run, the others best of 5.
 
 | Reader | Seconds | vs read_fwf |
 |---|---:|---:|
-| pandas.read_fwf | 14.412 | 1.0x |
-| polars str.slice (reference) | 0.328 | 44x |
-| fw.read_pandas | 0.207 | 70x |
-| fw.read_pandas, 1 thread | 0.618 | 23x |
-| fw.read_polars | 0.188 | 77x |
-| fw.read_arrow | 0.169 | 85x |
-| fw.read (NumPy views) | 0.169 | 85x |
-| fw.read, 1 thread | 0.580 | 25x |
+| pandas.read_fwf | 14.751 | 1.0x |
+| polars str.slice (reference) | 0.349 | 42x |
+| fw.read_pandas | 0.212 | 70x |
+| fw.read_pandas, 1 thread | 0.655 | 23x |
+| fw.read_polars | 0.198 | 74x |
+| fw.read_arrow | 0.195 | 76x |
+| fw.read (NumPy views) | 0.166 | 89x |
+| fw.read, 1 thread | 0.600 | 25x |
 
-A single thread is already 25x faster than `read_fwf`; the default, one thread per processor, adds another 3.4x.
+A single thread is already 25x faster than `read_fwf`; the default, one thread per processor, adds another 3.6x.
 `fw.read_pandas` costs about 40 ms over `fw.read_arrow`, pyarrow's conversion to pandas.
+
+## Writing
+
+`bench_write.py` reads the generated file once, before any timing, into pandas, polars and pyarrow tables, and
+times each writer turning that table back into the record lines. The expected output is the generated file's
+body, so every writer must produce it byte for byte; the script asserts that. Neither pandas nor polars writes
+fixed-width files, so the baselines are what their users write instead:
+
+- `numpy.savetxt` over the pandas columns with one printf field per column (`%-12s`, `%013d`), floats scaled to
+  their implied decimals and dates turned into `yyyymmdd` integers first.
+- polars string expressions: `pad_end` for text, the scaled integers zero-padded with the sign kept leftmost,
+  `strftime` for dates, joined with `concat_str` into one column written by `write_csv`.
+
+Same machine and versions; `numpy.savetxt` best of 1 run, the others best of 5.
+
+| Writer | Seconds | vs savetxt |
+|---|---:|---:|
+| numpy.savetxt (pandas) | 4.285 | 1.0x |
+| polars pad + concat_str | 0.722 | 5.9x |
+| fw.write (pandas) | 0.329 | 13x |
+| fw.write (polars) | 0.314 | 14x |
+| fw.write (pyarrow) | 0.259 | 17x |
+| fw.write (pyarrow), 1 thread | 0.838 | 5.1x |
+| fw.write_bytes (pyarrow) | 0.404 | 11x |
+
+`fw.write` is 2.8x faster than the polars pipeline. A pandas frame costs ~70 ms more than a pyarrow table, its
+conversion to Arrow; `write_bytes` timing includes copying the 235 MB into a `bytes` and writing it to the file.
+Of `fw.write`'s 0.26 s, ~20 ms is the Python side handing the columns over and ~240 ms the native write, which
+16 threads speed up only 3.5x over one (0.84 s).
 
 ## Fast paths for dates and integers
 
