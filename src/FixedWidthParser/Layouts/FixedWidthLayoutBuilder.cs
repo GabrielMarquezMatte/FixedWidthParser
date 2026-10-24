@@ -127,6 +127,63 @@ namespace FixedWidthParser
             return Add(column, parser, formatter);
         }
 
+        /// <summary>
+        /// Adds a <see cref="Nullable{TValue}"/> column of a type that parses only from characters, such as a
+        /// date or time: blank reads as <see langword="null"/>, and <see langword="null"/> writes the column
+        /// filled with its trim character. A <see cref="FixedWidthColumnOptions.Format"/> parses a date or
+        /// time exactly.
+        /// </summary>
+        /// <inheritdoc cref="Column(string, int, int, ColumnGetter{TModel, string}?, ColumnSetter{TModel, string}?, FixedWidthColumnOptions?)"/>
+        public FixedWidthLayoutBuilder<TModel> NullableDecodedColumn<TValue>(
+            string name, int start, int length, ColumnGetter<TModel, TValue?>? get, ColumnSetter<TModel, TValue?>? set, FixedWidthColumnOptions? options = null)
+            where TValue : struct, ISpanParsable<TValue>, ISpanFormattable
+        {
+            var column = Begin(name, start, length, typeof(TValue?), options);
+            ColumnParser<TModel>? parser = null;
+            if (set is not null)
+            {
+                parser = ColumnParserFactory.ForNullable(set, column.Trim,
+                    adapted => ColumnParserFactory.ForDecodedParsable(adapted, column.Trim, column.TrimMode, column.Format));
+            }
+            IColumnFormatter<TModel>? formatter = null;
+            if (get is not null)
+            {
+                var inner = new SpanFormattableColumnFormatter<TModel, TValue>(
+                    start, length, column.FormatOptions, name, (in TModel model) => get(in model).GetValueOrDefault());
+                formatter = new NullableColumnFormatter<TModel, TValue>(start, length, column.Trim, get, inner);
+            }
+            return Add(column, parser, formatter);
+        }
+
+        /// <summary>
+        /// Adds a <see cref="Nullable{TValue}"/> column parsed and formatted by <paramref name="converter"/>:
+        /// blank reads as <see langword="null"/> without calling the converter, and <see langword="null"/>
+        /// writes the column filled with its trim character.
+        /// </summary>
+        /// <inheritdoc cref="ConvertedColumn{TValue}(string, int, int, ColumnGetter{TModel, TValue}?, ColumnSetter{TModel, TValue}?, IFixedWidthConverter{TValue}, FixedWidthColumnOptions?)"/>
+        public FixedWidthLayoutBuilder<TModel> NullableConvertedColumn<TValue>(
+            string name, int start, int length, ColumnGetter<TModel, TValue?>? get, ColumnSetter<TModel, TValue?>? set,
+            IFixedWidthConverter<TValue> converter, FixedWidthColumnOptions? options = null)
+            where TValue : struct
+        {
+            ArgumentNullException.ThrowIfNull(converter);
+            var column = Begin(name, start, length, typeof(TValue?), options);
+            ColumnParser<TModel>? parser = null;
+            if (set is not null)
+            {
+                parser = ColumnParserFactory.ForNullable(set, column.Trim,
+                    adapted => ColumnParserFactory.ForConverter(adapted, converter, column.Trim, column.TrimMode));
+            }
+            IColumnFormatter<TModel>? formatter = null;
+            if (get is not null)
+            {
+                var inner = new ConverterColumnFormatter<TModel, TValue, IFixedWidthConverter<TValue>>(
+                    start, length, column.FormatOptions, name, (in TModel model) => get(in model).GetValueOrDefault(), converter);
+                formatter = new NullableColumnFormatter<TModel, TValue>(start, length, column.Trim, get, inner);
+            }
+            return Add(column, parser, formatter);
+        }
+
         /// <summary>Adds a column parsed and formatted by <paramref name="converter"/>.</summary>
         /// <param name="name">The column's name in error messages.</param>
         /// <param name="start">The 0-based offset of the column, in bytes.</param>

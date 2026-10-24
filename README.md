@@ -106,7 +106,9 @@ var layout = FixedWidthLayout.Build<Order>(b => b
 | `Column<T>` | a type that parses from and formats to UTF-8: numbers, `Guid`, … |
 | `DecodedColumn<T>` | a type that parses only from characters (decoded first) |
 | `NullableColumn<T>` | `T?` of a `Column<T>` type; a blank column is `null` |
+| `NullableDecodedColumn<T>` | `T?` of a `DecodedColumn<T>` type, such as `DateOnly?` |
 | `ConvertedColumn<T>` | any type, through an `IFixedWidthConverter<T>` instance |
+| `NullableConvertedColumn<T>` | `T?` of a value type, through an `IFixedWidthConverter<T>` instance |
 
 `FixedWidthColumnOptions` carries the same settings as `[FixedColumn]`, with the same defaults (see [Formatting Options](#formatting-options)). A reference-type model needs `Factory` to be read; a value type without one starts from `default`. Pass `null` as the getter or the setter to build a layout that only reads or only writes; using it the other way throws `InvalidOperationException` before any line is touched. The column name appears in error messages.
 
