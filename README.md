@@ -8,18 +8,18 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Benchmarks](https://img.shields.io/badge/benchmarks-GitHub%20Pages-informational)](https://gabrielmarquezmatte.github.io/FixedWidthParser/dev/bench/)
 
-A high-performance, low-allocation library for **parsing and writing fixed-width (flat) files** in .NET. Columns are declared with attributes, layouts are validated up front, and lines are parsed straight from the file's bytes, without a string per line.
+A high-performance, low-allocation library for **parsing and writing fixed-width (flat) files** in .NET. Columns are declared with attributes or described in code, layouts are validated up front, and lines are parsed straight from the file's bytes, without a string per line.
 
-The package includes both:
+Everything goes through one static class, `FixedWidth`, whose every method comes in two overloads:
 
-- a runtime parser, reader and writer for regular attribute-mapped models; and
-- a bundled Roslyn source generator for reflection-free `TryParse` and `TryFormat` implementations.
+- one for models the bundled Roslyn source generator implements (`IFixedWidthModel<TSelf>`): reflection-free and statically dispatched; and
+- one that takes a `FixedWidthLayout<T>`, built from `[FixedColumn]` attributes or fluently in code.
 
 Upgrading from 1.x? See [the 2.0 entry in the changelog](CHANGELOG.md#200).
 
 ## Features
 
-- **Attribute-driven** column mapping (`[FixedColumn(start, length)]`) on properties and public fields.
+- **Attribute-driven** column mapping (`[FixedColumn(start, length)]`) on properties and public fields, or a **fluent layout** bound with delegates, for types you cannot annotate. Fluent layouts are trimming- and Native AOT-safe.
 - **Byte positions.** Lines are read and written as bytes, with no transcoding to UTF-16. Text columns are decoded with the file's encoding: UTF-8 by default, or any ASCII-compatible encoding such as Latin-1 or Windows-1252.
 - **Lazy reading** from a `Stream` or a file, synchronous (`IEnumerable<T>` with a struct enumerator) and asynchronous (`IAsyncEnumerable<T>`).
 - **Source-generated parsing and writing** for `partial` models implementing `IFixedWidthModel<TSelf>`.
@@ -28,8 +28,8 @@ Upgrading from 1.x? See [the 2.0 entry in the changelog](CHANGELOG.md#200).
 - **Writing** of single records and batches, synchronous and asynchronous, batched into one pooled buffer.
 - **Configurable formatting** per column: alignment, padding character, format string and explicit overflow policy.
 - **Culture-aware** numbers and dates, including `double`/`float` via csFastFloat and any `IUtf8SpanParsable`/`ISpanParsable` type.
-- **Layout validation** at construction or generation time: negative `Start`, non-positive `Length`, overlapping columns and non-ASCII padding fail clearly.
-- **`ref struct` model support** on single-line parsing.
+- **Layout validation** when a layout is built or generated: negative `Start`, non-positive `Length`, overlapping columns and non-ASCII padding fail clearly.
+- **`ref struct` model support** on single-line parsing and formatting.
 
 ## Requirements
 
@@ -47,7 +47,7 @@ The package ships the Roslyn source generator bundled as an analyzer. Models tha
 
 ## Defining a Model
 
-Runtime/reflection models only need a public parameterless constructor and mapped fields or properties:
+An attribute model needs a public parameterless constructor and mapped fields or properties; `FixedWidthLayout.FromAttributes<Person>()` turns it into a layout, built once per type by reflection:
 
 ```csharp
 using FixedWidthParser.Attributes;
@@ -81,27 +81,46 @@ public readonly partial record struct GeneratedPerson : IFixedWidthModel<Generat
 }
 ```
 
-## Reading
+## Layouts without attributes
 
-```csharp
-using FixedWidthParser.Readers;
-
-var reader = new FixedWidthReader<Person>();
-
-foreach (var person in reader.ReadFile("people.txt"))
-{
-    // ...
-}
-```
-
-`Read(Stream, leaveOpen)` reads a stream once; `ReadFile` reopens the file on each enumeration. Reading is lazy and reuses a pooled buffer; each line is parsed in place, without a string per line.
-
-Empty lines (including a trailing newline at end of file) are skipped: they are counted toward the line number but not yielded. Lines end at `\n`, with a preceding `\r` dropped, and a leading UTF-8 byte order mark is skipped.
-
-The source-generated facade has the same methods:
+For a type you cannot annotate, or a layout known only at run time, describe the columns in code. Each column binds through a getter (used to write) and a setter (used to read), so nothing is reflected over:
 
 ```csharp
 using FixedWidthParser;
+using FixedWidthParser.Attributes;
+
+var layout = FixedWidthLayout.Build<Order>(b => b
+    .Factory(() => new Order())
+    .Column<int>("Id", 0, 6, (in Order o) => o.Id, (ref Order o, int v) => o.Id = v,
+        new FixedWidthColumnOptions { Alignment = Alignment.Right, Padding = '0' })
+    .Column("Name", 6, 20, (in Order o) => o.Name, (ref Order o, string v) => o.Name = v)
+    .NullableColumn<decimal>("Discount", 26, 10, (in Order o) => o.Discount, (ref Order o, decimal? v) => o.Discount = v)
+    .DecodedColumn<DateOnly>("Date", 36, 8, (in Order o) => o.Date, (ref Order o, DateOnly v) => o.Date = v,
+        new FixedWidthColumnOptions { Format = "yyyyMMdd" })
+    .ConvertedColumn("Total", 44, 12, (in Order o) => o.Total, (ref Order o, Money v) => o.Total = v, new MoneyConverter()));
+```
+
+| Method | Column type |
+|---|---|
+| `Column` | `string` |
+| `Column<T>` | a type that parses from and formats to UTF-8: numbers, `Guid`, … |
+| `DecodedColumn<T>` | a type that parses only from characters (decoded first) |
+| `NullableColumn<T>` | `T?` of a `Column<T>` type; a blank column is `null` |
+| `ConvertedColumn<T>` | any type, through an `IFixedWidthConverter<T>` instance |
+
+`FixedWidthColumnOptions` carries the same settings as `[FixedColumn]`, with the same defaults (see [Formatting Options](#formatting-options)). A reference-type model needs `Factory` to be read; a value type without one starts from `default`. Pass `null` as the getter or the setter to build a layout that only reads or only writes; using it the other way throws `InvalidOperationException` before any line is touched. The column name appears in error messages.
+
+## Reading
+
+```csharp
+using FixedWidthParser;
+
+var layout = FixedWidthLayout.FromAttributes<Person>();
+
+foreach (var person in FixedWidth.ReadFile("people.txt", layout))
+{
+    // ...
+}
 
 foreach (var person in FixedWidth.ReadFile<GeneratedPerson>("people.txt"))
 {
@@ -109,10 +128,14 @@ foreach (var person in FixedWidth.ReadFile<GeneratedPerson>("people.txt"))
 }
 ```
 
+`Read(Stream, …, leaveOpen)` reads a stream once; `ReadFile` reopens the file on each enumeration. Reading is lazy and reuses a pooled buffer; each line is parsed in place, without a string per line. A layout is immutable: build it once and share it across reads and threads.
+
+Empty lines (including a trailing newline at end of file) are skipped: they are counted toward the line number but not yielded. Lines end at `\n`, with a preceding `\r` dropped, and a leading UTF-8 byte order mark is skipped.
+
 ### Async
 
 ```csharp
-await foreach (var person in reader.ReadFileAsync("people.txt"))
+await foreach (var person in FixedWidth.ReadFileAsync("people.txt", layout))
 {
     // ...
 }
@@ -140,7 +163,7 @@ public sealed class Payroll : IRecordAccumulator<Payroll, Person>
     }
 }
 
-var payroll = await reader.AggregateFileAsync<Payroll>("people.txt");
+var payroll = await FixedWidth.AggregateFileAsync<Person, Payroll>("people.txt", layout);
 // GeneratedPayroll: the same accumulator over GeneratedPerson.
 var generated = await FixedWidth.AggregateFileAsync<GeneratedPerson, GeneratedPayroll>("people.txt");
 ```
@@ -160,7 +183,7 @@ and the others parse.
 Every read takes an optional `FixedWidthReaderOptions`:
 
 ```csharp
-var reader = new FixedWidthReader<Person>(new FixedWidthReaderOptions
+var options = new FixedWidthReaderOptions
 {
     FormatProvider = CultureInfo.GetCultureInfo("pt-BR"),
     Encoding = Encoding.Latin1,
@@ -168,7 +191,8 @@ var reader = new FixedWidthReader<Person>(new FixedWidthReaderOptions
     BufferSize = 64 * 1024,
     MaxLineLength = 4096,
     OnParseError = ex => { log.Warning(ex.Message); return true; }, // skip the line
-});
+};
+var people = FixedWidth.ReadFile("people.txt", layout, options);
 ```
 
 | Option | Default | Meaning |
@@ -197,20 +221,16 @@ A reader buffers a line until it finds its line break. `MaxLineLength` bounds th
 ## Single Lines
 
 ```csharp
-var parser = new FixedWidthParser<Person>();
-parser.TryParse("John Doe  30   60000.00  "u8, default, out var person);
+FixedWidth.TryParse("John Doe  30   60000.00  "u8, layout, default, out Person person);
 
 FixedWidth.TryParse<GeneratedPerson>(lineBytes, new FixedWidthContext { FormatProvider = culture }, out var generated);
 ```
 
-`FixedWidthContext` carries the format provider, the encoding and the string pool for one line; `default` means invariant culture, UTF-8 and no pool. `FixedWidthReader<T>.TryParse(line, out model)` parses one line with the reader's options.
+`FixedWidthContext` carries the format provider, the encoding and the string pool for one line; `default` means invariant culture, UTF-8 and no pool.
 
 ## Writing
 
 ```csharp
-using FixedWidthParser.Writers;
-
-var writer = new FixedWidthWriter<Person>();
 var people = new[]
 {
     new Person { Name = "John Doe", Age = 30, Salary = 60000 },
@@ -218,12 +238,11 @@ var people = new[]
 };
 
 using var stream = File.Create("out.txt");
-writer.WriteMany(stream, people.AsSpan());
+FixedWidth.WriteMany(stream, people.AsSpan(), layout);
+FixedWidth.WriteMany(stream, generatedPeople);   // generated models need no layout
 ```
 
-`Write`, `WriteMany` (span or enumerable) and their async versions write each record followed by `NewLine`, batched into one pooled buffer. `FixedWidthWriterOptions` sets the `FormatProvider`, the `Encoding` and the `NewLine` (default `Environment.NewLine`). `TryFormat(in model, Span<byte>, out int)` formats one line into your own buffer.
-
-Generated models format through `FixedWidth.TryFormat(in model, Span<byte>, in FixedWidthContext, out int)`.
+`Write`, `WriteMany` (span or enumerable) and their async versions write each record followed by `NewLine`, batched into one pooled buffer. `FixedWidthWriterOptions` sets the `FormatProvider`, the `Encoding` and the `NewLine` (default `Environment.NewLine`). `FixedWidth.TryFormat(in model, layout, Span<byte>, in FixedWidthContext, out int)`, or its generated overload without the layout, formats one line into your own buffer.
 
 ## Formatting Options
 
@@ -260,7 +279,7 @@ On .NET, Windows-1252 and other code pages need `Encoding.RegisterProvider(CodeP
 
 ## Validation
 
-Invalid layouts fail fast with an `InvalidOperationException` on the runtime parser/writer, or a generator diagnostic on generated models: negative `Start`, `Length < 1`, overlapping columns, a non-ASCII `Padding` or `TrimChar` (FWP012), an unsupported column type and a converter for the wrong type. Adjacent columns are valid.
+Invalid layouts fail fast with an `InvalidOperationException` from `FixedWidthLayout.Build` or `FromAttributes`, or a generator diagnostic on generated models: negative `Start`, `Length < 1`, overlapping columns, a non-ASCII `Padding` or `TrimChar` (FWP012), an unsupported column type and a converter for the wrong type. Adjacent columns are valid. An attribute model that can be read but not written (or the reverse), such as one with a column type that only formats, gets a layout anyway; the side it cannot do throws on first use.
 
 ## Versioning
 
@@ -348,6 +367,7 @@ src/FixedWidthParser.Generator/        Roslyn source generator
 tests/FixedWidthParser.Tests/          Runtime, reader, writer and parity tests
 tests/FixedWidthParser.Generator.Tests/Source generator tests
 tests/Benchmarks/                      BenchmarkDotNet benchmarks
+tests/AotSmoke/                        Fluent layout published with NativeAOT
 docs/                                  Measurements behind design decisions
 ```
 
