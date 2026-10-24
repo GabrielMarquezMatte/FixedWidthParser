@@ -12,9 +12,6 @@ namespace FixedWidthParser.Native.Writing
     /// </summary>
     internal sealed unsafe class TableFormatter
     {
-        private static readonly int EpochDay = new DateOnly(1970, 1, 1).DayNumber;
-        private static readonly double[] Pow10 = [.. Enumerable.Range(0, NativeType.MaxScale + 1).Select(p => Math.Pow(10, p))];
-
         private readonly NativeColumn[] _columns;
         private readonly NativeColumnRaw* _data;
         private readonly byte _filler;
@@ -98,7 +95,7 @@ namespace FixedWidthParser.Native.Writing
                     FormatFloat(column, ((double*)raw->Values)[row], slice);
                     return;
                 case NativeType.Date:
-                    FixedWidthRuntime.FormatUtf8Value(DateOnly.FromDayNumber(EpochDay + ((int*)raw->Values)[row]), slice, in _context, options, column.Name);
+                    FixedWidthRuntime.FormatUtf8Value(DateOnly.FromDayNumber(NativeType.EpochDay + ((int*)raw->Values)[row]), slice, in _context, options, column.Name);
                     return;
                 case NativeType.Time:
                     FixedWidthRuntime.FormatUtf8Value(new TimeOnly(((long*)raw->Values)[row] * TimeSpan.TicksPerMicrosecond), slice, in _context, options, column.Name);
@@ -120,7 +117,7 @@ namespace FixedWidthParser.Native.Writing
                 FixedWidthRuntime.FormatUtf8Value(value, slice, in _context, column.FormatOptions, column.Name);
                 return;
             }
-            double scaled = Math.Round(value * Pow10[column.Scale]);
+            double scaled = Math.Round(value * NativeType.Pow10[column.Scale]);
             if (!(Math.Abs(scaled) < 9e18))
             {
                 throw new InvalidOperationException($"Value {value} of column \"{column.Name}\" does not fit a scaled 64-bit integer.");

@@ -18,9 +18,6 @@ namespace FixedWidthParser.Native
         private int _capacity;
 
         internal int Count { get; private set; }
-        internal int ByteLength => checked(Count * sizeof(T));
-
-        internal ref T Last => ref _data[Count - 1];
 
         internal ref T this[int index] => ref _data[index];
 
@@ -62,11 +59,6 @@ namespace FixedWidthParser.Native
             }
             values.CopyTo(new Span<T>(_data + Count, values.Length));
             Count += values.Length;
-        }
-
-        internal void CopyTo(Span<byte> destination)
-        {
-            new ReadOnlySpan<byte>(_data, ByteLength).CopyTo(destination);
         }
 
         /// <summary>Hands the block to the caller, who frees it with <see cref="Marshal.FreeHGlobal"/>.</summary>

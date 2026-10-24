@@ -18,8 +18,6 @@ namespace FixedWidthParser.Native.Reading
         private const int StackChars = 256;
         private const long DecimalLimit = 1_000_000_000_000_000_000;
         private const DateTimeStyles Utc = DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal;
-        private static readonly int EpochDay = new DateOnly(1970, 1, 1).DayNumber;
-        private static readonly double[] Pow10 = [.. Enumerable.Range(0, NativeType.MaxScale + 1).Select(p => Math.Pow(10, p))];
 
         private readonly NativeColumn _column;
         private readonly long _maxTextBytes;
@@ -239,7 +237,7 @@ namespace FixedWidthParser.Native.Reading
             var text = FixedWidthRuntime.TrimColumn(raw, in parse);
             if (_column.Scale > 0 && long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out long digits))
             {
-                _doubles.Add(digits / Pow10[_column.Scale]);
+                _doubles.Add(digits / NativeType.Pow10[_column.Scale]);
                 return true;
             }
             if (!FixedWidthRuntime.TryDouble(raw, in context, in parse, out double value))
@@ -248,7 +246,7 @@ namespace FixedWidthParser.Native.Reading
             }
             // Digits too many for a long still carry the implied decimals.
             bool impliedDecimals = _column.Scale > 0 && text.IndexOfAny(".,eE"u8) < 0;
-            _doubles.Add(impliedDecimals ? value / Pow10[_column.Scale] : value);
+            _doubles.Add(impliedDecimals ? value / NativeType.Pow10[_column.Scale] : value);
             return true;
         }
 
@@ -262,7 +260,7 @@ namespace FixedWidthParser.Native.Reading
             {
                 return false;
             }
-            decimal scaled = value * (decimal)Pow10[scale];
+            decimal scaled = value * (decimal)NativeType.Pow10[scale];
             if (scaled != decimal.Truncate(scaled) || scaled <= -DecimalLimit || scaled >= DecimalLimit)
             {
                 return false;
@@ -280,7 +278,7 @@ namespace FixedWidthParser.Native.Reading
                     bool dateOk = exact ? FixedWidthRuntime.TryDateOnlyExact(raw, in context, in parse, out var date) : FixedWidthRuntime.TryParseDecoded(raw, in context, in parse, out date);
                     if (dateOk)
                     {
-                        _ints.Add(date.DayNumber - EpochDay);
+                        _ints.Add(date.DayNumber - NativeType.EpochDay);
                     }
                     return dateOk;
                 case NativeType.Time:

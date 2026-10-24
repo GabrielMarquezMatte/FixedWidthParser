@@ -14,6 +14,12 @@ namespace FixedWidthParser.Native.Layouts
         internal const int Timestamp = 6;
 
         internal const int MaxScale = 18;
+
+        /// <summary>The day DATE values count from, as Arrow's <c>date32</c> does.</summary>
+        internal static readonly int EpochDay = new DateOnly(1970, 1, 1).DayNumber;
+
+        /// <summary>10^scale for every scale a column may have.</summary>
+        internal static readonly double[] Pow10 = [.. Enumerable.Range(0, MaxScale + 1).Select(p => Math.Pow(10, p))];
     }
 
     /// <summary><c>fw_column_spec</c>.</summary>

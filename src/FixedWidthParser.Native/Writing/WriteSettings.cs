@@ -52,21 +52,15 @@ namespace FixedWidthParser.Native.Writing
             }
             if (raw.DegreeOfParallelism < 0 || raw.BatchRows < 0 || raw.NewLineLen < 0 || (raw.NewLine is null && raw.NewLineLen > 0))
             {
-                return Fail("fw_write_options: degree_of_parallelism, batch_rows and newline_len must not be negative, and a newline_len needs a newline.");
+                return NativeApi.InvalidArgument("fw_write_options: degree_of_parallelism, batch_rows and newline_len must not be negative, and a newline_len needs a newline.");
             }
             if (!ReadSettings.TryEncoding(raw.Encoding, out var encoding))
             {
-                return Fail($"fw_write_options: encoding {raw.Encoding} is not a code page this library knows.");
+                return NativeApi.InvalidArgument($"fw_write_options: encoding {raw.Encoding} is not a code page this library knows.");
             }
             byte[] newLine = raw.NewLine is null ? [(byte)'\n'] : new ReadOnlySpan<byte>(raw.NewLine, raw.NewLineLen).ToArray();
             settings = new WriteSettings(encoding, newLine, raw.DegreeOfParallelism, raw.BatchRows);
             return NativeStatus.Ok;
-        }
-
-        private static int Fail(string message)
-        {
-            NativeApi.SetLastError(message);
-            return NativeStatus.InvalidArgument;
         }
     }
 }

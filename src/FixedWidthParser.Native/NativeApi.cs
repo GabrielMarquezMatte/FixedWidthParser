@@ -30,6 +30,13 @@ namespace FixedWidthParser.Native
             _parseColumn = -1;
         }
 
+        /// <summary>Records <paramref name="message"/> and returns <see cref="NativeStatus.InvalidArgument"/>.</summary>
+        internal static int InvalidArgument(string message)
+        {
+            SetLastError(message);
+            return NativeStatus.InvalidArgument;
+        }
+
         /// <summary>Records a parse failure; <paramref name="column"/> is the layout index, -1 for a short line.</summary>
         internal static void SetParseError(FixedWidthParseException exception, int column)
         {
