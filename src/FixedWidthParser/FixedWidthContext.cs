@@ -27,8 +27,21 @@ namespace FixedWidthParser
             {
                 _formatProvider = value;
                 DecimalSeparator = PlainDecimalSeparator(value);
+                if (value is not null)
+                {
+                    var dates = DateTimeFormatInfo.GetInstance(value);
+                    GregorianDates = dates.Calendar is GregorianCalendar;
+                    StandardDateSeparators = string.Equals(dates.DateSeparator, "/", StringComparison.Ordinal)
+                        && string.Equals(dates.TimeSeparator, ":", StringComparison.Ordinal);
+                }
             }
         }
+
+        /// <summary>True when the provider's calendar is Gregorian, so a date's digits are its year, month and day.</summary>
+        internal bool GregorianDates { get => _formatProvider is null || field; private init; }
+
+        /// <summary>True when the provider's date and time separators are "/" and ":".</summary>
+        internal bool StandardDateSeparators { get => _formatProvider is null || field; private init; }
 
         /// <summary>
         /// The provider's decimal separator as one ASCII byte when its negative sign is "-", so a plain

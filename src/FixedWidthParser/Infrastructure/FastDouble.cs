@@ -100,7 +100,7 @@ namespace FixedWidthParser.Infrastructure
             if (i < s.Length && s[i] == decimalSeparator)
             {
                 int fractionStart = ++i;
-                i = ReadFractionDigits(s, i, ref mantissa);
+                i = ReadDigits(s, i, ref mantissa);
                 scale = i - fractionStart;
             }
             int allDigits = integerDigits + scale;
@@ -180,8 +180,9 @@ namespace FixedWidthParser.Infrastructure
 
         // fast_float's digit loop: eight digits per step while the next eight bytes are all digits, then one
         // four-digit step. Integer parts stay byte by byte, since most are too short for a step to pay off.
+        // FastInteger reads with it too, as zero-padded fixed-width integers are long.
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int ReadFractionDigits(ReadOnlySpan<byte> s, int i, ref ulong mantissa)
+        internal static int ReadDigits(ReadOnlySpan<byte> s, int i, ref ulong mantissa)
         {
             while (s.Length - i >= 8)
             {

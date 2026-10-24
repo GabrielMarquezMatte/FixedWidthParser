@@ -130,6 +130,10 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
   ([docs/reader-performance.md](docs/reader-performance.md)). Anything the fast path refuses goes to
   the BCL parser, which decides the result.
 - **Breaking:** the csFastFloat dependency is gone.
+- Dates and times with a format made only of fixed-width digit fields (`yyyyMMdd`, `yyyy-MM-dd`, `HHmmss`, …)
+  and `int`/`long` columns of plain digits parse straight from the bytes, about 5x and 1.5x faster; any
+  other text still goes to the BCL. A single-threaded B3 COTAHIST read through Python is 26% faster
+  ([docs/python-benchmarks.md](docs/python-benchmarks.md)).
 - Reading with a `StringPool` checks a small per-thread cache before the pool, about halving the cost of
   a pooled read.
 - The library, generator and native library build with warnings as errors.

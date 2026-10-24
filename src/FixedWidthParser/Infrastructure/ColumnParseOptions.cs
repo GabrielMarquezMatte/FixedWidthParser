@@ -22,6 +22,7 @@ namespace FixedWidthParser.Infrastructure
             TrimChar = trimChar;
             TrimMode = trimMode;
             Format = format;
+            FastDate = FastDate.TryCreate(format);
         }
 
         /// <summary>The ASCII character trimmed from the column before it is parsed, and that a <see langword="null"/> value is written with.</summary>
@@ -34,5 +35,8 @@ namespace FixedWidthParser.Infrastructure
         public string? Format { get; }
 
         internal byte TrimByte => (byte)TrimChar;
+
+        /// <summary><see cref="Format"/> compiled for <see cref="Infrastructure.FastDate"/>, or <see langword="null"/> when it cannot be.</summary>
+        internal FastDate? FastDate { get; }
     }
 }

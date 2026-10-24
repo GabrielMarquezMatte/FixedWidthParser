@@ -50,13 +50,13 @@ namespace FixedWidthParser.Infrastructure
         // The fast parsers need the provider's decimal separator as one ASCII byte and "-" as its negative sign
         // (FixedWidthContext.DecimalSeparator). What they refuse, thousands separators included, goes to the
         // BCL over the decoded text: its UTF-8 parser does not take a space for a no-break-space group
-        // separator, as fr-FR writes one. Leading spaces are trimmed too, so a right-aligned column stays fast.
+        // separator, as fr-FR writes one. Spaces are trimmed too, so a right-aligned column stays fast.
         private const NumberStyles FloatStyles = NumberStyles.Float | NumberStyles.AllowThousands;
 
         /// <summary>Parses a <see cref="double"/> column, honoring the provider's separators.</summary>
         public static bool TryDouble(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, out double value)
         {
-            var trimmed = TrimColumn(column, in options).TrimStart((byte)' ');
+            var trimmed = TrimColumn(column, in options).Trim((byte)' ');
             byte separator = context.DecimalSeparator;
             if (separator != 0 && FastDouble.TryParse(trimmed, separator, out value))
             {
@@ -68,7 +68,7 @@ namespace FixedWidthParser.Infrastructure
         /// <summary>Parses a <see cref="float"/> column, honoring the provider's separators.</summary>
         public static bool TryFloat(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, out float value)
         {
-            var trimmed = TrimColumn(column, in options).TrimStart((byte)' ');
+            var trimmed = TrimColumn(column, in options).Trim((byte)' ');
             byte separator = context.DecimalSeparator;
             if (separator != 0 && FastDouble.TryParse(trimmed, separator, out value))
             {
@@ -82,9 +82,26 @@ namespace FixedWidthParser.Infrastructure
         public static bool TryParse<TValue>(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, [MaybeNullWhen(false)] out TValue value)
             where TValue : IUtf8SpanParsable<TValue>
         {
+            // The BCL's default styles for these types allow surrounding white space, so trimming spaces for
+            // the fast paths changes no result.
             var trimmed = TrimColumn(column, in options);
+            if (typeof(TValue) == typeof(long) || typeof(TValue) == typeof(int))
+            {
+                bool isInt = typeof(TValue) == typeof(int);
+                if (FastInteger.TryParse(trimmed.Trim((byte)' '), context.DecimalSeparator != 0, isInt ? 9 : 18, out long integer))
+                {
+                    if (isInt)
+                    {
+                        int narrow = (int)integer;
+                        value = Unsafe.As<int, TValue>(ref narrow);
+                        return true;
+                    }
+                    value = Unsafe.As<long, TValue>(ref integer);
+                    return true;
+                }
+            }
             if (typeof(TValue) == typeof(decimal) && context.DecimalSeparator is var separator and not 0
-                && FastDecimal.TryParse(trimmed.TrimStart((byte)' '), separator, out decimal fast))
+                && FastDecimal.TryParse(trimmed.Trim((byte)' '), separator, out decimal fast))
             {
                 value = Unsafe.As<decimal, TValue>(ref fast);
                 return true;
@@ -111,19 +128,36 @@ namespace FixedWidthParser.Infrastructure
         /// <summary>Parses a <see cref="DateTime"/> column with exactly <see cref="ColumnParseOptions.Format"/>, decoding it first.</summary>
         public static bool TryDateTimeExact(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, out DateTime value)
         {
-            return ParseDecoded(TrimColumn(column, in options), in context, options.Format, static (text, format, provider, out result) => DateTime.TryParseExact(text, format, provider, DateTimeStyles.None, out result), out value);
+            var trimmed = TrimColumn(column, in options);
+            if (options.FastDate is { HasDate: true } fast && fast.TryParse(trimmed, in context, out value))
+            {
+                return true;
+            }
+            return ParseDecoded(trimmed, in context, options.Format, static (text, format, provider, out result) => DateTime.TryParseExact(text, format, provider, DateTimeStyles.None, out result), out value);
         }
 
         /// <summary>Parses a <see cref="DateOnly"/> column with exactly <see cref="ColumnParseOptions.Format"/>, decoding it first.</summary>
         public static bool TryDateOnlyExact(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, out DateOnly value)
         {
-            return ParseDecoded(TrimColumn(column, in options), in context, options.Format, static (text, format, provider, out result) => DateOnly.TryParseExact(text, format, provider, DateTimeStyles.None, out result), out value);
+            var trimmed = TrimColumn(column, in options);
+            if (options.FastDate is { HasDate: true, HasTime: false } fast && fast.TryParse(trimmed, in context, out var date))
+            {
+                value = DateOnly.FromDateTime(date);
+                return true;
+            }
+            return ParseDecoded(trimmed, in context, options.Format, static (text, format, provider, out result) => DateOnly.TryParseExact(text, format, provider, DateTimeStyles.None, out result), out value);
         }
 
         /// <summary>Parses a <see cref="TimeOnly"/> column with exactly <see cref="ColumnParseOptions.Format"/>, decoding it first.</summary>
         public static bool TryTimeOnlyExact(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, out TimeOnly value)
         {
-            return ParseDecoded(TrimColumn(column, in options), in context, options.Format, static (text, format, provider, out result) => TimeOnly.TryParseExact(text, format, provider, DateTimeStyles.None, out result), out value);
+            var trimmed = TrimColumn(column, in options);
+            if (options.FastDate is { HasDate: false } fast && fast.TryParse(trimmed, in context, out var time))
+            {
+                value = TimeOnly.FromDateTime(time);
+                return true;
+            }
+            return ParseDecoded(trimmed, in context, options.Format, static (text, format, provider, out result) => TimeOnly.TryParseExact(text, format, provider, DateTimeStyles.None, out result), out value);
         }
 
         /// <summary>Parses a <see cref="DateTimeOffset"/> column with exactly <see cref="ColumnParseOptions.Format"/>, decoding it first.</summary>
