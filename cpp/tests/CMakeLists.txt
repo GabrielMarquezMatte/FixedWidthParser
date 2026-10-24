@@ -1,4 +1,4 @@
-foreach(test read write arrow)
+foreach(test read write arrow mapped)
     add_executable(fw_cpp_${test} ${test}.cpp)
     target_link_libraries(fw_cpp_${test} PRIVATE fw::fixedwidth)
     if(MSVC)

@@ -224,7 +224,9 @@ size and each batch's offset are known up front: batches format in parallel stra
 buffer, or into a pooled buffer written at its offset with `RandomAccess.Write`, and the bytes equal a
 serial write.
 
-`python/` binds the C ABI with `ctypes`; `fixedwidth.hpp` wraps it for C++23. The NativeSmoke C program
+`python/` binds the C ABI with `ctypes`; `fixedwidth.hpp` wraps it for C++23, and maps structs through
+`FixedWidthMapper<T>`, as ExcelReader's C++ header does: the bindings build the layout, a read converts
+the columnar table to `T` row by row, and a write builds columns from the structs. The NativeSmoke C program
 pins every struct's layout with static asserts.
 
 ## Public surface
