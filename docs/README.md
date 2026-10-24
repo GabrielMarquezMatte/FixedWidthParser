@@ -10,6 +10,8 @@ a constraint; the numbers that justified it live here, so they can be re-run and
   scale with the number of workers.
 - [pipe-reader.md](pipe-reader.md) — why a `PipeReader` is read through `AsStream()` rather than
   its own enumerator.
+- [fluent-layout.md](fluent-layout.md) — reading and writing through a `FixedWidthLayout<T>` against
+  the classes it replaced.
 
 Usage documentation is the [README](../README.md); the shape of the code is
 [ARCHITECTURE.md](../ARCHITECTURE.md).
