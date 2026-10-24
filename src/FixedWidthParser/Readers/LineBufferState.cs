@@ -155,6 +155,14 @@ namespace FixedWidthParser.Readers
             return !line.IsEmpty;
         }
 
+        /// <summary>Makes room in the buffer and reads the next block of <paramref name="stream"/> into it.</summary>
+        internal void Fill(Stream stream)
+        {
+            Compact();
+            GrowIfFull();
+            Advance(stream.Read(Buffer.AsSpan(End)));
+        }
+
         internal void Compact()
         {
             if (Start <= 0)

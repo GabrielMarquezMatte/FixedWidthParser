@@ -45,21 +45,14 @@ namespace FixedWidthParser.Formatters
                 throw new InvalidOperationException(
                     $"OverflowBehavior.Truncate is not supported for non-string column '{columnName}' of type '{valueType.Name}'.");
             }
-            return new ColumnFormatOptions(alignment, padding, format, ResolveOverflow(overflow, valueType));
-        }
-
-        // Default overflow resolves per type: string truncates, everything else throws.
-        private static OverflowBehavior ResolveOverflow(OverflowBehavior overflow, Type valueType)
-        {
-            if (overflow != OverflowBehavior.Default)
+            // Default overflow resolves per type: string truncates, everything else throws.
+            var resolved = overflow switch
             {
-                return overflow;
-            }
-            if (valueType == typeof(string))
-            {
-                return OverflowBehavior.Truncate;
-            }
-            return OverflowBehavior.Throw;
+                OverflowBehavior.Default when valueType == typeof(string) => OverflowBehavior.Truncate,
+                OverflowBehavior.Default => OverflowBehavior.Throw,
+                _ => overflow,
+            };
+            return new ColumnFormatOptions(alignment, padding, format, resolved);
         }
 
         // Adapts a ColumnGetter<TModel, T?> into a ColumnGetter<TModel, T>; only called after HasValue is confirmed.

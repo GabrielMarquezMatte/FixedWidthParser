@@ -68,9 +68,7 @@ namespace FixedWidthParser.Infrastructure
                     return false;
                 }
 
-                _lines.Compact();
-                _lines.GrowIfFull();
-                _lines.Advance(_stream.Read(_lines.Buffer.AsSpan(_lines.End)));
+                _lines.Fill(_stream);
             }
         }
 

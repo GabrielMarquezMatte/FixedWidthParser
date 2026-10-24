@@ -87,9 +87,7 @@ namespace FixedWidthParser.Native.Reading
                 }
                 if (status == LineStatus.NeedData)
                 {
-                    _lines.Compact();
-                    _lines.GrowIfFull();
-                    _lines.Advance(_stream.Read(_lines.Buffer.AsSpan(_lines.End)));
+                    _lines.Fill(_stream);
                     continue;
                 }
                 if (!sink.TryAdd(line, in _context))
