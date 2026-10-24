@@ -67,15 +67,28 @@ namespace FixedWidthParser.Readers
             where TModel : allows ref struct
             where TParser : struct, IRecordLineParser<TModel>
         {
-            var failure = new ParseFailure();
-            var diagnosis = context with { Failure = failure };
-            _ = parser.TryParse(line, in diagnosis, out _);
+            Reject(Diagnose<TModel, TParser>(parser, line, lineNumber, in context), onParseError);
+        }
 
-            var exception = Create(line, lineNumber, typeof(TModel).Name, failure, in context);
+        /// <summary>Returns when <paramref name="onParseError"/> asks to skip the line <paramref name="exception"/> describes; throws it otherwise.</summary>
+        internal static void Reject(FixedWidthParseException exception, Func<FixedWidthParseException, bool>? onParseError)
+        {
             if (onParseError is null || !onParseError(exception))
             {
                 throw exception;
             }
+        }
+
+        /// <summary>Parses a rejected line again with a failure sink and builds the exception that names its column.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static FixedWidthParseException Diagnose<TModel, TParser>(TParser parser, ReadOnlySpan<byte> line, long lineNumber, in FixedWidthContext context)
+            where TModel : allows ref struct
+            where TParser : struct, IRecordLineParser<TModel>
+        {
+            var failure = new ParseFailure();
+            var diagnosis = context with { Failure = failure };
+            _ = parser.TryParse(line, in diagnosis, out _);
+            return Create(line, lineNumber, typeof(TModel).Name, failure, in context);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
