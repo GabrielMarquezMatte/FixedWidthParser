@@ -235,7 +235,7 @@ namespace FixedWidthParser.Native.Reading
         private bool AppendFloat(ReadOnlySpan<byte> raw, in FixedWidthContext context, in ColumnParseOptions parse)
         {
             var text = FixedWidthRuntime.TrimColumn(raw, in parse);
-            if (_column.Scale > 0 && long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out long digits))
+            if (_column.Scale > 0 && TryInteger(text, out long digits))
             {
                 _doubles.Add(digits / NativeType.Pow10[_column.Scale]);
                 return true;
@@ -250,9 +250,15 @@ namespace FixedWidthParser.Native.Reading
             return true;
         }
 
+        private static bool TryInteger(ReadOnlySpan<byte> text, out long value)
+        {
+            return FastInteger.TryParse(text.Trim((byte)' '), allowMinus: true, maxDigits: 18, out value)
+                || long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+        }
+
         private static bool TryDecimal(ReadOnlySpan<byte> text, int scale, out long unscaled)
         {
-            if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out unscaled))
+            if (TryInteger(text, out unscaled))
             {
                 return unscaled is > -DecimalLimit and < DecimalLimit;
             }
@@ -285,7 +291,10 @@ namespace FixedWidthParser.Native.Reading
                     bool timeOk = exact ? FixedWidthRuntime.TryTimeOnlyExact(raw, in context, in parse, out var time) : FixedWidthRuntime.TryParseDecoded(raw, in context, in parse, out time);
                     return Add(timeOk, time.Ticks / TimeSpan.TicksPerMicrosecond);
                 default:
-                    bool stampOk = TryTimestamp(FixedWidthRuntime.TrimColumn(raw, in parse), context.Encoding, parse.Format, out var stamp);
+                    // A fast parse has no zone, which the slow path would read as UTC too.
+                    var text = FixedWidthRuntime.TrimColumn(raw, in parse);
+                    bool stampOk = (parse.FastDate is { HasDate: true } fast && fast.TryParse(text, in context, out var stamp))
+                        || TryTimestamp(text, context.Encoding, parse.Format, out stamp);
                     return Add(stampOk, (stamp.Ticks - DateTime.UnixEpoch.Ticks) / TimeSpan.TicksPerMicrosecond);
             }
         }

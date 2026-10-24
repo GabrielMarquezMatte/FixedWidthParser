@@ -88,6 +88,70 @@ namespace FixedWidthParser.Tests
             }
         }
 
+        // The digit-only fast path for exact formats must agree with TryParseExact, including where it must
+        // step aside: a Buddhist calendar (th-TH) and "/" or ":" standing for other separators (de-DE).
+        [Theory]
+        [InlineData("")]
+        [InlineData("pt-BR")]
+        [InlineData("de-DE")]
+        [InlineData("th-TH")]
+        public void Parse_ExactDates_MatchTheBcl(string cultureName)
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+            var context = CtxWith(culture);
+            string[] formats = ["yyyyMMdd", "yyyy-MM-dd", "dd/MM/yyyy", "yyyyMMddHHmmss", "yyyy-MM-ddTHH:mm:ss", "HHmmss", "HH:mm:ss", "HH", "MMdd", "yyyyMM", "yyyy.MM.dd"];
+            string[] edges = ["00000101", "20230230", "20240229", "20230229", "20231301", "99991231", "2023010", "2023o105", "-0230105", "24:00:00", "23:59:60", "235959", "000000", "2023-01-05", "05/01/2023", "05.01.2023"];
+            var random = new Random(42);
+
+            foreach (string format in formats)
+            {
+                var options = new Infrastructure.ColumnParseOptions(' ', TrimMode.Both, format);
+                var samples = Enumerable.Range(0, 300)
+                    .Select(_ => new DateTime(1, 1, 1).AddSeconds(random.NextInt64(0, (long)(DateTime.MaxValue - DateTime.MinValue).TotalSeconds)))
+                    .SelectMany(d => new[] { d.ToString(format, CultureInfo.InvariantCulture), d.ToString(format, culture) });
+                foreach (string text in edges.Concat(samples))
+                {
+                    byte[] bytes = Bytes(text);
+                    bool expected = DateTime.TryParseExact(text, format, culture, DateTimeStyles.None, out var bclDateTime);
+                    Assert.True(expected == Infrastructure.FixedWidthRuntime.TryDateTimeExact(bytes, in context, in options, out var dateTime) && (!expected || bclDateTime == dateTime && bclDateTime.Kind == dateTime.Kind),
+                        $"DateTime '{text}' as {format}: BCL {expected} {bclDateTime:O}, parser {dateTime:O}");
+                    expected = DateOnly.TryParseExact(text, format, culture, DateTimeStyles.None, out var bclDate);
+                    Assert.True(expected == Infrastructure.FixedWidthRuntime.TryDateOnlyExact(bytes, in context, in options, out var date) && (!expected || bclDate == date),
+                        $"DateOnly '{text}' as {format}: BCL {expected} {bclDate:O}, parser {date:O}");
+                    expected = TimeOnly.TryParseExact(text, format, culture, DateTimeStyles.None, out var bclTime);
+                    Assert.True(expected == Infrastructure.FixedWidthRuntime.TryTimeOnlyExact(bytes, in context, in options, out var time) && (!expected || bclTime == time),
+                        $"TimeOnly '{text}' as {format}: BCL {expected} {bclTime:O}, parser {time:O}");
+                }
+            }
+        }
+
+        // sv-SE's negative sign is U+2212, so a leading "-" must not take the integer fast path there.
+        [Theory]
+        [InlineData("")]
+        [InlineData("de-DE")]
+        [InlineData("sv-SE")]
+        public void Parse_Integers_MatchTheBcl(string cultureName)
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+            var context = CtxWith(culture);
+            var options = new Infrastructure.ColumnParseOptions(' ', TrimMode.Trailing, format: null);
+            string[] edges = ["-5", "+5", "  12", "12  ", "0007", "-0", "-", "", "1,000", "1.000", "999999999", "2147483647", "2147483648", "-2147483648", "-2147483649",
+                "999999999999999999", "9223372036854775807", "9223372036854775808", "-9223372036854775808", "−5", "1e3", "12x"];
+            var random = new Random(42);
+            var values = Enumerable.Range(0, 2000).Select(_ => random.NextInt64(long.MinValue, long.MaxValue) >> random.Next(0, 63)).Select(v => v.ToString(CultureInfo.InvariantCulture));
+
+            foreach (string text in edges.Concat(values))
+            {
+                byte[] bytes = Bytes(text);
+                bool expected = long.TryParse(bytes, culture, out long bclLong);
+                bool actual = Infrastructure.FixedWidthRuntime.TryParse(bytes, in context, in options, out long parsedLong);
+                Assert.True(expected == actual && (!expected || bclLong == parsedLong), $"long '{text}': BCL {expected} {bclLong}, parser {actual} {parsedLong}");
+                expected = int.TryParse(bytes, culture, out int bclInt);
+                actual = Infrastructure.FixedWidthRuntime.TryParse(bytes, in context, in options, out int parsedInt);
+                Assert.True(expected == actual && (!expected || bclInt == parsedInt), $"int '{text}': BCL {expected} {bclInt}, parser {actual} {parsedInt}");
+            }
+        }
+
         // The float fast path rounds once in binary32; going through a double could land one ulp off.
         [Theory]
         [InlineData("")]
