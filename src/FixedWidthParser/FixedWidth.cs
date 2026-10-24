@@ -128,43 +128,43 @@ namespace FixedWidthParser
         /// possibly concurrently, and the first failure in file order is the one thrown.
         /// </remarks>
         public static Task<TAccumulator> AggregateFileAsync<TModel, TAccumulator>(
-            string path, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken cancellationToken = default)
+            string path, FixedWidthReaderOptions? options = null, CancellationToken cancellationToken = default)
             where TModel : IFixedWidthModel<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
             return ParallelAggregator.RunAsync<TModel, GeneratedLineParser<TModel>, TAccumulator>(
-                default, path, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), cancellationToken);
+                default, path, FixedWidthReaderOptions.Validate(options), cancellationToken);
         }
 
         /// <summary>
         /// Reads a file through <paramref name="layout"/> across several threads and folds every record into
         /// a <typeparamref name="TAccumulator"/>, one instance per partition, merged in file order.
         /// </summary>
-        /// <remarks>Carries the same contract as <see cref="AggregateFileAsync{TModel, TAccumulator}(string, FixedWidthReaderOptions?, FixedWidthParallelOptions?, CancellationToken)"/>.</remarks>
+        /// <remarks>Carries the same contract as <see cref="AggregateFileAsync{TModel, TAccumulator}(string, FixedWidthReaderOptions?, CancellationToken)"/>.</remarks>
         /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a setter.</exception>
         public static Task<TAccumulator> AggregateFileAsync<TModel, TAccumulator>(
-            string path, FixedWidthLayout<TModel> layout, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken cancellationToken = default)
+            string path, FixedWidthLayout<TModel> layout, FixedWidthReaderOptions? options = null, CancellationToken cancellationToken = default)
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
             return ParallelAggregator.RunAsync<TModel, LayoutLineParser<TModel>, TAccumulator>(
-                ReadableLayout(layout), path, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), cancellationToken);
+                ReadableLayout(layout), path, FixedWidthReaderOptions.Validate(options), cancellationToken);
         }
 
         /// <summary>
         /// Reads a stream once and folds every record into a <typeparamref name="TAccumulator"/> across
         /// several threads. <paramref name="leaveOpen"/> controls whether the stream is disposed afterwards.
         /// </summary>
-        /// <remarks>Carries the same contract as <see cref="AggregateFileAsync{TModel, TAccumulator}(string, FixedWidthReaderOptions?, FixedWidthParallelOptions?, CancellationToken)"/>.</remarks>
+        /// <remarks>Carries the same contract as <see cref="AggregateFileAsync{TModel, TAccumulator}(string, FixedWidthReaderOptions?, CancellationToken)"/>.</remarks>
         public static Task<TAccumulator> AggregateAsync<TModel, TAccumulator>(
-            Stream stream, bool leaveOpen = false, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken cancellationToken = default)
+            Stream stream, bool leaveOpen = false, FixedWidthReaderOptions? options = null, CancellationToken cancellationToken = default)
             where TModel : IFixedWidthModel<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             ArgumentNullException.ThrowIfNull(stream);
             return ParallelStreamAggregator.RunAsync<TModel, GeneratedLineParser<TModel>, TAccumulator>(
-                default, stream, leaveOpen, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), cancellationToken);
+                default, stream, leaveOpen, FixedWidthReaderOptions.Validate(options), cancellationToken);
         }
 
         /// <summary>
@@ -172,15 +172,15 @@ namespace FixedWidthParser
         /// <typeparamref name="TAccumulator"/> across several threads. <paramref name="leaveOpen"/> controls
         /// whether the stream is disposed afterwards.
         /// </summary>
-        /// <remarks>Carries the same contract as <see cref="AggregateFileAsync{TModel, TAccumulator}(string, FixedWidthReaderOptions?, FixedWidthParallelOptions?, CancellationToken)"/>.</remarks>
+        /// <remarks>Carries the same contract as <see cref="AggregateFileAsync{TModel, TAccumulator}(string, FixedWidthReaderOptions?, CancellationToken)"/>.</remarks>
         /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a setter.</exception>
         public static Task<TAccumulator> AggregateAsync<TModel, TAccumulator>(
-            Stream stream, FixedWidthLayout<TModel> layout, bool leaveOpen = false, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken cancellationToken = default)
+            Stream stream, FixedWidthLayout<TModel> layout, bool leaveOpen = false, FixedWidthReaderOptions? options = null, CancellationToken cancellationToken = default)
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             ArgumentNullException.ThrowIfNull(stream);
             return ParallelStreamAggregator.RunAsync<TModel, LayoutLineParser<TModel>, TAccumulator>(
-                ReadableLayout(layout), stream, leaveOpen, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), cancellationToken);
+                ReadableLayout(layout), stream, leaveOpen, FixedWidthReaderOptions.Validate(options), cancellationToken);
         }
 
 
