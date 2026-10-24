@@ -26,6 +26,7 @@ namespace FixedWidthParser.Infrastructure
             Padding = padding;
             Format = format;
             Overflow = overflow;
+            FastDate = FastDate.TryCreate(format);
         }
 
         /// <summary>Which side a written value is aligned to.</summary>
@@ -39,6 +40,9 @@ namespace FixedWidthParser.Infrastructure
 
         /// <summary>The resolved overflow policy: <see cref="OverflowBehavior.Truncate"/> or <see cref="OverflowBehavior.Throw"/>.</summary>
         public OverflowBehavior Overflow { get; }
+
+        /// <summary><see cref="Format"/> compiled for <see cref="Infrastructure.FastDate"/>, or <see langword="null"/> when it cannot be.</summary>
+        internal FastDate? FastDate { get; }
 
         /// <summary>
         /// Writes the encoded <paramref name="content"/> into the column slice <paramref name="slice"/>,

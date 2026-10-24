@@ -47,7 +47,9 @@ namespace FixedWidthParser.Native.Writing
             try
             {
                 long total = formatter!.Rows * lineBytes;
-                using var handle = File.OpenHandle(Encoding.UTF8.GetString(path), FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.None, total);
+                // Asynchronous, though every write waits: Windows runs one synchronous I/O at a time on a handle,
+                // which would serialize the parallel batches.
+                using var handle = File.OpenHandle(Encoding.UTF8.GetString(path), FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.Asynchronous, total);
                 RandomAccess.SetLength(handle, total);
                 return Run(formatter, settings!, lineBytes, (first, count) => WriteBatch(handle, formatter, settings!, layout, first, count, lineBytes));
             }

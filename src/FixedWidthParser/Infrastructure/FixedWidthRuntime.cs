@@ -261,6 +261,17 @@ namespace FixedWidthParser.Infrastructure
         public static void FormatUtf8Value<TValue>(TValue value, Span<byte> slice, in FixedWidthContext context, ColumnFormatOptions options, string columnName)
             where TValue : IUtf8SpanFormattable, ISpanFormattable
         {
+            // The default format writes ASCII digits after the provider's negative sign, which DecimalSeparator
+            // being set guarantees is "-".
+            if ((typeof(TValue) == typeof(long) || typeof(TValue) == typeof(int)) && options.Format is null
+                && options.Alignment == Alignment.Right && context.DecimalSeparator != 0)
+            {
+                long integer = typeof(TValue) == typeof(int) ? Unsafe.As<TValue, int>(ref value) : Unsafe.As<TValue, long>(ref value);
+                if (FastInteger.TryFormatRight(integer, slice, (byte)options.Padding))
+                {
+                    return;
+                }
+            }
             if (TryFormatInto(value, slice, in context, options, out int written) && (context.IsUtf8 || Ascii.IsValid(slice[..written])))
             {
                 options.AlignInPlace(slice, written);
@@ -275,6 +286,18 @@ namespace FixedWidthParser.Infrastructure
             if (typeof(TValue) == typeof(double) && options.Format is null)
             {
                 return TryFormatDouble(Unsafe.As<TValue, double>(ref value), destination, in context, out written);
+            }
+            if (typeof(TValue) == typeof(DateOnly) && options.FastDate is { HasDate: true, HasTime: false } dateFormat)
+            {
+                return dateFormat.TryFormat(Unsafe.As<TValue, DateOnly>(ref value).ToDateTime(TimeOnly.MinValue), destination, in context, out written);
+            }
+            if (typeof(TValue) == typeof(TimeOnly) && options.FastDate is { HasDate: false } timeFormat)
+            {
+                return timeFormat.TryFormat(DateTime.MinValue + Unsafe.As<TValue, TimeOnly>(ref value).ToTimeSpan(), destination, in context, out written);
+            }
+            if (typeof(TValue) == typeof(DateTime) && options.FastDate is { } dateTimeFormat)
+            {
+                return dateTimeFormat.TryFormat(Unsafe.As<TValue, DateTime>(ref value), destination, in context, out written);
             }
             return value.TryFormat(destination, out written, options.Format, context.FormatProvider);
         }
