@@ -36,13 +36,15 @@ extern "C" {
 #define FW_PARSE_ERROR      -6
 
 /* Column types and their fw_column values. */
-#define FW_T_STRING    0 /* int32 offsets (length + 1) into data, UTF-8 */
+#define FW_T_STRING    0 /* int32 offsets (length + 1) into data, valid UTF-8: bytes invalid in the read
+                            encoding become U+FFFD */
 #define FW_T_INT64     1 /* int64 */
 #define FW_T_FLOAT64   2 /* double */
 #define FW_T_DECIMAL   3 /* int64 unscaled value: 10^-scale per unit; at most 18 digits */
 #define FW_T_DATE      4 /* int32 days since 1970-01-01 */
 #define FW_T_TIME      5 /* int64 microseconds since midnight */
-#define FW_T_TIMESTAMP 6 /* int64 microseconds since 1970-01-01T00:00:00, no time zone */
+#define FW_T_TIMESTAMP 6 /* int64 microseconds since 1970-01-01T00:00:00Z: a zone or offset in the text is
+                            applied, text without one is taken as UTC */
 
 #define FW_TRIM_BOTH     0
 #define FW_TRIM_TRAILING 1
