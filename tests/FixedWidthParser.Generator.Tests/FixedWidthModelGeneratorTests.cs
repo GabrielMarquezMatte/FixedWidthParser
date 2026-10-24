@@ -25,10 +25,10 @@ namespace FixedWidthParser.Generator.Tests
             var generated = Assert.Single(result.GeneratedSources);
             Assert.Contains("TryParse(global::System.ReadOnlySpan<byte> line, in global::FixedWidthParser.FixedWidthContext context", generated, StringComparison.Ordinal);
             Assert.Contains("if (line.Length < 18) { context.ReportShortLine(18); model = default!; return false; }", generated, StringComparison.Ordinal);
-            Assert.Contains("FixedWidthRuntime.String(line.Slice(0, 5), context)", generated, StringComparison.Ordinal);
-            Assert.Contains("FixedWidthRuntime.TryParse<int>(line.Slice(5, 3), context, out int __v1)) { context.ReportFailedColumn(\"Quantity\", 5, 3); model = default!; return false; }", generated, StringComparison.Ordinal);
-            Assert.Contains("FixedWidthRuntime.TryDouble(line.Slice(8, 5), context", generated, StringComparison.Ordinal);
-            Assert.Contains("FixedWidthRuntime.TryFloat(line.Slice(13, 5), context", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.String(line.Slice(0, 5), context, in __parse0)", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.TryParse<int>(line.Slice(5, 3), context, in __parse1, out int __v1)) { context.ReportFailedColumn(\"Quantity\", 5, 3); model = default!; return false; }", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.TryDouble(line.Slice(8, 5), context, in __parse2", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.TryFloat(line.Slice(13, 5), context, in __parse3", generated, StringComparison.Ordinal);
             Assert.DoesNotContain("ReadOnlySpan<char>", generated, StringComparison.Ordinal);
             Assert.Contains("Code = __v0", generated, StringComparison.Ordinal);
             Assert.Contains("Discount = __v3", generated, StringComparison.Ordinal);
@@ -81,9 +81,10 @@ namespace FixedWidthParser.Generator.Tests
             Assert.Empty(result.GeneratorDiagnostics);
             Assert.Empty(result.CompilationErrors);
             var generated = Assert.Single(result.GeneratedSources);
-            Assert.Contains("FixedWidthRuntime.IsBlank(line.Slice(5, 5), (byte)' ')", generated, StringComparison.Ordinal);
-            Assert.Contains("TryDateOnlyExact(line.Slice(10, 8), \"yyyyMMdd\", context", generated, StringComparison.Ordinal);
-            Assert.Contains("(byte)'0', global::FixedWidthParser.TrimMode.Leading", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.IsBlank(line.Slice(5, 5), in __parse1)", generated, StringComparison.Ordinal);
+            Assert.Contains("TryDateOnlyExact(line.Slice(10, 8), context, in __parse", generated, StringComparison.Ordinal);
+            Assert.Contains("global::FixedWidthParser.TrimMode.Trailing, \"yyyyMMdd\");", generated, StringComparison.Ordinal);
+            Assert.Contains("= new('0', global::FixedWidthParser.TrimMode.Leading", generated, StringComparison.Ordinal);
         }
 
         [Fact]

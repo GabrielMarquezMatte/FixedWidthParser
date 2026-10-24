@@ -6,7 +6,7 @@ namespace FixedWidthParser.Infrastructure
     /// devirtualizes <see cref="TryParse"/> into a direct call. Public only because it appears in the
     /// enumerator types; the library is its only implementer.
     /// </summary>
-    public interface IRecordLineParser<TModel>
+    public interface IRecordLineParser<TModel> where TModel : allows ref struct
     {
         /// <summary>Parses a buffered line into a model.</summary>
         bool TryParse(ReadOnlySpan<byte> line, in FixedWidthContext context, out TModel model);

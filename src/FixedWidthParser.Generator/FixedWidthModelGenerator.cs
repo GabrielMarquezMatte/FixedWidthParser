@@ -469,8 +469,8 @@ namespace FixedWidthParser.Generator
             return sb.ToString();
         }
 
-        // One converter instance per converter column (created once, shared by parse and format) and
-        // one ColumnFormatOptions per column, resolved at compile time.
+        // One converter instance per converter column (created once, shared by parse and format), and one
+        // ColumnParseOptions and one ColumnFormatOptions per column, resolved at compile time.
         private static void AppendFields(StringBuilder sb, string body, ModelInfo model)
         {
             var columns = model.Columns.AsImmutableArray();
@@ -482,6 +482,9 @@ namespace FixedWidthParser.Generator
                     sb.Append(body).Append("private static readonly ").Append(c.ConverterFqn)
                       .Append(" __converter").Append(i).Append(" = new ").Append(c.ConverterFqn).AppendLine("();");
                 }
+                sb.Append(body).Append("private static readonly global::FixedWidthParser.Infrastructure.ColumnParseOptions __parse").Append(i)
+                  .Append(" = new(").Append(SymbolDisplay.FormatLiteral(c.TrimChar, true)).Append(", ").Append(TrimModeLiteral(c.TrimMode))
+                  .Append(", ").Append(c.Format is null ? "null" : SymbolDisplay.FormatLiteral(c.Format, true)).AppendLine(");");
                 sb.Append(body).Append("private static readonly global::FixedWidthParser.Infrastructure.ColumnFormatOptions __options").Append(i)
                   .Append(" = new(").Append(AlignmentLiteral(c.Alignment)).Append(", ").Append(SymbolDisplay.FormatLiteral(c.Padding, true))
                   .Append(", ").Append(c.Format is null ? "null" : SymbolDisplay.FormatLiteral(c.Format, true))
@@ -529,7 +532,7 @@ namespace FixedWidthParser.Generator
 
                 // T?: a blank column assigns null without invoking the underlying parser.
                 sb.Append(stmt).Append(c.TypeFqn).Append("? __v").Append(i).AppendLine(";");
-                sb.Append(stmt).Append("if (").Append(RuntimeFqn).Append(".IsBlank(").Append(col).Append(", ").Append(ByteLiteral(c.TrimChar)).AppendLine("))");
+                sb.Append(stmt).Append("if (").Append(RuntimeFqn).Append(".IsBlank(").Append(col).Append(", in __parse").Append(i).AppendLine("))");
                 sb.Append(stmt).AppendLine("{");
                 sb.Append(stmt).Append("    __v").Append(i).AppendLine(" = null;");
                 sb.Append(stmt).AppendLine("}");
@@ -554,7 +557,7 @@ namespace FixedWidthParser.Generator
         // Emits the kind-specific parse statement for one column into a local named localName.
         private static void AppendColumnParse(StringBuilder sb, string stmt, ColumnInfo c, string col, int i, string localName)
         {
-            string trimArg = TrimArgSuffix(c);
+            string parse = ", in __parse" + i;
             string fail = ")) { context.ReportFailedColumn(" + SymbolDisplay.FormatLiteral(c.Name, true) + ", " + c.Start + ", " + c.Length
                           + "); model = default!; return false; }";
 
@@ -562,29 +565,29 @@ namespace FixedWidthParser.Generator
             {
                 case ColumnKind.Exact:
                     sb.Append(stmt).Append("if (!").Append(RuntimeFqn).Append('.').Append(ExactHelper(c.TypeFqn)).Append('(').Append(col)
-                      .Append(", ").Append(SymbolDisplay.FormatLiteral(c.Format!, true)).Append(", context, out var ").Append(localName).Append(trimArg).AppendLine(fail);
+                      .Append(", context").Append(parse).Append(", out var ").Append(localName).AppendLine(fail);
                     break;
                 case ColumnKind.String:
                     sb.Append(stmt).Append("string ").Append(localName)
-                      .Append(" = ").Append(RuntimeFqn).Append(".String(").Append(col).Append(", context").Append(trimArg).AppendLine(");");
+                      .Append(" = ").Append(RuntimeFqn).Append(".String(").Append(col).Append(", context").Append(parse).AppendLine(");");
                     break;
                 case ColumnKind.Double:
                     sb.Append(stmt).Append("if (!").Append(RuntimeFqn).Append(".TryDouble(").Append(col)
-                      .Append(", context, out double ").Append(localName).Append(trimArg).AppendLine(fail);
+                      .Append(", context").Append(parse).Append(", out double ").Append(localName).AppendLine(fail);
                     break;
                 case ColumnKind.Float:
                     sb.Append(stmt).Append("if (!").Append(RuntimeFqn).Append(".TryFloat(").Append(col)
-                      .Append(", context, out float ").Append(localName).Append(trimArg).AppendLine(fail);
+                      .Append(", context").Append(parse).Append(", out float ").Append(localName).AppendLine(fail);
                     break;
                 case ColumnKind.Utf8Parsable:
                 case ColumnKind.DecodedParsable:
                     sb.Append(stmt).Append("if (!").Append(RuntimeFqn).Append(c.Kind == ColumnKind.Utf8Parsable ? ".TryParse<" : ".TryParseDecoded<")
-                      .Append(c.TypeFqn).Append(">(").Append(col).Append(", context, out ").Append(c.TypeFqn).Append(' ').Append(localName).Append(trimArg).AppendLine(fail);
+                      .Append(c.TypeFqn).Append(">(").Append(col).Append(", context").Append(parse).Append(", out ").Append(c.TypeFqn).Append(' ').Append(localName).AppendLine(fail);
                     break;
                 case ColumnKind.Converter:
                     sb.Append(stmt).Append("if (!").Append(RuntimeFqn).Append(".TryConvert<").Append(c.TypeFqn).Append(", ").Append(c.ConverterFqn)
-                      .Append(">(").Append(col).Append(", context, __converter").Append(i).Append(", out ").Append(c.TypeFqn)
-                      .Append(' ').Append(localName).Append(trimArg).AppendLine(fail);
+                      .Append(">(").Append(col).Append(", context, __converter").Append(i).Append(parse).Append(", out ").Append(c.TypeFqn)
+                      .Append(' ').Append(localName).AppendLine(fail);
                     break;
                 default:
                     // Unsupported kinds were reported in Emit, which then skips generation.
@@ -664,15 +667,6 @@ namespace FixedWidthParser.Generator
         }
 
         // Trailing trim arguments for a runtime parse call, omitted for the default (space, trailing).
-        private static string TrimArgSuffix(ColumnInfo c)
-        {
-            if (c.TrimChar == ' ' && c.TrimMode == 0)
-            {
-                return string.Empty;
-            }
-            return ", " + ByteLiteral(c.TrimChar) + ", " + TrimModeLiteral(c.TrimMode);
-        }
-
         private static string ByteLiteral(char value)
         {
             return "(byte)" + SymbolDisplay.FormatLiteral(value, true);
