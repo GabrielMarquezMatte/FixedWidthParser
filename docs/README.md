@@ -6,6 +6,8 @@ a constraint; the numbers that justified it live here, so they can be re-run and
 
 - [writer-performance.md](writer-performance.md) — where a written line spends its time, and the
   formatting shortcuts that came out of it.
+- [reader-performance.md](reader-performance.md) — `double` parsing in comma cultures, the cache in
+  front of `StringPool`, and the read size the file engine kept.
 - [parallel-aggregate.md](parallel-aggregate.md) — how `AggregateFileAsync` and `AggregateAsync`
   scale with the number of workers.
 - [pipe-reader.md](pipe-reader.md) — why a `PipeReader` is read through `AsStream()` rather than

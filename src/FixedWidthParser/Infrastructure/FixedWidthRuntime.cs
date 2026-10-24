@@ -44,7 +44,7 @@ namespace FixedWidthParser.Infrastructure
         public static string String(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options)
         {
             var trimmed = TrimColumn(column, in options);
-            return context.StringPool is { } pool ? pool.GetOrAdd(trimmed, context.Encoding) : context.Encoding.GetString(trimmed);
+            return context.StringPool is { } pool ? Utf8StringCache.GetOrAdd(pool, trimmed, context.Encoding) : context.Encoding.GetString(trimmed);
         }
 
         /// <summary>Parses a <see cref="double"/> column, honoring the provider's decimal separator.</summary>
