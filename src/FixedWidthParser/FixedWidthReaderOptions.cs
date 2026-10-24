@@ -64,7 +64,10 @@ namespace FixedWidthParser
 
         internal FixedWidthContext Context => new() { FormatProvider = FormatProvider!, Encoding = Encoding!, StringPool = StringPool };
 
-        internal bool SkipsByteOrderMark => Encoding is null || Encoding.CodePage == Encoding.UTF8.CodePage;
+        // Overrides whether a leading UTF-8 byte order mark is skipped; null decides from the encoding.
+        internal bool? ByteOrderMark { get; init; }
+
+        internal bool SkipsByteOrderMark => ByteOrderMark ?? (Encoding is null || Encoding.CodePage == Encoding.UTF8.CodePage);
 
         internal static FixedWidthReaderOptions Validate(FixedWidthReaderOptions? options)
         {

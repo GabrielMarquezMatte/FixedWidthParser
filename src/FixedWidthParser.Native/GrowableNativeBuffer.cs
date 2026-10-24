@@ -22,6 +22,26 @@ namespace FixedWidthParser.Native
 
         internal ref T Last => ref _data[Count - 1];
 
+        internal ref T this[int index] => ref _data[index];
+
+        /// <summary>Drops every element from <paramref name="count"/> on.</summary>
+        internal void Truncate(int count)
+        {
+            Count = count;
+        }
+
+        /// <summary>Appends <paramref name="count"/> uninitialized elements and returns them to be filled.</summary>
+        internal Span<T> Append(int count)
+        {
+            if (count > _capacity - Count)
+            {
+                Grow(checked(Count + count));
+            }
+            var span = new Span<T>(_data + Count, count);
+            Count += count;
+            return span;
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void Add(T value)
         {

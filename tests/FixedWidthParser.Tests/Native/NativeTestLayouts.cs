@@ -60,7 +60,7 @@ namespace FixedWidthParser.Tests.Native
             return layout!;
         }
 
-        internal static NativeLayoutOptionsRaw Options(int lineLength = 0, int filler = 0)
+        internal static NativeLayoutOptionsRaw LayoutOptions(int lineLength = 0, int filler = 0)
         {
             return new NativeLayoutOptionsRaw { StructSize = sizeof(NativeLayoutOptionsRaw), LineLength = lineLength, Filler = filler };
         }
