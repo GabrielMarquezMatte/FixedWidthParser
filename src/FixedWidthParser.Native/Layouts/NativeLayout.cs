@@ -36,6 +36,12 @@ namespace FixedWidthParser.Native.Layouts
         internal int LineLength { get; }
         internal byte Filler { get; }
 
+        /// <summary>The index of the first column named <paramref name="name"/>, or -1.</summary>
+        internal int IndexOf(string? name)
+        {
+            return Array.FindIndex(Columns, c => string.Equals(c.Name, name, StringComparison.Ordinal));
+        }
+
         internal static unsafe int TryCreate(ReadOnlySpan<NativeColumnSpecRaw> specs, NativeLayoutOptionsRaw* options, out NativeLayout? layout)
         {
             layout = null;
