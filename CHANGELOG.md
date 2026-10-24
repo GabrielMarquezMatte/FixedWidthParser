@@ -31,6 +31,8 @@ in options objects and a `FixedWidthContext`, so later versions can add to them 
 | `IFixedWidthConverter<T>` + `IUtf8FixedWidthConverter<T>` with `IFormatProvider?` | `IFixedWidthConverter<T>` over bytes, with `in FixedWidthContext` |
 | `FixedWidthWriter<T>.Write*(StreamWriter or Stream, …, provider)` | `FixedWidth.Write*(Stream, …, FixedWidthLayout.FromAttributes<T>(), new FixedWidthWriterOptions { FormatProvider = …, Encoding = …, NewLine = … })` |
 | `catch (FormatException)` on a bad line | still works; the exception is now `FixedWidthParseException` |
+| `using FixedWidthParser.Attributes;`, `using FixedWidthParser.Processors;` | `using FixedWidthParser;` — `FixedColumnAttribute`, `Alignment`, `TrimMode`, `OverflowBehavior` and `IFixedWidthConverter<T>` moved to the root namespace |
+| `IFixedWidthConverter<T>.TryParse(field, …)`, `TryFormat(…, out int written)` | the same, with the parameters named `column` and `bytesWritten` |
 
 A UTF-8 file with multi-byte text whose layout counts characters no longer lines up: positions are
 bytes. Read files written in a single-byte encoding with that encoding (`Encoding.Latin1`, or
@@ -47,7 +49,7 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
 - Parallel aggregation: `FixedWidth.AggregateFileAsync`, for generated models and layouts alike,
   reads a file in byte-range partitions on several threads and fold each into an
   `IRecordAccumulator<TSelf, TModel>`, merged in file order. Every line is parsed exactly once, and
-  errors carry the same line number as a sequential read. `FixedWidthParallelOptions.DegreeOfParallelism`
+  errors carry the same line number as a sequential read. `FixedWidthReaderOptions.DegreeOfParallelism`
   sets the thread count. `AggregateAsync` does the same over a `Stream`: one thread
   reads chunks, the others parse them.
 - `FixedWidthReaderOptions`: `FormatProvider`, `Encoding`, `StringPool`, `BufferSize`,
@@ -85,6 +87,11 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
 
 ### Changed
 - **Breaking:** bytes only; see the table above. The column positions of a model are bytes.
+- **Breaking:** `FixedColumnAttribute`, `Alignment`, `TrimMode`, `OverflowBehavior` and
+  `IFixedWidthConverter<T>` moved to the `FixedWidthParser` namespace. The types public only for
+  generated code or allocation-free enumeration (`FixedWidthRuntime`, `ColumnFormatOptions`, the new
+  `ColumnParseOptions`, the record enumerables and enumerators, `IRecordLineParser<T>` and the
+  line-parser structs) moved to `FixedWidthParser.Infrastructure` and are hidden from IntelliSense.
 - **Breaking:** targets `net10.0` only. .NET 8 reaches end of support on 10 November 2026.
 - **Breaking:** a `null` format provider means the invariant culture for every column type, on parse and
   write. 1.x used it for `double`/`float` only and fell back to `CurrentCulture` for the rest.
