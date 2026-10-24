@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Text;
+using FixedWidthParser.Infrastructure;
 using csFastFloat;
 
 namespace FixedWidthParser.Processors
@@ -50,7 +51,7 @@ namespace FixedWidthParser.Processors
         }
 
         /// <summary>Parses a (not yet trimmed) column as <see cref="double"/>, honoring the context's provider.</summary>
-        public static bool TryParseDouble(ReadOnlySpan<byte> column, in FixedWidthContext context, out double value, byte trimChar = (byte)' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
+        public static bool TryParseDouble(ReadOnlySpan<byte> column, in FixedWidthContext context, out double value, byte trimChar = (byte)' ', TrimMode trimMode = TrimMode.Trailing)
         {
             // Also trim leading spaces: csFastFloat's characters_consumed does not reliably include
             // skipped leading whitespace, so a right-aligned column would otherwise fail the
@@ -67,7 +68,7 @@ namespace FixedWidthParser.Processors
         }
 
         /// <summary>Parses a (not yet trimmed) column as <see cref="float"/>, honoring the context's provider.</summary>
-        public static bool TryParseFloat(ReadOnlySpan<byte> column, in FixedWidthContext context, out float value, byte trimChar = (byte)' ', Attributes.TrimMode trimMode = Attributes.TrimMode.Trailing)
+        public static bool TryParseFloat(ReadOnlySpan<byte> column, in FixedWidthContext context, out float value, byte trimChar = (byte)' ', TrimMode trimMode = TrimMode.Trailing)
         {
             var trimmed = FixedWidthRuntime.TrimColumn(column, trimChar, trimMode).TrimStart((byte)' ');
             var formatProvider = context.FormatProvider;

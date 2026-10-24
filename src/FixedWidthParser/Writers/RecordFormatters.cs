@@ -1,8 +1,10 @@
+using FixedWidthParser.Infrastructure;
+
 namespace FixedWidthParser.Writers
 {
     /// <summary>
     /// Format strategy <see cref="RecordWriter"/> is specialized by, the write-side twin of
-    /// <see cref="Readers.IRecordLineParser{TModel}"/>: implemented by <see langword="struct"/> types so each
+    /// <see cref="Infrastructure.IRecordLineParser{TModel}"/>: implemented by <see langword="struct"/> types so each
     /// <c>(TModel, TFormatter)</c> pair is compiled once and the call devirtualizes.
     /// </summary>
     internal interface IRecordFormatter<TModel>

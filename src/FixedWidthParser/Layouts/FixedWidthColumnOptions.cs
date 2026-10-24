@@ -1,5 +1,3 @@
-using FixedWidthParser.Attributes;
-
 namespace FixedWidthParser
 {
     /// <summary>

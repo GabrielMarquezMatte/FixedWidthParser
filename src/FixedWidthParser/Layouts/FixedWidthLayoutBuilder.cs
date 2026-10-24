@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Formatters;
+using FixedWidthParser.Infrastructure;
 using FixedWidthParser.Parsers;
 using FixedWidthParser.Processors;
 

@@ -1,7 +1,6 @@
 using System.Text;
-using FixedWidthParser.Attributes;
 
-namespace FixedWidthParser.Formatters
+namespace FixedWidthParser.Infrastructure
 {
     /// <summary>
     /// Resolved formatting options for a column (alignment, padding, format string and an overflow

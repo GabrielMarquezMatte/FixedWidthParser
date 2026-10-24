@@ -1,4 +1,6 @@
-namespace FixedWidthParser.Readers
+using FixedWidthParser.Readers;
+
+namespace FixedWidthParser.Infrastructure
 {
     /// <summary>
     /// Asynchronous record enumerator over a stream. The line scan stays synchronous; only the refill

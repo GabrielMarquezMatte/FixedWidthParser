@@ -1,4 +1,4 @@
-namespace FixedWidthParser.Processors
+namespace FixedWidthParser
 {
     /// <summary>
     /// Per-property custom conversion for a fixed-width column, wired via

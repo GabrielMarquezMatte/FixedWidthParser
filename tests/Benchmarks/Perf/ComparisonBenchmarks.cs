@@ -1,9 +1,8 @@
 using System.Text;
 using BenchmarkDotNet.Attributes;
 using FileHelpers;
-using FlatFiles;
 using FixedWidthParser;
-using FixedWidthParser.Readers;
+using FlatFiles;
 using RecordParser.Builders.Reader;
 using RecordParser.Extensions;
 
@@ -14,13 +13,13 @@ namespace Benchmarks.Perf
     public sealed class FileHelpersRecord
     {
         [FieldFixedLength(10)]
-        [FieldTrim(TrimMode.Both)]
+        [FieldTrim(FileHelpers.TrimMode.Both)]
         public string? Name;
         [FieldFixedLength(5)]
-        [FieldTrim(TrimMode.Both)]
+        [FieldTrim(FileHelpers.TrimMode.Both)]
         public int Age;
         [FieldFixedLength(10)]
-        [FieldTrim(TrimMode.Both)]
+        [FieldTrim(FileHelpers.TrimMode.Both)]
         public double Salary;
     }
 #pragma warning restore CA1051

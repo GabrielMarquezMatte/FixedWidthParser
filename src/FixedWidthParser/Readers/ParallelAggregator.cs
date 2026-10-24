@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Runtime.ExceptionServices;
+using FixedWidthParser.Infrastructure;
 using Microsoft.Win32.SafeHandles;
 
 namespace FixedWidthParser.Readers

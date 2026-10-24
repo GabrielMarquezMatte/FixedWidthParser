@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
+using FixedWidthParser.Infrastructure;
 
 namespace FixedWidthParser.Readers
 {

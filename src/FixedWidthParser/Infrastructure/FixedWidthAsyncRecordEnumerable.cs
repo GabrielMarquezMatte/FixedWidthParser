@@ -1,4 +1,4 @@
-namespace FixedWidthParser.Readers
+namespace FixedWidthParser.Infrastructure
 {
     /// <summary>
     /// Asynchronous version of <see cref="FixedWidthRecordEnumerable{TModel, TParser}"/> for

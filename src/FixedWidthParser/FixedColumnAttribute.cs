@@ -1,4 +1,4 @@
-namespace FixedWidthParser.Attributes
+namespace FixedWidthParser
 {
     /// <summary>Alignment of the content within the column when writing.</summary>
     public enum Alignment

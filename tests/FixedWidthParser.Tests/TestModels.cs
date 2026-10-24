@@ -1,7 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
-using FixedWidthParser.Attributes;
-using FixedWidthParser.Processors;
+using FixedWidthParser.Infrastructure;
 
 namespace FixedWidthParser.Tests
 {

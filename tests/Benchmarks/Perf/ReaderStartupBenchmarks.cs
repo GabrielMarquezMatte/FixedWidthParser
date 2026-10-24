@@ -1,6 +1,5 @@
 using BenchmarkDotNet.Attributes;
 using FixedWidthParser;
-using FixedWidthParser.Readers;
 
 namespace Benchmarks.Perf
 {

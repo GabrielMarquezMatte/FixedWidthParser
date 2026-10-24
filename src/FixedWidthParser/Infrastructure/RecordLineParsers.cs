@@ -1,4 +1,4 @@
-namespace FixedWidthParser.Readers
+namespace FixedWidthParser.Infrastructure
 {
     /// <summary>
     /// Parse strategy the record enumerators are specialized by. Implemented by

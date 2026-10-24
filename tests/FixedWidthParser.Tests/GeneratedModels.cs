@@ -1,5 +1,3 @@
-using FixedWidthParser.Attributes;
-
 namespace FixedWidthParser.Tests
 {
     // Models that opt into the source-generated parser and writer. Each mirrors a reflection-based
