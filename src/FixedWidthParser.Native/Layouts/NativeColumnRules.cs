@@ -56,8 +56,20 @@ namespace FixedWidthParser.Native.Layouts
                 Nullable = spec.Nullable != 0,
                 Scale = spec.Scale,
                 Parse = new ColumnParseOptions(trimChar, TrimModeOf(spec.TrimMode), format),
-                FormatOptions = new ColumnFormatOptions(AlignmentOf(spec.Alignment, spec.Type), padding, format,
+                FormatOptions = new ColumnFormatOptions(AlignmentOf(spec.Alignment, spec.Type), padding, format ?? IsoFormat(spec.Type),
                     spec.Overflow == 1 ? OverflowBehavior.Truncate : OverflowBehavior.Throw),
+            };
+        }
+
+        // Without a format, dates and times are written as ISO 8601 to the second; reading without one accepts it back.
+        private static string? IsoFormat(int type)
+        {
+            return type switch
+            {
+                NativeType.Date => "yyyy-MM-dd",
+                NativeType.Time => "HH:mm:ss",
+                NativeType.Timestamp => "yyyy-MM-ddTHH:mm:ss",
+                _ => null,
             };
         }
 
