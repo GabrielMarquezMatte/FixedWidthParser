@@ -111,11 +111,13 @@ stream is read once and disposed unless the caller passed `leaveOpen`.
 
 ### Parallel aggregation
 
-`ParallelAggregator` (`Readers/ParallelAggregator.cs`) backs `AggregateFileAsync` on both paths. It
-opens the file once as a `SafeFileHandle`, cuts it into byte ranges (four per worker, 1 MB to 64 MB
-each), and lets workers pull ranges from a shared counter. Each worker reads its range with
-`RandomAccess.Read`, through its own `LineBufferState`, into its own accumulator; the caller merges the
-accumulators in range order and throws the first failure in file order.
+`ParallelAggregator` (`Readers/ParallelAggregator.cs`) backs `AggregateFileAsync` on both paths, and the
+native library's reads. It reads an `IRandomAccessSource` (a file handle, or native memory), cuts
+`[dataStart, length)` into byte ranges (four per worker, 1 MB to 64 MB each), and lets workers pull ranges
+from a shared counter. Each worker reads its range through its own `LineBufferState` into its own
+accumulator — or, for the native library, its own `ILineSink` — and the caller merges them in range order
+and throws the first failure in file order. The accumulator and sink loops are twins on purpose: folding
+the accumulator into a generic sink cost one-call reads about 40% under dynamic PGO.
 
 A line belongs to the range its first byte falls in, the byte after the previous line break, so a
 byte order mark belongs to line 1. A worker starts one byte before its range, skips the line it lands
@@ -191,6 +193,37 @@ type, overflow, ASCII padding — and reports diagnostics `FWP001`–`FWP012` in
 for an invalid model. Otherwise it writes `TryParse` and `TryFormat` as straight-line code: one
 `FixedWidthRuntime` call per column. Each column's settings become two `static readonly` fields, a
 `ColumnParseOptions` and a `ColumnFormatOptions`, passed to the helpers by `in`.
+
+## The native library
+
+`src/FixedWidthParser.Native` is published with NativeAOT as a shared library with a C ABI
+(`include/fixedwidth.h`), following ExcelReader.Native: `[UnmanagedCallersOnly]` wrappers in `Exports*.cs`
+that only check pointers, over a span-based `*Api` layer the tests drive; opaque handles in a
+`NativeHandleTable` that never reissues an id; a per-thread last error; every optional input in a
+`struct_size`-versioned options struct. It uses the core through `InternalsVisibleTo` and adds nothing to
+its public API.
+
+```
+fw_column_spec[] -> NativeLayout -> ParallelAggregator -> TableSink per partition -> fw_table
+                    (validated,      (byte ranges,         (a ColumnBuilder per       or Arrow
+                     immutable)       header skipped)       column, native buffers)
+```
+
+There is no model type: a `NativeLayout` holds each column's `ColumnParseOptions` and
+`ColumnFormatOptions`, and a `ColumnBuilder` parses its slice of each line with the same
+`FixedWidthRuntime` helpers generated code calls, appending to `GrowableNativeBuffer`s (`int64`,
+`double`, `int32` days or string offsets, UTF-8 bytes, a validity bitmap created on the first null). A line
+rejected midway truncates the columns it already filled. A partitioned read merges by adopting the
+following partition's builders; publishing concatenates each column once. The Arrow export moves those
+buffers into `ArrowArray`s without a copy, except DECIMAL, widened to 128 bits.
+
+Writing formats a caller's `fw_table` through the layout. Every line has the same length, so the output
+size and each batch's offset are known up front: batches format in parallel straight into the output
+buffer, or into a pooled buffer written at its offset with `RandomAccess.Write`, and the bytes equal a
+serial write.
+
+`python/` binds the C ABI with `ctypes`; `fixedwidth.hpp` wraps it for C++23. The NativeSmoke C program
+pins every struct's layout with static asserts.
 
 ## Public surface
 

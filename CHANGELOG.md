@@ -61,6 +61,15 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
   `ColumnLength` and `RawValue`. A short line says how long it is and how long the layout needs it to
   be. A line that parses pays nothing for this: a failed line is parsed again to find the column.
 - `FixedWidthReaderOptions.OnParseError`: return `true` to skip a line that fails to parse.
+- `FixedWidthParser.Native`: the library published with NativeAOT as a shared library with a C ABI
+  (`fixedwidth.h`), for languages without a .NET runtime. Layouts are described at run time
+  (`fw_layout_create`), including implied decimals (`scale`) for vendor formats such as B3's COTAHIST.
+  Reads fill a columnar `fw_table` or Arrow C Data Interface arrays and streams, in parallel by byte range,
+  with `header_lines` and `skip_invalid`; writes take a columnar table and are byte-identical whatever the
+  thread count. Not on NuGet.
+- The `fixedwidth` Python package over it (NumPy views, pyarrow, pandas, polars), 52 times faster than
+  `pandas.read_fwf` on a 1,000,000-line COTAHIST-shaped file, and a header-only C++23 wrapper
+  (`fixedwidth.hpp`).
 - `ref struct` models on `Read`, `ReadFile`, `ReadAsync`, `ReadFileAsync`, `AggregateFileAsync` and
   `AggregateAsync`, generated and through a layout. The enumerators parse a line when `Current` is
   read, so reading it twice parses twice; with `OnParseError` set, each line is parsed once more to
