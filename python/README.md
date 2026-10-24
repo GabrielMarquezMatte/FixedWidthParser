@@ -37,12 +37,22 @@ df = fw.read_pandas("COTAHIST_A2023.TXT", layout, options)
 
 A line that fails to parse raises `fw.ParseError` with `line_number` and `column`, unless `skip_invalid` is set.
 
+`fw.Table` maps a column name to a NumPy array (a list for strings), and has `num_rows`, `column_names`,
+`lines_read`, `lines_skipped`, `validity(name)` (a bool array, `True` where the row holds a value, or `None`
+when the column has no nulls) and `to_arrow()`, which shares the native buffers. Without pyarrow,
+`read_polars` reads sequentially through the Arrow stream.
+
 ## Columns
 
 `fw.Column(name, start, length, type, *, nullable, scale, format, trim_char, trim_mode, alignment, padding, overflow)`.
 Positions are bytes. Types: `fw.String`, `fw.Int64`, `fw.Float64`, `fw.Decimal` (int64 unscaled, Arrow
 `decimal128(18, scale)`), `fw.Date`, `fw.Time`, `fw.Timestamp`. `scale` is the number of implied decimals:
 `0000000123456` with `scale=2` reads as `1234.56`. `format` uses .NET date syntax (`yyyyMMdd`, `HHmmss`).
+`trim_mode`, `alignment` and `overflow` take `fw.TrimMode`, `fw.Alignment` and `fw.Overflow`.
+
+`fw.Layout(columns, fw.LayoutOptions(line_length=..., filler=...))` sets how written lines are laid out:
+`line_length` past the last column pads each line, and `filler` (default a space) fills the gaps between
+columns.
 
 ## Writing
 
@@ -53,7 +63,8 @@ data = fw.write_bytes(df, layout)
 
 Takes pandas, polars, pyarrow or anything with `__arrow_c_stream__` (needs pyarrow), matching columns by name.
 `padding="0"` writes zero-padded numbers with the sign leftmost; a null writes as its column filled with
-`trim_char`. Parallel writes are byte-identical to serial ones.
+`trim_char`. Parallel writes are byte-identical to serial ones. `fw.WriteOptions` also takes `encoding`,
+`newline` (default `"\n"`) and `batch_rows`.
 
 A `fw.Decimal` column stores its value times `10**scale` as an int64. Decimals and integers are scaled
 exactly, and a decimal with more digits than `scale` raises. Floats round half to even to `scale`.

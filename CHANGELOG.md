@@ -69,7 +69,7 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
   thread count. Not on NuGet.
 - The `fixedwidth` Python package over it (NumPy views, pyarrow, pandas, polars), 52 times faster than
   `pandas.read_fwf` on a 1,000,000-line COTAHIST-shaped file, and a header-only C++23 wrapper
-  (`fixedwidth.hpp`).
+  (`fixedwidth.hpp`) that also maps structs to columns through `FixedWidthMapper<T>`.
 - `ref struct` models on `Read`, `ReadFile`, `ReadAsync`, `ReadFileAsync`, `AggregateFileAsync` and
   `AggregateAsync`, generated and through a layout. The enumerators parse a line when `Current` is
   read, so reading it twice parses twice; with `OnParseError` set, each line is parsed once more to
@@ -124,7 +124,12 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
   scaled integer, about 5x faster, with the same bytes. A line of a string, an `int` and a `double`
   writes about 2x faster.
 - The generator targets `netstandard2.0`, so Visual Studio's .NET Framework compiler host can load it.
-- The library and generator build with warnings as errors.
+- `double`/`float` columns parse through csFastFloat under any culture whose decimal separator is one
+  ASCII character and whose negative sign is `-`, not only `'.'`: a pt-BR read is about 40% faster
+  ([docs/reader-performance.md](docs/reader-performance.md)).
+- Reading with a `StringPool` checks a small per-thread cache before the pool, about halving the cost of
+  a pooled read.
+- The library, generator and native library build with warnings as errors.
 
 ### Removed
 - **Breaking:** `FixedWidthParser<T>`, `FixedWidthReader<T>` and `FixedWidthWriter<T>`. Pass
@@ -151,7 +156,10 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
 - `double`/`float` columns with a thousands separator under a `'.'` culture (`"1,234.56"`) failed
   instead of parsing.
 - `double`/`float` columns under a `','` culture could silently return a truncated value: `"1.234,50"`
-  became `1.0`. The fast path is now trusted only for `'.'`, and only when it consumes the whole field.
+  became `1.0`. The fast path is now trusted only when it consumes the whole field.
+- A generated model skipped `[FixedColumn]` members declared on a base class: it left them at their
+  default when reading and wrote filler over their columns. Inherited columns are now generated as
+  reflection maps them, with an override or a `new` member replacing the one it hides.
 - The decimal-separator cache thrashed when two format providers alternated.
 
 ## [1.1.1]

@@ -6,7 +6,7 @@ rewrites — see [ARCHITECTURE.md](ARCHITECTURE.md) for the shape of the codebas
 
 ## Build expectations
 
-- **Warnings are errors in `src/`.** Both library projects set `TreatWarningsAsErrors`, under a
+- **Warnings are errors in `src/`.** The library, generator and native projects set `TreatWarningsAsErrors`, under a
   curated `AnalysisMode=All` analyzer set (NetAnalyzers, Meziantou, SonarAnalyzer, Roslynator and
   others, in `Directory.Build.props`). A PR that doesn't build clean locally won't build clean in CI
   either — run a full build before pushing:
@@ -20,8 +20,8 @@ rewrites — see [ARCHITECTURE.md](ARCHITECTURE.md) for the shape of the codebas
   public, update `src/FixedWidthParser/PublicAPI.Unshipped.txt`; the IDE's code fix writes the line for
   you. At a release, the unshipped entries move to `PublicAPI.Shipped.txt`.
 
-- **Minor versions don't break callers.** The policy is in the README's
-  [Versioning](docs/guide/versioning.md) section; in practice:
+- **Minor versions don't break callers.** The policy is in
+  [docs/guide/versioning.md](docs/guide/versioning.md); in practice:
   - `IFixedWidthModel<TSelf>` and `IFixedWidthConverter<T>` are implemented by users, so a minor
     version never adds a member to them. New information reaches them as a new property on
     `FixedWidthContext`.
@@ -43,8 +43,22 @@ rewrites — see [ARCHITECTURE.md](ARCHITECTURE.md) for the shape of the codebas
   Codecov from the Linux leg.
 
   A change to one path needs the same change, and a parity test, on its twin: the runtime and
-  generated paths, the sync and async readers, and the file and stream aggregators
-  ([STYLEGUIDE.md § Twins](STYLEGUIDE.md#twins)). Line-splitting code reads untrusted input; read
+  generated paths, the sync and async readers and writers, the sequential and parallel reads, and the
+  aggregator's model and sink loops ([STYLEGUIDE.md § Twins](STYLEGUIDE.md#twins)).
+
+- **The native library, its bindings and NativeAOT have their own checks.** A change under
+  `src/FixedWidthParser.Native`, `python/` or `cpp/` needs the Python, C and C++ tests; a change to the
+  fluent layout or anything it reaches needs the AOT smoke app to publish without an `IL2xxx`/`IL3xxx`
+  warning and to run:
+
+  ```bash
+  python python/scripts/build_native.py          # publishes the library into python/src/fixedwidth/_lib
+  pip install -e "python[dev,pandas,polars]" && pytest python/tests
+  cmake -S cpp -B build/cpp && cmake --build build/cpp && ctest --test-dir build/cpp --output-on-failure
+  dotnet publish tests/AotSmoke/AotSmoke.csproj -c Release -r win-x64 -p:IlcTreatWarningsAsErrors=true
+  ```
+
+  On Windows, run the CMake steps from a Visual Studio developer prompt, which puts `lib.exe` on the path. Line-splitting code reads untrusted input; read
   [STYLEGUIDE.md § Untrusted Input](STYLEGUIDE.md#untrusted-input) before touching it.
 
 - **Performance claims come with numbers.** This is a performance-sensitive library: avoid
@@ -73,8 +87,10 @@ mood, lowercase summary, no trailing period. Common types in this repo: `feat`, 
 - One focused change per PR — don't batch unrelated fixes into one commit or one PR.
 - If a change is user-visible (new API, behavior change, performance claim), add it to
   [CHANGELOG.md](CHANGELOG.md) and mention it in the PR description.
-- CI builds and tests on Linux, Windows, and macOS, and runs CodeQL and the benchmark comparison — a
-  change that only builds on one OS isn't ready to merge.
+- CI builds and tests on Linux, Windows, and macOS: the .NET suite, and the native library with its
+  Python, C and C++ bindings. It also validates the package against the last release, audits
+  dependencies, publishes and runs the NativeAOT smoke app, and runs CodeQL and the benchmark
+  comparison. A change that only builds on one OS isn't ready to merge.
 
 ## Reporting bugs / requesting features
 
