@@ -30,6 +30,7 @@ Upgrading from 1.x? See [the 2.0 entry in the changelog](CHANGELOG.md#200).
 - **Culture-aware** numbers and dates, including `double`/`float` via csFastFloat and any `IUtf8SpanParsable`/`ISpanParsable` type.
 - **Layout validation** when a layout is built or generated: negative `Start`, non-positive `Length`, overlapping columns and non-ASCII padding fail clearly.
 - **`ref struct` model support** on single-line parsing and formatting, on every reader and on parallel aggregation.
+- **Python and C/C++** through a NativeAOT library with a C ABI: columnar and Arrow reads, parallel reads and writes. See [Python and C/C++](#python-and-cc).
 
 ## Requirements
 
@@ -360,13 +361,39 @@ dotnet run -c Release --project tests/Benchmarks/Benchmarks.csproj -- --filter "
 
 Benchmark reports are written to `tests/Benchmarks/BenchmarkDotNet.Artifacts/results`.
 
+## Python and C/C++
+
+`src/FixedWidthParser.Native` publishes the library as a NativeAOT shared library with a C ABI
+(`include/fixedwidth.h`), so Python and C/C++ read and write fixed-width files without a .NET runtime. The
+caller describes the columns at run time; a read fills one native buffer per column, or Arrow arrays, in
+parallel by byte range.
+
+```python
+import fixedwidth as fw
+
+layout = fw.Layout([
+    fw.Column("codneg", 12, 12, fw.String),
+    fw.Column("preabe", 56, 13, fw.Float64, scale=2),   # B3 N(11)V99: two implied decimals
+])
+df = fw.read_pandas("COTAHIST_A2023.TXT", layout, fw.ReadOptions(header_lines=1, skip_invalid=True))
+```
+
+On a 1,000,000-line COTAHIST-shaped file, `fw.read_pandas` is 52 times faster than `pandas.read_fwf`
+([measurements](docs/python-benchmarks.md)). The [Python README](python/README.md), the
+[C++ README](cpp/README.md) and the [native library README](src/FixedWidthParser.Native/README.md) cover
+the rest.
+
 ## Project Layout
 
 ```text
 src/FixedWidthParser/                  The library
 src/FixedWidthParser.Generator/        Roslyn source generator
-tests/FixedWidthParser.Tests/          Runtime, reader, writer and parity tests
+src/FixedWidthParser.Native/           NativeAOT C ABI, its C and C++ headers
+python/                                The fixedwidth Python package
+cpp/                                   CMake target and tests for the C++ wrapper
+tests/FixedWidthParser.Tests/          Runtime, reader, writer, parity and native-layer tests
 tests/FixedWidthParser.Generator.Tests/Source generator tests
+tests/FixedWidthParser.NativeSmoke/    C consumer of the native library
 tests/Benchmarks/                      BenchmarkDotNet benchmarks
 tests/AotSmoke/                        Fluent layout published with NativeAOT
 docs/                                  Measurements behind design decisions
