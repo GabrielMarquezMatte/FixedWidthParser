@@ -57,7 +57,7 @@ namespace FixedWidthParser.Native.Reading
             }
             catch (FixedWidthParseException ex)
             {
-                NativeApi.SetParseError(ex, Array.FindIndex(layout.Columns, c => string.Equals(c.Name, ex.ColumnName, StringComparison.Ordinal)));
+                NativeApi.SetParseError(ex, layout.IndexOf(ex.ColumnName));
                 return NativeStatus.ParseError;
             }
             catch (Exception ex)
