@@ -1,4 +1,4 @@
-using FixedWidthParser.Parsers;
+using System.Diagnostics.CodeAnalysis;
 
 namespace FixedWidthParser.Readers
 {
@@ -10,13 +10,17 @@ namespace FixedWidthParser.Readers
     /// </summary>
     public sealed class FixedWidthReader<TModel> where TModel : new()
     {
-        private readonly FixedWidthParser<TModel> _parser = new();
+        private readonly FixedWidthLayout<TModel> _layout;
         private readonly FixedWidthReaderOptions _options;
         private readonly FixedWidthContext _context;
 
         /// <summary>Creates a reader; <see langword="null"/> options use every default.</summary>
+        [RequiresUnreferencedCode("Attribute layouts reflect over TModel's public properties and fields, which trimming may remove.")]
+        [RequiresDynamicCode("Attribute layouts compile member accessors at runtime (Expression.Compile / MakeGenericType).")]
         public FixedWidthReader(FixedWidthReaderOptions? options = null)
         {
+            _layout = FixedWidthLayout.FromAttributes<TModel>();
+            _layout.EnsureCanRead();
             _options = FixedWidthReaderOptions.Validate(options);
             _context = _options.Context;
         }
@@ -24,35 +28,35 @@ namespace FixedWidthParser.Readers
         /// <summary>Parses a single line, without its line break, using the reader's options.</summary>
         public bool TryParse(ReadOnlySpan<byte> line, out TModel model)
         {
-            return _parser.TryParse(line, in _context, out model);
+            return _layout.TryParse(line, in _context, out model);
         }
 
         /// <summary>Reads from a stream, once. <paramref name="leaveOpen"/> controls whether the stream is disposed when iteration ends.</summary>
-        public FixedWidthRecordEnumerable<TModel, ReflectionLineParser<TModel>> Read(Stream stream, bool leaveOpen = false)
+        public FixedWidthRecordEnumerable<TModel, LayoutLineParser<TModel>> Read(Stream stream, bool leaveOpen = false)
         {
             ArgumentNullException.ThrowIfNull(stream);
-            return new(new ReflectionLineParser<TModel>(_parser), stream, ownsStream: !leaveOpen, _options);
+            return new(new LayoutLineParser<TModel>(_layout), stream, ownsStream: !leaveOpen, _options);
         }
 
         /// <summary>Reads from a file, reopening it on each enumeration.</summary>
-        public FixedWidthRecordEnumerable<TModel, ReflectionLineParser<TModel>> ReadFile(string path)
+        public FixedWidthRecordEnumerable<TModel, LayoutLineParser<TModel>> ReadFile(string path)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
-            return new(new ReflectionLineParser<TModel>(_parser), path, _options);
+            return new(new LayoutLineParser<TModel>(_layout), path, _options);
         }
 
         /// <summary>Reads from a stream via <c>await foreach</c>, once. <paramref name="leaveOpen"/> controls whether the stream is disposed when iteration ends.</summary>
-        public FixedWidthAsyncRecordEnumerable<TModel, ReflectionLineParser<TModel>> ReadAsync(Stream stream, bool leaveOpen = false)
+        public FixedWidthAsyncRecordEnumerable<TModel, LayoutLineParser<TModel>> ReadAsync(Stream stream, bool leaveOpen = false)
         {
             ArgumentNullException.ThrowIfNull(stream);
-            return new(new ReflectionLineParser<TModel>(_parser), stream, ownsStream: !leaveOpen, _options);
+            return new(new LayoutLineParser<TModel>(_layout), stream, ownsStream: !leaveOpen, _options);
         }
 
         /// <summary>Reads from a file via <c>await foreach</c> with asynchronous I/O, reopening it on each enumeration.</summary>
-        public FixedWidthAsyncRecordEnumerable<TModel, ReflectionLineParser<TModel>> ReadFileAsync(string path)
+        public FixedWidthAsyncRecordEnumerable<TModel, LayoutLineParser<TModel>> ReadFileAsync(string path)
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
-            return new(new ReflectionLineParser<TModel>(_parser), path, _options);
+            return new(new LayoutLineParser<TModel>(_layout), path, _options);
         }
 
         /// <summary>
@@ -69,8 +73,8 @@ namespace FixedWidthParser.Readers
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
-            return ParallelAggregator.RunAsync<TModel, ReflectionLineParser<TModel>, TAccumulator>(
-                new ReflectionLineParser<TModel>(_parser), path, _options, FixedWidthParallelOptions.Validate(parallel), ct);
+            return ParallelAggregator.RunAsync<TModel, LayoutLineParser<TModel>, TAccumulator>(
+                new LayoutLineParser<TModel>(_layout), path, _options, FixedWidthParallelOptions.Validate(parallel), ct);
         }
 
         /// <summary>
@@ -84,8 +88,8 @@ namespace FixedWidthParser.Readers
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             ArgumentNullException.ThrowIfNull(stream);
-            return ParallelStreamAggregator.RunAsync<TModel, ReflectionLineParser<TModel>, TAccumulator>(
-                new ReflectionLineParser<TModel>(_parser), stream, leaveOpen, _options, FixedWidthParallelOptions.Validate(parallel), ct);
+            return ParallelStreamAggregator.RunAsync<TModel, LayoutLineParser<TModel>, TAccumulator>(
+                new LayoutLineParser<TModel>(_layout), stream, leaveOpen, _options, FixedWidthParallelOptions.Validate(parallel), ct);
         }
     }
 }

@@ -1,5 +1,3 @@
-using FixedWidthParser.Parsers;
-
 namespace FixedWidthParser.Readers
 {
     /// <summary>
@@ -17,20 +15,20 @@ namespace FixedWidthParser.Readers
     // Strategy structs are plumbing for the generic enumerators; they are never compared, so
     // value equality is meaningless for them.
 #pragma warning disable CA1815 // Override equals and operator equals on value types
-    /// <summary>Reflection-based parse strategy: forwards to a runtime <see cref="FixedWidthParser{TModel}"/>.</summary>
-    public readonly struct ReflectionLineParser<TModel> : IRecordLineParser<TModel> where TModel : new()
+    /// <summary>Layout parse strategy: forwards to a <see cref="FixedWidthLayout{TModel}"/>, built from attributes or fluently.</summary>
+    public readonly struct LayoutLineParser<TModel> : IRecordLineParser<TModel>
     {
-        private readonly FixedWidthParser<TModel> _parser;
+        private readonly FixedWidthLayout<TModel> _layout;
 
-        internal ReflectionLineParser(FixedWidthParser<TModel> parser)
+        internal LayoutLineParser(FixedWidthLayout<TModel> layout)
         {
-            _parser = parser;
+            _layout = layout;
         }
 
         /// <inheritdoc />
         public bool TryParse(ReadOnlySpan<byte> line, in FixedWidthContext context, out TModel model)
         {
-            return _parser.TryParse(line, in context, out model);
+            return _layout.TryParse(line, in context, out model);
         }
     }
 

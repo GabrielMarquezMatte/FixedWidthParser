@@ -67,12 +67,28 @@ namespace FixedWidthParser
             return new(default, stream, ownsStream: !leaveOpen, FixedWidthReaderOptions.Validate(options));
         }
 
+        /// <summary>Reads from a stream through <paramref name="layout"/>, once. <paramref name="leaveOpen"/> controls whether the stream is disposed when iteration ends.</summary>
+        /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a setter.</exception>
+        public static FixedWidthRecordEnumerable<TModel, LayoutLineParser<TModel>> Read<TModel>(Stream stream, FixedWidthLayout<TModel> layout, bool leaveOpen = false, FixedWidthReaderOptions? options = null)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            return new(ReadableLayout(layout), stream, ownsStream: !leaveOpen, FixedWidthReaderOptions.Validate(options));
+        }
+
         /// <summary>Reads from a file, reopening it on each enumeration.</summary>
         public static FixedWidthRecordEnumerable<TModel, GeneratedLineParser<TModel>> ReadFile<TModel>(string path, FixedWidthReaderOptions? options = null)
             where TModel : IFixedWidthModel<TModel>
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
             return new(default, path, FixedWidthReaderOptions.Validate(options));
+        }
+
+        /// <summary>Reads from a file through <paramref name="layout"/>, reopening it on each enumeration.</summary>
+        /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a setter.</exception>
+        public static FixedWidthRecordEnumerable<TModel, LayoutLineParser<TModel>> ReadFile<TModel>(string path, FixedWidthLayout<TModel> layout, FixedWidthReaderOptions? options = null)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(path);
+            return new(ReadableLayout(layout), path, FixedWidthReaderOptions.Validate(options));
         }
 
         /// <summary>Reads from a stream via <c>await foreach</c>, once. <paramref name="leaveOpen"/> controls whether the stream is disposed when iteration ends.</summary>
@@ -83,12 +99,28 @@ namespace FixedWidthParser
             return new(default, stream, ownsStream: !leaveOpen, FixedWidthReaderOptions.Validate(options));
         }
 
+        /// <summary>Reads from a stream through <paramref name="layout"/> via <c>await foreach</c>, once. <paramref name="leaveOpen"/> controls whether the stream is disposed when iteration ends.</summary>
+        /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a setter.</exception>
+        public static FixedWidthAsyncRecordEnumerable<TModel, LayoutLineParser<TModel>> ReadAsync<TModel>(Stream stream, FixedWidthLayout<TModel> layout, bool leaveOpen = false, FixedWidthReaderOptions? options = null)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            return new(ReadableLayout(layout), stream, ownsStream: !leaveOpen, FixedWidthReaderOptions.Validate(options));
+        }
+
         /// <summary>Reads from a file via <c>await foreach</c> with asynchronous I/O, reopening it on each enumeration.</summary>
         public static FixedWidthAsyncRecordEnumerable<TModel, GeneratedLineParser<TModel>> ReadFileAsync<TModel>(string path, FixedWidthReaderOptions? options = null)
             where TModel : IFixedWidthModel<TModel>
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
             return new(default, path, FixedWidthReaderOptions.Validate(options));
+        }
+
+        /// <summary>Reads from a file through <paramref name="layout"/> via <c>await foreach</c> with asynchronous I/O, reopening it on each enumeration.</summary>
+        /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a setter.</exception>
+        public static FixedWidthAsyncRecordEnumerable<TModel, LayoutLineParser<TModel>> ReadFileAsync<TModel>(string path, FixedWidthLayout<TModel> layout, FixedWidthReaderOptions? options = null)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(path);
+            return new(ReadableLayout(layout), path, FixedWidthReaderOptions.Validate(options));
         }
 
         /// <summary>
@@ -107,6 +139,21 @@ namespace FixedWidthParser
         }
 
         /// <summary>
+        /// Reads a file through <paramref name="layout"/> across several threads and folds every record into
+        /// a <typeparamref name="TAccumulator"/>, one instance per partition, merged in file order.
+        /// </summary>
+        /// <remarks>Carries the same contract as <see cref="AggregateFileAsync{TModel, TAccumulator}(string, FixedWidthReaderOptions?, FixedWidthParallelOptions?, CancellationToken)"/>.</remarks>
+        /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a setter.</exception>
+        public static Task<TAccumulator> AggregateFileAsync<TModel, TAccumulator>(
+            string path, FixedWidthLayout<TModel> layout, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken ct = default)
+            where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
+        {
+            ArgumentException.ThrowIfNullOrEmpty(path);
+            return ParallelAggregator.RunAsync<TModel, LayoutLineParser<TModel>, TAccumulator>(
+                ReadableLayout(layout), path, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), ct);
+        }
+
+        /// <summary>
         /// Reads a stream once and folds every record into a <typeparamref name="TAccumulator"/> across
         /// several threads. <paramref name="leaveOpen"/> controls whether the stream is disposed afterwards.
         /// </summary>
@@ -119,6 +166,29 @@ namespace FixedWidthParser
             ArgumentNullException.ThrowIfNull(stream);
             return ParallelStreamAggregator.RunAsync<TModel, GeneratedLineParser<TModel>, TAccumulator>(
                 default, stream, leaveOpen, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), ct);
+        }
+
+        /// <summary>
+        /// Reads a stream once through <paramref name="layout"/> and folds every record into a
+        /// <typeparamref name="TAccumulator"/> across several threads. <paramref name="leaveOpen"/> controls
+        /// whether the stream is disposed afterwards.
+        /// </summary>
+        /// <remarks>Carries the same contract as <see cref="AggregateFileAsync{TModel, TAccumulator}(string, FixedWidthReaderOptions?, FixedWidthParallelOptions?, CancellationToken)"/>.</remarks>
+        /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a setter.</exception>
+        public static Task<TAccumulator> AggregateAsync<TModel, TAccumulator>(
+            Stream stream, FixedWidthLayout<TModel> layout, bool leaveOpen = false, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken ct = default)
+            where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            return ParallelStreamAggregator.RunAsync<TModel, LayoutLineParser<TModel>, TAccumulator>(
+                ReadableLayout(layout), stream, leaveOpen, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), ct);
+        }
+
+        private static LayoutLineParser<TModel> ReadableLayout<TModel>(FixedWidthLayout<TModel> layout)
+        {
+            ArgumentNullException.ThrowIfNull(layout);
+            layout.EnsureCanRead();
+            return new LayoutLineParser<TModel>(layout);
         }
     }
 }
