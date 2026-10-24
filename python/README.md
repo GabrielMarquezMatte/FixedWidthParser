@@ -55,6 +55,10 @@ Takes pandas, polars, pyarrow or anything with `__arrow_c_stream__` (needs pyarr
 `padding="0"` writes zero-padded numbers with the sign leftmost; a null writes as its column filled with
 `trim_char`. Parallel writes are byte-identical to serial ones.
 
+A `fw.Decimal` column stores its value times `10**scale` as an int64. Decimals and integers are scaled
+exactly, and a decimal with more digits than `scale` raises. Floats round half to even to `scale`.
+A value that is NaN, infinite or outside int64 once scaled raises before anything is written.
+
 ## Building from source
 
     python python/scripts/build_native.py      # publishes the library into src/fixedwidth/_lib
