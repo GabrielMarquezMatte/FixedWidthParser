@@ -1,5 +1,4 @@
 using System.Text;
-using FixedWidthParser.Writers;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
@@ -78,7 +77,7 @@ namespace FixedWidthParser.Tests
 
             FixedWidth.WriteMany(stream, People, FixedWidthLayout.FromAttributes<PersonModel>(), Lf);
 
-            Assert.Equal(WriteMany(new FixedWidthWriter<PersonModel>(Lf), (IEnumerable<PersonModel>)People), Decode(stream));
+            Assert.Equal(WriteMany(FixedWidthLayout.FromAttributes<PersonModel>(), (IEnumerable<PersonModel>)People, Lf), Decode(stream));
         }
 
         [Fact]

@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Text;
 using FixedWidthParser.Attributes;
 using FixedWidthParser.Formatters;
-using FixedWidthParser.Parsers;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
@@ -20,7 +19,7 @@ namespace FixedWidthParser.Tests
             var timestamp = new DateTimeOffset(2026, 7, 16, 13, 45, 30, TimeSpan.FromHours(3));
             byte[] input = Bytes("13453020260716134530+03:00");
 
-            Assert.True(new FixedWidthParser<TimeExactModel>().TryParse(input, Ctx, out var reflected));
+            Assert.True(FixedWidth.TryParse(input, FixedWidthLayout.FromAttributes<TimeExactModel>(), Ctx, out var reflected));
             Assert.Equal(time, reflected.Time);
             Assert.Equal(timestamp, reflected.Timestamp);
 
@@ -34,7 +33,7 @@ namespace FixedWidthParser.Tests
         {
             byte[] bad = Bytes("xxxxxx20260716134530+03:00");
 
-            Assert.False(new FixedWidthParser<TimeExactModel>().TryParse(bad, Ctx, out _));
+            Assert.False(FixedWidth.TryParse(bad, FixedWidthLayout.FromAttributes<TimeExactModel>(), Ctx, out _));
             Assert.False(FixedWidth.TryParse<GenTimeExactModel>(bad, Ctx, out _));
         }
 
@@ -44,7 +43,7 @@ namespace FixedWidthParser.Tests
             // Wider than the 128-char stack buffer, with a ',' separator so the BCL fallback runs.
             string field = ("0," + new string('1', 150)).PadRight(200);
 
-            bool ok = new FixedWidthParser<WideUtf8NumericModel>().TryParse(Bytes(field + field), CtxWith(CultureInfo.GetCultureInfo("de-DE")), out var m);
+            bool ok = FixedWidth.TryParse(Bytes(field + field), FixedWidthLayout.FromAttributes<WideUtf8NumericModel>(), CtxWith(CultureInfo.GetCultureInfo("de-DE")), out var m);
 
             Assert.True(ok);
             Assert.InRange(m.D, 0.11, 0.12);

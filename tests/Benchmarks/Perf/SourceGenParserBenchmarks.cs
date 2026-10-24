@@ -2,7 +2,6 @@ using System.Text;
 using BenchmarkDotNet.Attributes;
 using FixedWidthParser;
 using FixedWidthParser.Attributes;
-using FixedWidthParser.Parsers;
 
 namespace Benchmarks.Perf
 {
@@ -21,7 +20,7 @@ namespace Benchmarks.Perf
     [Config(typeof(RegressionConfig))]
     public class SourceGenParserBenchmarks
     {
-        private readonly FixedWidthParser<SampleModel> _reflection = new();
+        private static readonly FixedWidthLayout<SampleModel> _layout = FixedWidthLayout.FromAttributes<SampleModel>();
         private byte[] _line = [];
 
         [Params("John Doe  30   6000000.00")]
@@ -36,7 +35,7 @@ namespace Benchmarks.Perf
         [Benchmark(Baseline = true)]
         public int Reflection()
         {
-            _reflection.TryParse(_line, default, out var model);
+            FixedWidth.TryParse(_line, _layout, default, out var model);
             return model.Age;
         }
 

@@ -2,7 +2,6 @@ using BenchmarkDotNet.Attributes;
 using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser;
 using FixedWidthParser.Readers;
-using FixedWidthParser.Writers;
 
 namespace Benchmarks.Perf
 {
@@ -14,9 +13,9 @@ namespace Benchmarks.Perf
     [Config(typeof(RegressionConfig))]
     public class ReaderPoolingBenchmarks
     {
-        private readonly FixedWidthReader<SampleModel> _reader = new();
-        private readonly FixedWidthReader<SampleModel> _pooledReader = new(new FixedWidthReaderOptions { StringPool = new StringPool() });
-        private readonly FixedWidthReader<NumericModel> _numericReader = new();
+        private static readonly FixedWidthLayout<SampleModel> _layout = FixedWidthLayout.FromAttributes<SampleModel>();
+        private readonly FixedWidthReaderOptions _pooledReaderOptions = new FixedWidthReaderOptions { StringPool = new StringPool() };
+        private static readonly FixedWidthLayout<NumericModel> _numericLayout = FixedWidthLayout.FromAttributes<NumericModel>();
         private byte[] _bytes = [];
         private byte[] _numericBytes = [];
 
@@ -29,7 +28,7 @@ namespace Benchmarks.Perf
             _bytes = SampleData.Bytes(Count);
             var numeric = SampleData.Models(Count).Select(m => new NumericModel { Age = m.Age, Salary = m.Salary }).ToArray();
             using var ms = new MemoryStream();
-            new FixedWidthWriter<NumericModel>().WriteMany(ms, numeric.AsSpan());
+            FixedWidth.WriteMany(ms, numeric.AsSpan(), FixedWidthLayout.FromAttributes<NumericModel>());
             _numericBytes = ms.ToArray();
         }
 
@@ -38,7 +37,7 @@ namespace Benchmarks.Perf
         public int WithString_NoPool()
         {
             int sum = 0;
-            foreach (var model in _reader.Read(new MemoryStream(_bytes, writable: false)))
+            foreach (var model in FixedWidth.Read(new MemoryStream(_bytes, writable: false), _layout))
             {
                 sum += model.Age;
             }
@@ -50,7 +49,7 @@ namespace Benchmarks.Perf
         public int WithString_Pooled()
         {
             int sum = 0;
-            foreach (var model in _pooledReader.Read(new MemoryStream(_bytes, writable: false)))
+            foreach (var model in FixedWidth.Read(new MemoryStream(_bytes, writable: false), _layout, options: _pooledReaderOptions))
             {
                 sum += model.Age;
             }
@@ -62,7 +61,7 @@ namespace Benchmarks.Perf
         public int NoString()
         {
             int sum = 0;
-            foreach (var model in _numericReader.Read(new MemoryStream(_numericBytes, writable: false)))
+            foreach (var model in FixedWidth.Read(new MemoryStream(_numericBytes, writable: false), _numericLayout))
             {
                 sum += model.Age;
             }

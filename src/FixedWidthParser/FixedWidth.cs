@@ -4,9 +4,10 @@ using FixedWidthParser.Writers;
 namespace FixedWidthParser
 {
     /// <summary>
-    /// Entry points for source-generated models. Dispatches to the model's generated
-    /// <see cref="IFixedWidthModel{TSelf}.TryParse"/> and <see cref="IFixedWidthModel{TSelf}.TryFormat"/>
-    /// through the type parameter, so the call is statically resolved (no reflection, no delegates).
+    /// Parses, reads, aggregates, formats and writes fixed-width lines. Every operation comes in two
+    /// overloads: one for a source-generated model (<see cref="IFixedWidthModel{TSelf}"/>), resolved
+    /// statically through the type parameter, and one that takes a <see cref="FixedWidthLayout{TModel}"/>
+    /// built from attributes or fluently.
     /// <para><b>Column positions are bytes.</b></para>
     /// </summary>
     public static class FixedWidth
@@ -119,7 +120,12 @@ namespace FixedWidthParser
         /// Reads a file across several threads and folds every record into a <typeparamref name="TAccumulator"/>,
         /// one instance per partition, merged in file order.
         /// </summary>
-        /// <remarks>Carries the same contract as <see cref="FixedWidthReader{TModel}.AggregateFileAsync{TAccumulator}"/>.</remarks>
+        /// <remarks>
+        /// The result equals one sequential pass when <see cref="IRecordAccumulator{TSelf, TModel}.Merge"/> is
+        /// associative. Every line is parsed exactly once, and errors report the same line number as a
+        /// sequential read. <see cref="FixedWidthReaderOptions.OnParseError"/> runs on the worker threads,
+        /// possibly concurrently, and the first failure in file order is the one thrown.
+        /// </remarks>
         public static Task<TAccumulator> AggregateFileAsync<TModel, TAccumulator>(
             string path, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken ct = default)
             where TModel : IFixedWidthModel<TModel>
@@ -149,7 +155,7 @@ namespace FixedWidthParser
         /// Reads a stream once and folds every record into a <typeparamref name="TAccumulator"/> across
         /// several threads. <paramref name="leaveOpen"/> controls whether the stream is disposed afterwards.
         /// </summary>
-        /// <remarks>Carries the same contract as <see cref="FixedWidthReader{TModel}.AggregateAsync{TAccumulator}"/>.</remarks>
+        /// <remarks>Carries the same contract as <see cref="AggregateFileAsync{TModel, TAccumulator}(string, FixedWidthReaderOptions?, FixedWidthParallelOptions?, CancellationToken)"/>.</remarks>
         public static Task<TAccumulator> AggregateAsync<TModel, TAccumulator>(
             Stream stream, bool leaveOpen = false, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken ct = default)
             where TModel : IFixedWidthModel<TModel>

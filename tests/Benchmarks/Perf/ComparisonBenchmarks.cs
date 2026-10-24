@@ -33,7 +33,7 @@ namespace Benchmarks.Perf
     [Config(typeof(RegressionConfig))]
     public class ComparisonBenchmarks
     {
-        private readonly FixedWidthReader<SampleModel> _reader = new();
+        private static readonly FixedWidthLayout<SampleModel> _layout = FixedWidthLayout.FromAttributes<SampleModel>();
         private readonly FileHelperEngine<FileHelpersRecord> _engine = new();
         private readonly FixedLengthSchema _schema = CreateSchema();
         private readonly FixedLengthReaderOptions<SampleModel> _options = CreateReader();
@@ -112,7 +112,7 @@ namespace Benchmarks.Perf
         public int FixedWidthParser_Read()
         {
             int sum = 0;
-            foreach (var model in _reader.Read(new MemoryStream(_bytes, writable: false)))
+            foreach (var model in FixedWidth.Read(new MemoryStream(_bytes, writable: false), _layout))
             {
                 sum += model.Age;
             }

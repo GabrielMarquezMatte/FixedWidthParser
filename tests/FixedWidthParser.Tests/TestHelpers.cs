@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Writers;
 
 namespace FixedWidthParser.Tests
 {
@@ -35,32 +34,32 @@ namespace FixedWidthParser.Tests
             return Encoding.UTF8.GetString(destination[..written]);
         }
 
-        /// <summary>Writes a model and returns the line without the trailing newline.</summary>
-        public static string WriteOne<T>(FixedWidthWriter<T> writer, in T model) where T : new()
+        /// <summary>Writes a model through an attribute or fluent layout and returns the line without the trailing newline.</summary>
+        public static string WriteOne<T>(FixedWidthLayout<T> layout, in T model, FixedWidthWriterOptions? options = null)
         {
             using var ms = new MemoryStream();
-            writer.Write(ms, in model);
+            FixedWidth.Write(ms, in model, layout, options);
             return Decode(ms).TrimEnd('\r', '\n');
         }
 
-        public static async Task<string> WriteOneAsync<T>(FixedWidthWriter<T> writer, T model) where T : new()
+        public static async Task<string> WriteOneAsync<T>(FixedWidthLayout<T> layout, T model, FixedWidthWriterOptions? options = null)
         {
             await using var ms = new MemoryStream();
-            await writer.WriteAsync(ms, model, TestContext.Current.CancellationToken).ConfigureAwait(false);
+            await FixedWidth.WriteAsync(ms, model, layout, options, TestContext.Current.CancellationToken).ConfigureAwait(false);
             return Decode(ms).TrimEnd('\r', '\n');
         }
 
-        public static string WriteMany<T>(FixedWidthWriter<T> writer, ReadOnlySpan<T> models) where T : new()
+        public static string WriteMany<T>(FixedWidthLayout<T> layout, ReadOnlySpan<T> models, FixedWidthWriterOptions? options = null)
         {
             using var ms = new MemoryStream();
-            writer.WriteMany(ms, models);
+            FixedWidth.WriteMany(ms, models, layout, options);
             return Decode(ms);
         }
 
-        public static string WriteMany<T>(FixedWidthWriter<T> writer, IEnumerable<T> models) where T : new()
+        public static string WriteMany<T>(FixedWidthLayout<T> layout, IEnumerable<T> models, FixedWidthWriterOptions? options = null)
         {
             using var ms = new MemoryStream();
-            writer.WriteMany(ms, models);
+            FixedWidth.WriteMany(ms, models, layout, options);
             return Decode(ms);
         }
 

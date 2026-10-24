@@ -1,6 +1,5 @@
 using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Readers;
 
 namespace FixedWidthParser.Tests
 {
@@ -23,24 +22,25 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Read_AllocatesEnumerableOnly_NoClosure()
         {
-            var reader = new FixedWidthReader<CodeModel>();
+            var layout = FixedWidthLayout.FromAttributes<CodeModel>();
             using var stream = new MemoryStream();
-            _ = reader.Read(stream);
+            _ = FixedWidth.Read(stream, layout);
             _ = FixedWidth.Read<GenCodeModel>(stream);
 
-            Assert.True(PerCall(() => reader.Read(stream)) <= 72, "Reflection Read allocated more than the enumerable.");
+            Assert.True(PerCall(() => FixedWidth.Read(stream, layout)) <= 72, "Reflection Read allocated more than the enumerable.");
             Assert.True(PerCall(() => FixedWidth.Read<GenCodeModel>(stream)) <= 72, "Generated Read allocated more than the enumerable.");
         }
 
         [Fact]
         public void ReflectionPooledReader_AllocatesNothingPerLine()
         {
-            var reader = new FixedWidthReader<CodeModel>(new FixedWidthReaderOptions { StringPool = new StringPool() });
+            var options = new FixedWidthReaderOptions { StringPool = new StringPool() };
+            var layout = FixedWidthLayout.FromAttributes<CodeModel>();
             byte[] small = Repeat(Small), large = Repeat(Large);
-            SumReflection(reader, small);
-            SumReflection(reader, large);
+            SumReflection(layout, options, small);
+            SumReflection(layout, options, large);
 
-            double perLine = MarginalPerLine(() => SumReflection(reader, small), () => SumReflection(reader, large));
+            double perLine = MarginalPerLine(() => SumReflection(layout, options, small), () => SumReflection(layout, options, large));
 
             Assert.True(perLine <= 1, $"Reflection pooled reader regressed to {perLine} B/line (expected ~0).");
         }
@@ -79,10 +79,10 @@ namespace FixedWidthParser.Tests
             return Encoding.UTF8.GetBytes(sb.ToString());
         }
 
-        private static int SumReflection(FixedWidthReader<CodeModel> reader, byte[] bytes)
+        private static int SumReflection(FixedWidthLayout<CodeModel> layout, FixedWidthReaderOptions options, byte[] bytes)
         {
             int total = 0;
-            foreach (var m in reader.Read(new MemoryStream(bytes, writable: false)))
+            foreach (var m in FixedWidth.Read(new MemoryStream(bytes, writable: false), layout, options: options))
             {
                 total += m.Code.Length;
             }

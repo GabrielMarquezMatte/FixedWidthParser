@@ -2,7 +2,6 @@ using System.Text;
 using BenchmarkDotNet.Attributes;
 using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser;
-using FixedWidthParser.Parsers;
 
 namespace Benchmarks.Perf
 {
@@ -13,7 +12,7 @@ namespace Benchmarks.Perf
     [Config(typeof(RegressionConfig))]
     public class ParserBenchmarks
     {
-        private readonly FixedWidthParser<SampleModel> _parser = new();
+        private static readonly FixedWidthLayout<SampleModel> _layout = FixedWidthLayout.FromAttributes<SampleModel>();
         private FixedWidthContext _pooled;
         private byte[] _line = [];
 
@@ -32,14 +31,14 @@ namespace Benchmarks.Perf
         [Benchmark(Baseline = true)]
         public SampleModel Parse_NoPool()
         {
-            _parser.TryParse(_line, default, out var model);
+            FixedWidth.TryParse(_line, _layout, default, out var model);
             return model;
         }
 
         [Benchmark]
         public SampleModel Parse_WithStringPool()
         {
-            _parser.TryParse(_line, _pooled, out var model);
+            FixedWidth.TryParse(_line, _layout, _pooled, out var model);
             return model;
         }
     }

@@ -1,12 +1,11 @@
 using System.Globalization;
-using FixedWidthParser.Writers;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
 {
     /// <summary>
     /// The source-generated <c>TryFormat</c> (via <see cref="FixedWidth.TryFormat{TModel}"/>): parity
-    /// with <see cref="FixedWidthWriter{TModel}"/>, round-tripping through the generated <c>TryParse</c>,
+    /// with the attribute layout (<see cref="FixedWidthLayout.FromAttributes{TModel}"/>), round-tripping through the generated <c>TryParse</c>,
     /// formatting options, nullable columns, converters, culture, and a destination that is too small.
     /// </summary>
     public class GeneratedWriterTests
@@ -23,10 +22,10 @@ namespace FixedWidthParser.Tests
         [InlineData("Max", -5, -1234.56)]
         public void Person_MatchesReflection(string name, int age, double salary)
         {
-            var writer = new FixedWidthWriter<PersonModel>();
+            var layout = FixedWidthLayout.FromAttributes<PersonModel>();
 
             Assert.Equal(
-                WriteOne(writer, new PersonModel { Name = name, Age = age, Salary = salary }),
+                WriteOne(layout, new PersonModel { Name = name, Age = age, Salary = salary }),
                 WriteGenerated(new GenPersonModel { Name = name, Age = age, Salary = salary }));
         }
 
@@ -47,7 +46,7 @@ namespace FixedWidthParser.Tests
         public void FieldModel_MatchesReflection()
         {
             Assert.Equal(
-                WriteOne(new FixedWidthWriter<ProductModel>(), new ProductModel { Code = "ABCDE", Quantity = 1234 }),
+                WriteOne(FixedWidthLayout.FromAttributes<ProductModel>(), new ProductModel { Code = "ABCDE", Quantity = 1234 }),
                 WriteGenerated(new GenProductModel { Code = "ABCDE", Quantity = 1234 }));
         }
 
@@ -55,7 +54,7 @@ namespace FixedWidthParser.Tests
         public void FloatColumn_MatchesReflection()
         {
             Assert.Equal(
-                WriteOne(new FixedWidthWriter<MeasurementModel>(), new MeasurementModel { Value = 3.14f }),
+                WriteOne(FixedWidthLayout.FromAttributes<MeasurementModel>(), new MeasurementModel { Value = 3.14f }),
                 WriteGenerated(new GenMeasurementModel { Value = 3.14f }));
         }
 
@@ -63,7 +62,7 @@ namespace FixedWidthParser.Tests
         public void DecimalColumn_MatchesReflection()
         {
             Assert.Equal(
-                WriteOne(new FixedWidthWriter<DecimalModel>(), new DecimalModel { Amount = 1234.56m }),
+                WriteOne(FixedWidthLayout.FromAttributes<DecimalModel>(), new DecimalModel { Amount = 1234.56m }),
                 WriteGenerated(new GenDecimalModel { Amount = 1234.56m }));
         }
 
@@ -71,7 +70,7 @@ namespace FixedWidthParser.Tests
         public void RightAligned_MatchesReflection()
         {
             Assert.Equal(
-                WriteOne(new FixedWidthWriter<RightAlignedModel>(), new RightAlignedModel { Value = 30 }),
+                WriteOne(FixedWidthLayout.FromAttributes<RightAlignedModel>(), new RightAlignedModel { Value = 30 }),
                 WriteGenerated(new GenRightAlignedModel { Value = 30 }));
         }
 
@@ -79,7 +78,7 @@ namespace FixedWidthParser.Tests
         public void ZeroPadded_MatchesReflection()
         {
             Assert.Equal(
-                WriteOne(new FixedWidthWriter<ZeroPaddedModel>(), new ZeroPaddedModel { Value = 30 }),
+                WriteOne(FixedWidthLayout.FromAttributes<ZeroPaddedModel>(), new ZeroPaddedModel { Value = 30 }),
                 WriteGenerated(new GenZeroPaddedModel { Value = 30 }));
         }
 
@@ -87,14 +86,14 @@ namespace FixedWidthParser.Tests
         public void FormatString_MatchesReflection()
         {
             Assert.Equal(
-                WriteOne(new FixedWidthWriter<FormattedModel>(), new FormattedModel { Amount = 1234.5 }),
+                WriteOne(FixedWidthLayout.FromAttributes<FormattedModel>(), new FormattedModel { Amount = 1234.5 }),
                 WriteGenerated(new GenFormattedModel { Amount = 1234.5 }));
         }
 
         [Fact]
         public void Overflow_Throws_MatchesReflection()
         {
-            Assert.Throws<InvalidOperationException>(() => WriteOne(new FixedWidthWriter<NarrowModel>(), new NarrowModel { Value = 12345 }));
+            Assert.Throws<InvalidOperationException>(() => WriteOne(FixedWidthLayout.FromAttributes<NarrowModel>(), new NarrowModel { Value = 12345 }));
 
             var buffer = new byte[16];
             var generatedModel = new GenNarrowModel { Value = 12345 };
@@ -117,7 +116,7 @@ namespace FixedWidthParser.Tests
         public void Nullable_Null_MatchesReflection()
         {
             Assert.Equal(
-                WriteOne(new FixedWidthWriter<NullableModel>(), new NullableModel { Age = null, Amount = null }),
+                WriteOne(FixedWidthLayout.FromAttributes<NullableModel>(), new NullableModel { Age = null, Amount = null }),
                 WriteGenerated(new GenNullableModel { Age = null, Amount = null }));
         }
 
@@ -125,7 +124,7 @@ namespace FixedWidthParser.Tests
         public void Nullable_Value_MatchesReflection()
         {
             Assert.Equal(
-                WriteOne(new FixedWidthWriter<NullableModel>(), new NullableModel { Age = 42, Amount = 123.45m }),
+                WriteOne(FixedWidthLayout.FromAttributes<NullableModel>(), new NullableModel { Age = 42, Amount = 123.45m }),
                 WriteGenerated(new GenNullableModel { Age = 42, Amount = 123.45m }));
         }
 
@@ -133,20 +132,20 @@ namespace FixedWidthParser.Tests
         public void Converter_MatchesReflection()
         {
             Assert.Equal(
-                WriteOne(new FixedWidthWriter<CentsConverterModel>(), new CentsConverterModel { Amount = new CentsValue(12345) }),
+                WriteOne(FixedWidthLayout.FromAttributes<CentsConverterModel>(), new CentsConverterModel { Amount = new CentsValue(12345) }),
                 WriteGenerated(new GenCentsConverterModel { Amount = new CentsValue(12345) }));
         }
 
         [Fact]
         public void NullableConverter_MatchesReflection()
         {
-            var writer = new FixedWidthWriter<NullableConverterModel>();
+            var layout = FixedWidthLayout.FromAttributes<NullableConverterModel>();
 
             Assert.Equal(
-                WriteOne(writer, new NullableConverterModel { Amount = null }),
+                WriteOne(layout, new NullableConverterModel { Amount = null }),
                 WriteGenerated(new GenNullableConverterModel { Amount = null }));
             Assert.Equal(
-                WriteOne(writer, new NullableConverterModel { Amount = new CentsValue(999) }),
+                WriteOne(layout, new NullableConverterModel { Amount = new CentsValue(999) }),
                 WriteGenerated(new GenNullableConverterModel { Amount = new CentsValue(999) }));
         }
 
@@ -154,7 +153,7 @@ namespace FixedWidthParser.Tests
         public void DecodedParsable_MatchesReflection()
         {
             Assert.Equal(
-                WriteOne(new FixedWidthWriter<ShoutModel>(), new ShoutModel { Word = new Shout("HEY") }),
+                WriteOne(FixedWidthLayout.FromAttributes<ShoutModel>(), new ShoutModel { Word = new Shout("HEY") }),
                 WriteGenerated(new GenShoutModel { Word = new Shout("HEY") }));
         }
 
@@ -162,10 +161,11 @@ namespace FixedWidthParser.Tests
         public void Culture_HonorsDecimalSeparator_MatchesReflection()
         {
             var deDe = CultureInfo.GetCultureInfo("de-DE");
-            var writer = new FixedWidthWriter<PersonModel>(new FixedWidthWriterOptions { FormatProvider = deDe });
+            var writerOptions = new FixedWidthWriterOptions { FormatProvider = deDe };
+            var layout = FixedWidthLayout.FromAttributes<PersonModel>();
 
             Assert.Equal(
-                WriteOne(writer, new PersonModel { Name = "Bob", Age = 30, Salary = 1234.5 }),
+                WriteOne(layout, new PersonModel { Name = "Bob", Age = 30, Salary = 1234.5 }, writerOptions),
                 WriteGenerated(new GenPersonModel { Name = "Bob", Age = 30, Salary = 1234.5 }, deDe));
         }
     }

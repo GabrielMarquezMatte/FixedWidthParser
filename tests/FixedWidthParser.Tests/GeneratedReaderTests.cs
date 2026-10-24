@@ -7,7 +7,7 @@ namespace FixedWidthParser.Tests
 {
     /// <summary>
     /// The <see cref="FixedWidth"/> read methods for generated models, sync and async, and their
-    /// parity with the reflection <see cref="FixedWidthReader{TModel}"/>.
+    /// parity with reading through <see cref="FixedWidthLayout.FromAttributes{TModel}"/>.
     /// </summary>
     public class GeneratedReaderTests
     {
@@ -79,7 +79,7 @@ namespace FixedWidthParser.Tests
         {
             var options = new FixedWidthReaderOptions { BufferSize = 4 };
 
-            var expected = new FixedWidthReader<PersonModel>(options).Read(StreamOf(TwoPeople)).ToList();
+            var expected = FixedWidth.Read(StreamOf(TwoPeople), FixedWidthLayout.FromAttributes<PersonModel>(), options: options).ToList();
             var actual = FixedWidth.Read<GenPersonModel>(StreamOf(TwoPeople), options: options).ToList();
 
             Assert.Equal(expected[0].Name, actual[0].Name);
@@ -92,7 +92,7 @@ namespace FixedWidthParser.Tests
         {
             const string text = "John Doe  30   60000.00  \nJane      XX   55000.00  ";
 
-            var expected = Assert.Throws<FixedWidthParseException>(() => new FixedWidthReader<PersonModel>().Read(StreamOf(text)).ToList());
+            var expected = Assert.Throws<FixedWidthParseException>(() => FixedWidth.Read(StreamOf(text), FixedWidthLayout.FromAttributes<PersonModel>()).ToList());
             var actual = Assert.Throws<FixedWidthParseException>(() => FixedWidth.Read<GenPersonModel>(StreamOf(text)).ToList());
 
             Assert.Equal(expected.LineNumber, actual.LineNumber);
@@ -160,7 +160,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_MatchesReflectionReader()
         {
-            var expected = await new FixedWidthReader<PersonModel>().ReadAsync(StreamOf(TwoPeople)).ToListAsync(TestContext.Current.CancellationToken);
+            var expected = await FixedWidth.ReadAsync(StreamOf(TwoPeople), FixedWidthLayout.FromAttributes<PersonModel>()).ToListAsync(TestContext.Current.CancellationToken);
             var actual = await FixedWidth.ReadAsync<GenPersonModel>(StreamOf(TwoPeople)).ToListAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(expected.Count, actual.Count);

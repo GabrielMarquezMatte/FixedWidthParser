@@ -1,8 +1,8 @@
+using FixedWidthParser;
 using BenchmarkDotNet.Attributes;
 using FileHelpers;
 using FlatFiles;
 using FlatFiles.TypeMapping;
-using FixedWidthParser.Writers;
 using RecordParser.Parsers;
 using RecordParser.Builders.Writer;
 using RecordParser.Extensions;
@@ -25,7 +25,7 @@ namespace Benchmarks.Perf
     public class ComparisonWriterBenchmarks : IDisposable
     {
         private static readonly FixedLengthOptions FlatFilesOptions = new();
-        private readonly FixedWidthWriter<SampleModel> _writer = new();
+        private static readonly FixedWidthLayout<SampleModel> _layout = FixedWidthLayout.FromAttributes<SampleModel>();
         private readonly FileHelperEngine<FileHelpersRecord> _engine = new();
         private readonly IFixedLengthWriter<SampleModel> _fixedWidthWriter = CreateWriter();
         private StreamWriter _sink = null!;
@@ -100,7 +100,7 @@ namespace Benchmarks.Perf
         [Benchmark]
         public void FixedWidthParser_Write()
         {
-            _writer.WriteMany(Stream.Null, _models.AsSpan());
+            FixedWidth.WriteMany(Stream.Null, _models.AsSpan(), _layout);
         }
 
         public virtual void Dispose()

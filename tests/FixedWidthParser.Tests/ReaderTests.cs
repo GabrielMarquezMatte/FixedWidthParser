@@ -1,12 +1,11 @@
 using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser.Readers;
-using FixedWidthParser.Writers;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
 {
     /// <summary>
-    /// <see cref="FixedWidthReader{TModel}"/> over streams and files, sync and async: line endings, BOM,
+    /// Reading through an attribute layout over streams and files, sync and async: line endings, BOM,
     /// buffer growth, error reporting, leaveOpen and string pooling.
     /// </summary>
     public class ReaderTests
@@ -19,7 +18,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Read_MultipleLines_ParsesAll()
         {
-            var people = new FixedWidthReader<PersonModel>().Read(StreamOf(TwoPeople)).ToList();
+            var people = FixedWidth.Read(StreamOf(TwoPeople), FixedWidthLayout.FromAttributes<PersonModel>()).ToList();
 
             Assert.Equal(2, people.Count);
             Assert.Equal("John Doe", people[0].Name);
@@ -35,7 +34,7 @@ namespace FixedWidthParser.Tests
         [InlineData("ABC\nDEF")]
         public void Read_HandlesLineEndingsAndTrailingNewline(string text)
         {
-            var codes = new FixedWidthReader<CodeModel>().Read(StreamOf(text)).Select(m => m.Code).ToList();
+            var codes = FixedWidth.Read(StreamOf(text), FixedWidthLayout.FromAttributes<CodeModel>()).Select(m => m.Code).ToList();
 
             Assert.Equal(["ABC", "DEF"], codes);
         }
@@ -43,7 +42,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Read_SkipsEmptyLines()
         {
-            var codes = new FixedWidthReader<CodeModel>().Read(StreamOf("ABC\n\n\nDEF\n")).Select(m => m.Code).ToList();
+            var codes = FixedWidth.Read(StreamOf("ABC\n\n\nDEF\n"), FixedWidthLayout.FromAttributes<CodeModel>()).Select(m => m.Code).ToList();
 
             Assert.Equal(["ABC", "DEF"], codes);
         }
@@ -53,7 +52,7 @@ namespace FixedWidthParser.Tests
         {
             byte[] bytes = [0xEF, 0xBB, 0xBF, .. "ABC\nDEF\n"u8];
 
-            var codes = new FixedWidthReader<CodeModel>().Read(new MemoryStream(bytes)).Select(m => m.Code).ToList();
+            var codes = FixedWidth.Read(new MemoryStream(bytes), FixedWidthLayout.FromAttributes<CodeModel>()).Select(m => m.Code).ToList();
 
             Assert.Equal(["ABC", "DEF"], codes);
         }
@@ -62,9 +61,10 @@ namespace FixedWidthParser.Tests
         public void Read_LineLongerThanBuffer_StillParses()
         {
             // A tiny buffer forces compaction and growth (25-byte lines).
-            var reader = new FixedWidthReader<PersonModel>(new FixedWidthReaderOptions { BufferSize = 4 });
+            var readerOptions = new FixedWidthReaderOptions { BufferSize = 4 };
+            var layout = FixedWidthLayout.FromAttributes<PersonModel>();
 
-            var people = reader.Read(StreamOf(TwoPeople)).ToList();
+            var people = FixedWidth.Read(StreamOf(TwoPeople), layout, options: readerOptions).ToList();
 
             Assert.Equal(2, people.Count);
             Assert.Equal("John Doe", people[0].Name);
@@ -74,10 +74,10 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Read_InvalidLine_ThrowsWithLineNumber()
         {
-            var reader = new FixedWidthReader<PersonModel>();
+            var layout = FixedWidthLayout.FromAttributes<PersonModel>();
 
             var ex = Assert.Throws<FixedWidthParseException>(
-                () => reader.Read(StreamOf("John Doe  30   60000.00  \nJane      XX   55000.00  ")).ToList());
+                () => FixedWidth.Read(StreamOf("John Doe  30   60000.00  \nJane      XX   55000.00  "), layout).ToList());
 
             Assert.Equal(2, ex.LineNumber);
             Assert.Contains("Line 2", ex.Message, StringComparison.Ordinal);
@@ -88,7 +88,7 @@ namespace FixedWidthParser.Tests
         {
             using var stream = StreamOf("ABC\nDEF\n");
 
-            _ = new FixedWidthReader<CodeModel>().Read(stream, leaveOpen: true).ToList();
+            _ = FixedWidth.Read(stream, FixedWidthLayout.FromAttributes<CodeModel>(), leaveOpen: true).ToList();
 
             Assert.True(stream.CanRead);
         }
@@ -98,7 +98,7 @@ namespace FixedWidthParser.Tests
         {
             var stream = StreamOf("ABC\nDEF\n");
 
-            _ = new FixedWidthReader<CodeModel>().Read(stream).ToList();
+            _ = FixedWidth.Read(stream, FixedWidthLayout.FromAttributes<CodeModel>()).ToList();
 
             Assert.False(stream.CanRead);
         }
@@ -106,15 +106,16 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Read_NullStream_Throws()
         {
-            Assert.Throws<ArgumentNullException>(() => new FixedWidthReader<CodeModel>().Read(null!));
+            Assert.Throws<ArgumentNullException>(() => FixedWidth.Read(null!, FixedWidthLayout.FromAttributes<CodeModel>()));
         }
 
         [Fact]
         public void Read_WithStringPool_InternsRepeatedValues()
         {
-            var reader = new FixedWidthReader<CodeModel>(new FixedWidthReaderOptions { StringPool = new StringPool() });
+            var readerOptions = new FixedWidthReaderOptions { StringPool = new StringPool() };
+            var layout = FixedWidthLayout.FromAttributes<CodeModel>();
 
-            var codes = reader.Read(StreamOf("ABC\nABC\n")).ToList();
+            var codes = FixedWidth.Read(StreamOf("ABC\nABC\n"), layout, options: readerOptions).ToList();
 
             Assert.Equal("ABC", codes[0].Code);
             Assert.Same(codes[0].Code, codes[1].Code);
@@ -126,7 +127,7 @@ namespace FixedWidthParser.Tests
             Assert.True(typeof(RecordEnumerator<CodeModel, LayoutLineParser<CodeModel>>).IsValueType);
 
             int count = 0;
-            foreach (var _ in new FixedWidthReader<CodeModel>().Read(StreamOf("ABC\nDEF\n")))
+            foreach (var _ in FixedWidth.Read(StreamOf("ABC\nDEF\n"), FixedWidthLayout.FromAttributes<CodeModel>()))
             {
                 count++;
             }
@@ -137,11 +138,12 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void TryParse_UsesTheReaderOptions()
         {
-            var reader = new FixedWidthReader<DecimalModel>(new FixedWidthReaderOptions { FormatProvider = System.Globalization.CultureInfo.GetCultureInfo("de-DE") });
+            var readerOptions = new FixedWidthReaderOptions { FormatProvider = System.Globalization.CultureInfo.GetCultureInfo("de-DE") };
+            var layout = FixedWidthLayout.FromAttributes<DecimalModel>();
 
-            Assert.True(reader.TryParse("1234,56     "u8, out var model));
+            Assert.True(FixedWidth.TryParse("1234,56     "u8, layout, readerOptions.Context, out var model));
             Assert.Equal(1234.56m, model.Amount);
-            Assert.False(reader.TryParse("short"u8, out _));
+            Assert.False(FixedWidth.TryParse("short"u8, layout, readerOptions.Context, out _));
         }
 
         [Fact]
@@ -151,10 +153,10 @@ namespace FixedWidthParser.Tests
             try
             {
                 File.WriteAllText(path, "ABC\nDEF\n");
-                var reader = new FixedWidthReader<CodeModel>();
+                var layout = FixedWidthLayout.FromAttributes<CodeModel>();
 
-                var first = reader.ReadFile(path).Select(m => m.Code).ToList();
-                var second = reader.ReadFile(path).Select(m => m.Code).ToList();
+                var first = FixedWidth.ReadFile(path, layout).Select(m => m.Code).ToList();
+                var second = FixedWidth.ReadFile(path, layout).Select(m => m.Code).ToList();
 
                 Assert.Equal(["ABC", "DEF"], first);
                 Assert.Equal(first, second);
@@ -178,10 +180,10 @@ namespace FixedWidthParser.Tests
                 ];
                 using (var fs = File.Create(path))
                 {
-                    new FixedWidthWriter<PersonModel>().WriteMany(fs, models.AsSpan());
+                    FixedWidth.WriteMany(fs, models.AsSpan(), FixedWidthLayout.FromAttributes<PersonModel>());
                 }
 
-                var parsed = new FixedWidthReader<PersonModel>().ReadFile(path).ToList();
+                var parsed = FixedWidth.ReadFile(path, FixedWidthLayout.FromAttributes<PersonModel>()).ToList();
 
                 Assert.Equal(2, parsed.Count);
                 Assert.Equal("John Doe", parsed[0].Name);
@@ -199,7 +201,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_Stream_ParsesAll()
         {
-            var people = await new FixedWidthReader<PersonModel>().ReadAsync(StreamOf(TwoPeople)).ToListAsync(TestContext.Current.CancellationToken);
+            var people = await FixedWidth.ReadAsync(StreamOf(TwoPeople), FixedWidthLayout.FromAttributes<PersonModel>()).ToListAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(2, people.Count);
             Assert.Equal("John Doe", people[0].Name);
@@ -210,9 +212,10 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_LineLongerThanBuffer_StillParses()
         {
-            var reader = new FixedWidthReader<PersonModel>(new FixedWidthReaderOptions { BufferSize = 4 });
+            var readerOptions = new FixedWidthReaderOptions { BufferSize = 4 };
+            var layout = FixedWidthLayout.FromAttributes<PersonModel>();
 
-            var people = await reader.ReadAsync(StreamOf(TwoPeople)).ToListAsync(TestContext.Current.CancellationToken);
+            var people = await FixedWidth.ReadAsync(StreamOf(TwoPeople), layout, options: readerOptions).ToListAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(2, people.Count);
             Assert.Equal(55000.00, people[1].Salary, 2);
@@ -223,7 +226,7 @@ namespace FixedWidthParser.Tests
         {
             byte[] bytes = [0xEF, 0xBB, 0xBF, .. "ABC\nDEF\n"u8];
 
-            var codes = await new FixedWidthReader<CodeModel>().ReadAsync(new MemoryStream(bytes)).Select(m => m.Code).ToListAsync(TestContext.Current.CancellationToken);
+            var codes = await FixedWidth.ReadAsync(new MemoryStream(bytes), FixedWidthLayout.FromAttributes<CodeModel>()).Select(m => m.Code).ToListAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(["ABC", "DEF"], codes);
         }
@@ -231,11 +234,11 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_InvalidLine_ThrowsWithLineNumber()
         {
-            var reader = new FixedWidthReader<PersonModel>();
+            var layout = FixedWidthLayout.FromAttributes<PersonModel>();
 
             var ex = await Assert.ThrowsAsync<FixedWidthParseException>(async () =>
             {
-                await foreach (var _ in reader.ReadAsync(StreamOf("John Doe  30   60000.00  \nJane      XX   55000.00  ")))
+                await foreach (var _ in FixedWidth.ReadAsync(StreamOf("John Doe  30   60000.00  \nJane      XX   55000.00  "), layout))
                 {
                 }
             });
@@ -251,7 +254,7 @@ namespace FixedWidthParser.Tests
 
             await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             {
-                await foreach (var _ in new FixedWidthReader<CodeModel>().ReadAsync(StreamOf("ABC\nDEF\n")).WithCancellation(cts.Token))
+                await foreach (var _ in FixedWidth.ReadAsync(StreamOf("ABC\nDEF\n"), FixedWidthLayout.FromAttributes<CodeModel>()).WithCancellation(cts.Token))
                 {
                 }
             });
@@ -260,12 +263,12 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_LeaveOpen_ControlsDisposal()
         {
-            var reader = new FixedWidthReader<CodeModel>();
+            var layout = FixedWidthLayout.FromAttributes<CodeModel>();
             using var kept = StreamOf("ABC\n");
             var owned = StreamOf("ABC\n");
 
-            _ = await reader.ReadAsync(kept, leaveOpen: true).ToListAsync(TestContext.Current.CancellationToken);
-            _ = await reader.ReadAsync(owned).ToListAsync(TestContext.Current.CancellationToken);
+            _ = await FixedWidth.ReadAsync(kept, layout, leaveOpen: true).ToListAsync(TestContext.Current.CancellationToken);
+            _ = await FixedWidth.ReadAsync(owned, layout).ToListAsync(TestContext.Current.CancellationToken);
 
             Assert.True(kept.CanRead);
             Assert.False(owned.CanRead);
@@ -274,7 +277,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void ReadAsync_NullStream_Throws()
         {
-            Assert.Throws<ArgumentNullException>(() => new FixedWidthReader<CodeModel>().ReadAsync((Stream)null!));
+            Assert.Throws<ArgumentNullException>(() => FixedWidth.ReadAsync((Stream)null!, FixedWidthLayout.FromAttributes<CodeModel>()));
         }
 
         [Fact]
@@ -284,10 +287,10 @@ namespace FixedWidthParser.Tests
             try
             {
                 await File.WriteAllTextAsync(path, "ABC\nDEF\nGHI\n", TestContext.Current.CancellationToken);
-                var reader = new FixedWidthReader<CodeModel>();
+                var layout = FixedWidthLayout.FromAttributes<CodeModel>();
 
-                var asyncCodes = await reader.ReadFileAsync(path).Select(m => m.Code).ToListAsync(TestContext.Current.CancellationToken);
-                var syncCodes = reader.ReadFile(path).Select(m => m.Code).ToList();
+                var asyncCodes = await FixedWidth.ReadFileAsync(path, layout).Select(m => m.Code).ToListAsync(TestContext.Current.CancellationToken);
+                var syncCodes = FixedWidth.ReadFile(path, layout).Select(m => m.Code).ToList();
 
                 Assert.Equal(["ABC", "DEF", "GHI"], asyncCodes);
                 Assert.Equal(syncCodes, asyncCodes);
@@ -301,9 +304,10 @@ namespace FixedWidthParser.Tests
         [Fact]
         public async Task ReadAsync_WithStringPool_InternsRepeatedValues()
         {
-            var reader = new FixedWidthReader<CodeModel>(new FixedWidthReaderOptions { StringPool = new StringPool() });
+            var readerOptions = new FixedWidthReaderOptions { StringPool = new StringPool() };
+            var layout = FixedWidthLayout.FromAttributes<CodeModel>();
 
-            var codes = await reader.ReadAsync(StreamOf("ABC\nABC\n")).ToListAsync(TestContext.Current.CancellationToken);
+            var codes = await FixedWidth.ReadAsync(StreamOf("ABC\nABC\n"), layout, options: readerOptions).ToListAsync(TestContext.Current.CancellationToken);
 
             Assert.Same(codes[0].Code, codes[1].Code);
         }

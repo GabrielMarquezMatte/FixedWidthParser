@@ -2,7 +2,6 @@ using System.Text;
 using BenchmarkDotNet.Attributes;
 using CommunityToolkit.HighPerformance.Buffers;
 using FixedWidthParser;
-using FixedWidthParser.Parsers;
 using FixedWidthParser.Readers;
 
 namespace Benchmarks.Perf
@@ -14,9 +13,8 @@ namespace Benchmarks.Perf
     [Config(typeof(RegressionConfig))]
     public class AsyncReaderBenchmarks
     {
-        private readonly FixedWidthParser<SampleModel> _parser = new();
-        private readonly FixedWidthReader<SampleModel> _reader = new();
-        private readonly FixedWidthReader<SampleModel> _pooledReader = new(new FixedWidthReaderOptions { StringPool = new StringPool() });
+        private static readonly FixedWidthLayout<SampleModel> _layout = FixedWidthLayout.FromAttributes<SampleModel>();
+        private readonly FixedWidthReaderOptions _pooledReaderOptions = new FixedWidthReaderOptions { StringPool = new StringPool() };
         private readonly FixedWidthReaderOptions _generatedPooled = new() { StringPool = new StringPool() };
         private byte[] _bytes = [];
 
@@ -37,7 +35,7 @@ namespace Benchmarks.Perf
             string? line;
             while ((line = await reader.ReadLineAsync().ConfigureAwait(false)) is not null)
             {
-                if (_parser.TryParse(Encoding.UTF8.GetBytes(line), default, out var model))
+                if (FixedWidth.TryParse(Encoding.UTF8.GetBytes(line), _layout, default, out var model))
                 {
                     sum += model.Age;
                 }
@@ -49,7 +47,7 @@ namespace Benchmarks.Perf
         public async Task<int> Reader_ReadAsync()
         {
             int sum = 0;
-            await foreach (var model in _reader.ReadAsync(new MemoryStream(_bytes, writable: false)).ConfigureAwait(false))
+            await foreach (var model in FixedWidth.ReadAsync(new MemoryStream(_bytes, writable: false), _layout).ConfigureAwait(false))
             {
                 sum += model.Age;
             }
@@ -60,7 +58,7 @@ namespace Benchmarks.Perf
         public async Task<int> Reader_ReadAsync_Pooled()
         {
             int sum = 0;
-            await foreach (var model in _pooledReader.ReadAsync(new MemoryStream(_bytes, writable: false)).ConfigureAwait(false))
+            await foreach (var model in FixedWidth.ReadAsync(new MemoryStream(_bytes, writable: false), _layout, options: _pooledReaderOptions).ConfigureAwait(false))
             {
                 sum += model.Age;
             }

@@ -19,7 +19,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void ParseError_NamesColumnAndRawValue_OnBothPaths()
         {
-            var reflected = Assert.Throws<FixedWidthParseException>(() => new FixedWidthReader<PersonModel>().Read(StreamOf(BadAge)).ToList());
+            var reflected = Assert.Throws<FixedWidthParseException>(() => FixedWidth.Read(StreamOf(BadAge), FixedWidthLayout.FromAttributes<PersonModel>()).ToList());
             var generated = Assert.Throws<FixedWidthParseException>(() => FixedWidth.Read<GenPersonModel>(StreamOf(BadAge)).ToList());
 
             foreach (var ex in new[] { reflected, generated })
@@ -36,7 +36,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void ParseError_ShortLine_SaysHowLongTheLayoutIs()
         {
-            var reflected = Assert.Throws<FixedWidthParseException>(() => new FixedWidthReader<PersonModel>().Read(StreamOf("John\n")).ToList());
+            var reflected = Assert.Throws<FixedWidthParseException>(() => FixedWidth.Read(StreamOf("John\n"), FixedWidthLayout.FromAttributes<PersonModel>()).ToList());
             var generated = Assert.Throws<FixedWidthParseException>(() => FixedWidth.Read<GenPersonModel>(StreamOf("John\n")).ToList());
 
             foreach (var ex in new[] { reflected, generated })
@@ -50,7 +50,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void ParseError_IsAFormatException()
         {
-            Assert.ThrowsAny<FormatException>(() => new FixedWidthReader<PersonModel>().Read(StreamOf(BadAge)).ToList());
+            Assert.ThrowsAny<FormatException>(() => FixedWidth.Read(StreamOf(BadAge), FixedWidthLayout.FromAttributes<PersonModel>()).ToList());
         }
 
         [Fact]
@@ -59,7 +59,7 @@ namespace FixedWidthParser.Tests
             var errors = new List<FixedWidthParseException>();
             var options = new FixedWidthReaderOptions { OnParseError = ex => { errors.Add(ex); return true; } };
 
-            var reflected = new FixedWidthReader<PersonModel>(options).Read(StreamOf(BadAge)).Select(p => p.Name).ToList();
+            var reflected = FixedWidth.Read(StreamOf(BadAge), FixedWidthLayout.FromAttributes<PersonModel>(), options: options).Select(p => p.Name).ToList();
             var generated = FixedWidth.Read<GenPersonModel>(StreamOf(BadAge), options: options).Select(p => p.Name).ToList();
 
             Assert.Equal(["John Doe", "Max"], reflected);
@@ -73,7 +73,7 @@ namespace FixedWidthParser.Tests
         {
             var options = new FixedWidthReaderOptions { OnParseError = _ => false };
 
-            Assert.Throws<FixedWidthParseException>(() => new FixedWidthReader<PersonModel>(options).Read(StreamOf(BadAge)).ToList());
+            Assert.Throws<FixedWidthParseException>(() => FixedWidth.Read(StreamOf(BadAge), FixedWidthLayout.FromAttributes<PersonModel>(), options: options).ToList());
         }
 
         [Fact]
@@ -81,7 +81,7 @@ namespace FixedWidthParser.Tests
         {
             var options = new FixedWidthReaderOptions { OnParseError = _ => true };
 
-            var codes = new FixedWidthReader<CodeModel>(options).Read(StreamOf("ABC\nA")).Select(m => m.Code).ToList();
+            var codes = FixedWidth.Read(StreamOf("ABC\nA"), FixedWidthLayout.FromAttributes<CodeModel>(), options: options).Select(m => m.Code).ToList();
 
             Assert.Equal(["ABC"], codes);
         }
@@ -90,9 +90,9 @@ namespace FixedWidthParser.Tests
         public async Task OnParseError_SkipsOnAsyncReads()
         {
             var options = new FixedWidthReaderOptions { OnParseError = _ => true };
-            var reader = new FixedWidthReader<PersonModel>(options);
+            var layout = FixedWidthLayout.FromAttributes<PersonModel>();
 
-            var fromStream = await reader.ReadAsync(StreamOf(BadAge)).Select(p => p.Name).ToListAsync(TestContext.Current.CancellationToken);
+            var fromStream = await FixedWidth.ReadAsync(StreamOf(BadAge), layout, options: options).Select(p => p.Name).ToListAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(["John Doe", "Max"], fromStream);
         }
@@ -104,7 +104,7 @@ namespace FixedWidthParser.Tests
             var options = new FixedWidthReaderOptions { BufferSize = 16, MaxLineLength = 100 };
             var source = new MemoryStream(new byte[10_000]);
 
-            var ex = Assert.Throws<InvalidDataException>(() => new FixedWidthReader<CodeModel>(options).Read(source).ToList());
+            var ex = Assert.Throws<InvalidDataException>(() => FixedWidth.Read(source, FixedWidthLayout.FromAttributes<CodeModel>(), options: options).ToList());
 
             Assert.Contains("MaxLineLength", ex.Message, StringComparison.Ordinal);
             Assert.Contains("Line 1", ex.Message, StringComparison.Ordinal);
@@ -115,7 +115,7 @@ namespace FixedWidthParser.Tests
         {
             var options = new FixedWidthReaderOptions { MaxLineLength = 5 };
 
-            var ex = Assert.Throws<InvalidDataException>(() => new FixedWidthReader<CodeModel>(options).Read(StreamOf("ABC\nABCDEFGH\n")).ToList());
+            var ex = Assert.Throws<InvalidDataException>(() => FixedWidth.Read(StreamOf("ABC\nABCDEFGH\n"), FixedWidthLayout.FromAttributes<CodeModel>(), options: options).ToList());
 
             Assert.Contains("Line 2", ex.Message, StringComparison.Ordinal);
         }
@@ -125,7 +125,7 @@ namespace FixedWidthParser.Tests
         {
             var options = new FixedWidthReaderOptions { BufferSize = 2, MaxLineLength = 3 };
 
-            var codes = new FixedWidthReader<CodeModel>(options).Read(StreamOf("ABC\r\nDEF")).Select(m => m.Code).ToList();
+            var codes = FixedWidth.Read(StreamOf("ABC\r\nDEF"), FixedWidthLayout.FromAttributes<CodeModel>(), options: options).Select(m => m.Code).ToList();
 
             Assert.Equal(["ABC", "DEF"], codes);
         }
@@ -137,7 +137,7 @@ namespace FixedWidthParser.Tests
 
             await Assert.ThrowsAsync<InvalidDataException>(async () =>
             {
-                await foreach (var _ in new FixedWidthReader<CodeModel>(options).ReadAsync(new MemoryStream(new byte[10_000])))
+                await foreach (var _ in FixedWidth.ReadAsync(new MemoryStream(new byte[10_000]), FixedWidthLayout.FromAttributes<CodeModel>(), options: options))
                 {
                 }
             });
@@ -150,7 +150,7 @@ namespace FixedWidthParser.Tests
         {
             var options = new FixedWidthReaderOptions { BufferSize = bufferSize, MaxLineLength = maxLineLength };
 
-            Assert.Throws<ArgumentOutOfRangeException>(() => new FixedWidthReader<CodeModel>(options));
+            Assert.Throws<ArgumentOutOfRangeException>(() => FixedWidth.Read(StreamOf("ABC"), FixedWidthLayout.FromAttributes<CodeModel>(), options: options));
             Assert.Throws<ArgumentOutOfRangeException>(() => FixedWidth.Read<GenCodeModel>(StreamOf("ABC"), options: options));
         }
 
@@ -161,7 +161,7 @@ namespace FixedWidthParser.Tests
             var options = new FixedWidthReaderOptions { Encoding = Encoding.Latin1 };
             byte[] bytes = [0xEF, 0xBB, 0xBF, .. "\nABC\n"u8];
 
-            var codes = new FixedWidthReader<CodeModel>(options).Read(new MemoryStream(bytes)).Select(m => m.Code).ToList();
+            var codes = FixedWidth.Read(new MemoryStream(bytes), FixedWidthLayout.FromAttributes<CodeModel>(), options: options).Select(m => m.Code).ToList();
 
             Assert.Equal(["ï»¿", "ABC"], codes);
         }
@@ -171,7 +171,7 @@ namespace FixedWidthParser.Tests
         {
             // "Zoë" is 4 bytes in UTF-8; the layout counts bytes, so the name column must be 6 wide here
             // and the age still starts at byte 6.
-            var person = new FixedWidthReader<NameAgeModel>().Read(StreamOf("Zoë  42 \n")).Single();
+            var person = FixedWidth.Read(StreamOf("Zoë  42 \n"), FixedWidthLayout.FromAttributes<NameAgeModel>()).Single();
 
             Assert.Equal("Zoë", person.Name);
             Assert.Equal(42, person.Age);

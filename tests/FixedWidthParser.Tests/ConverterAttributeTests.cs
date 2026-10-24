@@ -1,5 +1,3 @@
-using FixedWidthParser.Parsers;
-using FixedWidthParser.Writers;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
@@ -16,16 +14,16 @@ namespace FixedWidthParser.Tests
         {
             var original = new CentsConverterModel { Amount = new CentsValue(12345) };
 
-            string line = WriteOne(new FixedWidthWriter<CentsConverterModel>(), original);
+            string line = WriteOne(FixedWidthLayout.FromAttributes<CentsConverterModel>(), original);
 
-            Assert.True(new FixedWidthParser<CentsConverterModel>().TryParse(Bytes(line), Ctx, out var parsed));
+            Assert.True(FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<CentsConverterModel>(), Ctx, out var parsed));
             Assert.Equal(original.Amount, parsed.Amount);
         }
 
         [Fact]
         public void Generated_MatchesReflection()
         {
-            bool okR = new FixedWidthParser<CentsConverterModel>().TryParse("12345   "u8, Ctx, out var r);
+            bool okR = FixedWidth.TryParse("12345   "u8, FixedWidthLayout.FromAttributes<CentsConverterModel>(), Ctx, out var r);
             bool okG = FixedWidth.TryParse<GenCentsConverterModel>("12345   "u8, Ctx, out var g);
 
             Assert.True(okR);
@@ -36,20 +34,20 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Converter_RejectingInput_ReturnsFalse()
         {
-            Assert.False(new FixedWidthParser<CentsConverterModel>().TryParse("notanum "u8, Ctx, out _));
+            Assert.False(FixedWidth.TryParse("notanum "u8, FixedWidthLayout.FromAttributes<CentsConverterModel>(), Ctx, out _));
             Assert.False(FixedWidth.TryParse<GenCentsConverterModel>("notanum "u8, Ctx, out _));
         }
 
         [Fact]
         public void MismatchedConverter_ParserConstruction_Throws()
         {
-            Assert.Throws<InvalidOperationException>(() => new FixedWidthParser<MismatchedConverterModel>());
+            Assert.Throws<InvalidOperationException>(() => FixedWidth.TryParse(ReadOnlySpan<byte>.Empty, FixedWidthLayout.FromAttributes<MismatchedConverterModel>(), Ctx, out _));
         }
 
         [Fact]
         public void MismatchedConverter_WriterConstruction_Throws()
         {
-            Assert.Throws<InvalidOperationException>(() => new FixedWidthWriter<MismatchedConverterModel>());
+            Assert.Throws<InvalidOperationException>(() => FixedWidth.WriteMany(Stream.Null, Array.Empty<MismatchedConverterModel>(), FixedWidthLayout.FromAttributes<MismatchedConverterModel>()));
         }
     }
 }

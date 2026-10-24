@@ -1,4 +1,3 @@
-using FixedWidthParser.Parsers;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
@@ -11,7 +10,7 @@ namespace FixedWidthParser.Tests
         [InlineData("1****", 1)]
         public void AsteriskTrim_ParsesUnderlyingValue_OnBothPaths(string line, int expected)
         {
-            Assert.True(new FixedWidthParser<AsteriskTrimIntModel>().TryParse(Bytes(line), Ctx, out var reflected));
+            Assert.True(FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<AsteriskTrimIntModel>(), Ctx, out var reflected));
             Assert.True(FixedWidth.TryParse<GenAsteriskTrimIntModel>(Bytes(line), Ctx, out var generated));
 
             Assert.Equal(expected, reflected.Value);
@@ -21,7 +20,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void HashTrim_StringColumn_OnBothPaths()
         {
-            Assert.True(new FixedWidthParser<HashTrimStringModel>().TryParse("AB######"u8, Ctx, out var reflected));
+            Assert.True(FixedWidth.TryParse("AB######"u8, FixedWidthLayout.FromAttributes<HashTrimStringModel>(), Ctx, out var reflected));
             Assert.True(FixedWidth.TryParse<GenHashTrimStringModel>("AB######"u8, Ctx, out var generated));
 
             Assert.Equal("AB", reflected.Code);
@@ -31,7 +30,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void NonAsciiTrimChar_Throws()
         {
-            Assert.Throws<InvalidOperationException>(() => new FixedWidthParser<NonAsciiTrimModel>());
+            Assert.Throws<InvalidOperationException>(() => FixedWidth.TryParse(ReadOnlySpan<byte>.Empty, FixedWidthLayout.FromAttributes<NonAsciiTrimModel>(), Ctx, out _));
         }
     }
 }

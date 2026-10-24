@@ -1,4 +1,4 @@
-using FixedWidthParser.Writers;
+using FixedWidthParser;
 
 namespace Benchmarks
 {
@@ -18,7 +18,7 @@ namespace Benchmarks
         public static byte[] Bytes(int count)
         {
             using var ms = new MemoryStream();
-            new FixedWidthWriter<SampleModel>().WriteMany(ms, Models(count).AsSpan());
+            FixedWidth.WriteMany(ms, Models(count).AsSpan(), FixedWidthLayout.FromAttributes<SampleModel>());
             return ms.ToArray();
         }
     }

@@ -4,7 +4,7 @@ namespace FixedWidthParser.Tests
 {
     // Models that opt into the source-generated parser and writer. Each mirrors a reflection-based
     // counterpart in TestModels.cs so the parity tests can compare the generated TryParse/TryFormat
-    // against the runtime FixedWidthParser<T>/FixedWidthWriter<T> over the same lines.
+    // against the same type's attribute layout (FixedWidthLayout.FromAttributes) over the same lines.
 
     /// <summary>Property-based model (string + int + double) — mirrors <see cref="PersonModel"/>.</summary>
     public readonly partial record struct GenPersonModel : IFixedWidthModel<GenPersonModel>
