@@ -63,6 +63,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="FixedWidthParser.Tests" />
+    <InternalsVisibleTo Include="FixedWidthParser.Native" />
   </ItemGroup>
 
   <ItemGroup>

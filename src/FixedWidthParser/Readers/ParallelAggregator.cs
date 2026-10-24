@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Runtime.ExceptionServices;
 using FixedWidthParser.Infrastructure;
-using Microsoft.Win32.SafeHandles;
 
 namespace FixedWidthParser.Readers
 {
@@ -26,13 +25,44 @@ namespace FixedWidthParser.Readers
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            var plan = new ChunkPlan(RandomAccess.GetLength(handle), options);
-            var results = new TAccumulator[plan.Count];
+            var source = new FileSource(handle);
+            return await RunPartitionsAsync(source, 0, options,
+                (plan, index) => AggregateChunk<TModel, TParser, TAccumulator>(parser, source, plan, index, options, ct),
+                static (merged, following) =>
+                {
+                    merged.Merge(following);
+                    return merged;
+                }, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Reads <c>[dataStart, source.Length)</c> in partitions, one <typeparamref name="TSink"/> each, merged in
+        /// order. <paramref name="dataStart"/> must start a line; line numbers count from the start of the source.
+        /// </summary>
+        internal static Task<TSink> RunAsync<TSink>(
+            IRandomAccessSource source, long dataStart, Func<TSink> create, FixedWidthReaderOptions options, CancellationToken ct)
+            where TSink : struct, ILineSink<TSink>
+        {
+            return RunPartitionsAsync(source, dataStart, options,
+                (plan, index) => SinkChunk(source, plan, index, create(), options, ct),
+                static (merged, following) =>
+                {
+                    merged.Merge(following);
+                    return merged;
+                }, ct);
+        }
+
+        private static async Task<TResult> RunPartitionsAsync<TResult>(
+            IRandomAccessSource source, long dataStart, FixedWidthReaderOptions options,
+            Func<ChunkPlan, int, TResult> aggregate, Func<TResult, TResult, TResult> merge, CancellationToken ct)
+        {
+            var plan = new ChunkPlan(dataStart, source.Length, options);
+            var results = new TResult[plan.Count];
             var failures = new ExceptionDispatchInfo?[plan.Count];
             var workers = new Task[Math.Min(options.Workers, plan.Count)];
             foreach (ref var worker in workers.AsSpan())
             {
-                worker = Task.Run(() => Drain<TModel, TParser, TAccumulator>(parser, handle, plan, options, results, failures, ct), ct);
+                worker = Task.Run(() => Drain(plan, aggregate, results, failures, ct), ct);
             }
             await Task.WhenAll(workers).ConfigureAwait(false);
 
@@ -41,24 +71,20 @@ namespace FixedWidthParser.Readers
             for (int i = 1; i < plan.Count; i++)
             {
                 failures[i]?.Throw();
-                merged.Merge(results[i]);
+                merged = merge(merged, results[i]);
             }
             return merged;
         }
 
-        private static void Drain<TModel, TParser, TAccumulator>(
-            TParser parser, SafeFileHandle handle, ChunkPlan plan, FixedWidthReaderOptions options,
-            TAccumulator[] results, ExceptionDispatchInfo?[] failures, CancellationToken ct)
-            where TModel : allows ref struct
-            where TParser : struct, IRecordLineParser<TModel>
-            where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
+        private static void Drain<TResult>(
+            ChunkPlan plan, Func<ChunkPlan, int, TResult> aggregate, TResult[] results, ExceptionDispatchInfo?[] failures, CancellationToken ct)
         {
             while (plan.TryTakeNext(out int index))
             {
                 ct.ThrowIfCancellationRequested();
                 try
                 {
-                    results[index] = AggregateChunk<TModel, TParser, TAccumulator>(parser, handle, plan.Start(index), plan.End(index), options, ct);
+                    results[index] = aggregate(plan, index);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -67,15 +93,20 @@ namespace FixedWidthParser.Readers
             }
         }
 
+        // ponytail: the model and sink loops are twins on purpose. Folding the model path into a ModelSink
+        // made one-call reads ~40% slower: dynamic PGO stopped devirtualizing IRecordAccumulator.Add through
+        // the shared generic sink. Keep them in step.
         private static TAccumulator AggregateChunk<TModel, TParser, TAccumulator>(
-            TParser parser, SafeFileHandle handle, long start, long end, FixedWidthReaderOptions options, CancellationToken ct)
+            TParser parser, IRandomAccessSource source, ChunkPlan plan, int index, FixedWidthReaderOptions options, CancellationToken ct)
             where TModel : allows ref struct
             where TParser : struct, IRecordLineParser<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
+            long start = plan.Start(index);
+            long end = plan.End(index);
             var accumulator = new TAccumulator();
             var context = options.Context;
-            var reader = new ChunkReader(handle, start == 0 ? 0 : start - 1, options.MaxLineLength);
+            var reader = new ChunkReader(source, index == 0 ? start : start - 1, options.MaxLineLength);
             var lines = default(LineBufferState);
             lines.Rent(options, start == 0 && options.SkipsByteOrderMark);
             long delivered = 0;
@@ -109,6 +140,47 @@ namespace FixedWidthParser.Readers
             return accumulator;
         }
 
+        private static TSink SinkChunk<TSink>(
+            IRandomAccessSource source, ChunkPlan plan, int index, TSink sink, FixedWidthReaderOptions options, CancellationToken ct)
+            where TSink : struct, ILineSink<TSink>
+        {
+            long start = plan.Start(index);
+            long end = plan.End(index);
+            var context = options.Context;
+            var reader = new ChunkReader(source, index == 0 ? start : start - 1, options.MaxLineLength);
+            var lines = default(LineBufferState);
+            lines.Rent(options, start == 0 && options.SkipsByteOrderMark);
+            long delivered = 0;
+            try
+            {
+                while (reader.Origin + lines.Consumed < end)
+                {
+                    if (reader.NextLine(ref lines, out var line) == LineStatus.End)
+                    {
+                        break;
+                    }
+                    long lineStart = reader.Origin + lines.LineStart;
+                    if (lineStart < start || lineStart >= end)
+                    {
+                        continue;
+                    }
+                    if (++delivered % LinesPerCancellationCheck == 0)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                    }
+                    if (!sink.TryAdd(line, in context))
+                    {
+                        ParseErrors.Reject(sink.Diagnose(line, reader.LineNumberAt(lineStart), in context), options.OnParseError);
+                    }
+                }
+            }
+            finally
+            {
+                lines.Return();
+            }
+            return sink;
+        }
+
         /// <summary>Parses one line and folds it in; <see langword="false"/> when it does not parse.</summary>
         internal static bool TryAdd<TModel, TParser, TAccumulator>(TParser parser, ReadOnlySpan<byte> line, in FixedWidthContext context, ref TAccumulator accumulator)
             where TModel : allows ref struct
@@ -125,22 +197,25 @@ namespace FixedWidthParser.Readers
 
         private sealed class ChunkPlan
         {
+            private readonly long _dataStart;
             private readonly long _length;
             private readonly long _chunkSize;
             private int _next = -1;
 
-            internal ChunkPlan(long length, FixedWidthReaderOptions options)
+            internal ChunkPlan(long dataStart, long length, FixedWidthReaderOptions options)
             {
+                _dataStart = dataStart;
                 _length = length;
-                _chunkSize = ChunkSize(length, options);
-                Count = (int)Math.Max(1, (length + _chunkSize - 1) / _chunkSize);
+                long data = Math.Max(0, length - dataStart);
+                _chunkSize = ChunkSize(data, options);
+                Count = (int)Math.Max(1, (data + _chunkSize - 1) / _chunkSize);
             }
 
             internal int Count { get; }
 
             internal long Start(int index)
             {
-                return index * _chunkSize;
+                return _dataStart + (index * _chunkSize);
             }
 
             internal long End(int index)
@@ -169,7 +244,7 @@ namespace FixedWidthParser.Readers
         }
 
         /// <summary>Feeds one partition's bytes to a <see cref="LineBufferState"/> and numbers its lines on demand.</summary>
-        private sealed class ChunkReader(SafeFileHandle handle, long origin, int maxLineLength)
+        private sealed class ChunkReader(IRandomAccessSource source, long origin, int maxLineLength)
         {
             private long _readOffset = origin;
             private long _countedTo;
@@ -190,7 +265,7 @@ namespace FixedWidthParser.Readers
                         }
                         lines.Compact();
                         lines.GrowIfFull();
-                        int read = RandomAccess.Read(handle, lines.Buffer.AsSpan(lines.End), _readOffset);
+                        int read = source.Read(lines.Buffer.AsSpan(lines.End), _readOffset);
                         _readOffset += read;
                         lines.Advance(read);
                     }
@@ -212,7 +287,7 @@ namespace FixedWidthParser.Readers
                 {
                     while (_countedTo < offset)
                     {
-                        int read = RandomAccess.Read(handle, buffer.AsSpan(0, (int)Math.Min(buffer.Length, offset - _countedTo)), _countedTo);
+                        int read = source.Read(buffer.AsSpan(0, (int)Math.Min(buffer.Length, offset - _countedTo)), _countedTo);
                         if (read == 0)
                         {
                             break;
