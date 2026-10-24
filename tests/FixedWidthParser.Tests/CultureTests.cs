@@ -64,6 +64,30 @@ namespace FixedWidthParser.Tests
             Assert.Equal(1234.50, model.Salary, 2);
         }
 
+        // The fast path takes any one-ASCII-character separator, so every accepted value must match the BCL's.
+        [Theory]
+        [InlineData("de-DE")]
+        [InlineData("pt-BR")]
+        [InlineData("fr-FR")]
+        public void Parse_Double_CommaCulture_MatchesTheBcl(string cultureName)
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+            var context = CtxWith(culture);
+            var options = new Infrastructure.ColumnParseOptions(' ', TrimMode.Both, format: null);
+            string[] edges = ["-0,5", "+1,5", "1,5e3", "1,5E-3", "1.234,5", "0,1", ",5", "5,", "007,10", "1,7976931348623157E+308", "4,9E-324", "1,2,3", "--1", "1e", "1,5x", "1 000,5"];
+            var random = new Random(42);
+            var values = edges.Concat(Enumerable.Range(0, 2000).Select(_ => (random.NextDouble() * Math.Pow(10, random.Next(-8, 12)) * (random.Next(2) * 2 - 1)).ToString("R", culture)));
+
+            foreach (string text in values)
+            {
+                bool expected = double.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, culture, out double bcl);
+                bool actual = Infrastructure.FixedWidthRuntime.TryDouble(Bytes(text), in context, in options, out double parsed);
+
+                Assert.True(expected == actual, $"'{text}': BCL {expected}, parser {actual}");
+                Assert.True(!expected || bcl.Equals(parsed), $"'{text}': BCL {bcl:R}, parser {parsed:R}");
+            }
+        }
+
         [Fact]
         public void Parse_DoubleColumn_TrailingGarbageAfterNumber_Fails()
         {
