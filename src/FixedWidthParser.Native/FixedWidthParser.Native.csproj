@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
+    <!-- Publishing this project with -r <rid> produces the C-ABI shared library
+         (FixedWidthParser.Native.dll/.so/.dylib). Ordinary `dotnet build` still produces a managed
+         assembly, which is what FixedWidthParser.Tests references. -->
+    <PublishAot>true</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <!-- Keeps ICU out of the shared library; numbers and dates use the invariant culture. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <OptimizationPreference>Speed</OptimizationPreference>
+    <IlcGenerateStackTraceData>false</IlcGenerateStackTraceData>
+    <StackTraceSupport>false</StackTraceSupport>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <EventSourceSupport>false</EventSourceSupport>
+    <!-- A fixed x86-64-v3 floor (AVX2), never `native`: the library is redistributed, so the build
+         host's CPU must not decide which CPUs can load it. ILC's default x64 baseline compiles
+         Vector256 paths away. Same choice and reasoning as ExcelReader.Native. -->
+    <IlcInstructionSet Condition="$(RuntimeIdentifier.EndsWith('-x64'))">x86-64-v3</IlcInstructionSet>
+    <!-- RS0016/RS0026/RS0037: public-API tracking is for the NuGet package; this project is never
+         packed and its C ABI is tracked by include/fixedwidth.h instead. -->
+    <!-- CA1031: every export is a hard boundary; an escaping exception would corrupt the caller's
+         stack, so catch-all plus a status code is the required behavior. -->
+    <!-- S6640: unsafe code is what a C ABI is made of. -->
+    <NoWarn>$(NoWarn);RS0016;RS0026;RS0037;CA1031;S6640</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <DebuggerSupport>false</DebuggerSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FixedWidthParser\FixedWidthParser.csproj" />
+  </ItemGroup>
+
+  <!-- [UnmanagedCallersOnly] exports cannot be called from managed code, so the tests drive the
+       span-based *Api layer underneath them. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="FixedWidthParser.Tests" />
+  </ItemGroup>
+
+</Project>
