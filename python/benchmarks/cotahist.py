@@ -80,7 +80,8 @@ def _line(rng: random.Random, day: int) -> str:
     open_ = rng.randint(100, 9_999_999)
     prices = [open_ + rng.randint(-500, 500) for _ in range(6)]
     trades = rng.randint(1, 99_999)
-    quantity = rng.randint(100, 10**12)
+    # At most 10**9 shares keeps the volume (quantity * price) within the 15 digits a float64 round-trips.
+    quantity = rng.randint(100, 10**9)
     return (
         "01"
         + f"202310{day:02d}"
