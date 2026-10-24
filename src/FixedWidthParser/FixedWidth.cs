@@ -128,13 +128,13 @@ namespace FixedWidthParser
         /// possibly concurrently, and the first failure in file order is the one thrown.
         /// </remarks>
         public static Task<TAccumulator> AggregateFileAsync<TModel, TAccumulator>(
-            string path, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken ct = default)
+            string path, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken cancellationToken = default)
             where TModel : IFixedWidthModel<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
             return ParallelAggregator.RunAsync<TModel, GeneratedLineParser<TModel>, TAccumulator>(
-                default, path, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), ct);
+                default, path, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), cancellationToken);
         }
 
         /// <summary>
@@ -144,12 +144,12 @@ namespace FixedWidthParser
         /// <remarks>Carries the same contract as <see cref="AggregateFileAsync{TModel, TAccumulator}(string, FixedWidthReaderOptions?, FixedWidthParallelOptions?, CancellationToken)"/>.</remarks>
         /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a setter.</exception>
         public static Task<TAccumulator> AggregateFileAsync<TModel, TAccumulator>(
-            string path, FixedWidthLayout<TModel> layout, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken ct = default)
+            string path, FixedWidthLayout<TModel> layout, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken cancellationToken = default)
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             ArgumentException.ThrowIfNullOrEmpty(path);
             return ParallelAggregator.RunAsync<TModel, LayoutLineParser<TModel>, TAccumulator>(
-                ReadableLayout(layout), path, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), ct);
+                ReadableLayout(layout), path, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), cancellationToken);
         }
 
         /// <summary>
@@ -158,13 +158,13 @@ namespace FixedWidthParser
         /// </summary>
         /// <remarks>Carries the same contract as <see cref="AggregateFileAsync{TModel, TAccumulator}(string, FixedWidthReaderOptions?, FixedWidthParallelOptions?, CancellationToken)"/>.</remarks>
         public static Task<TAccumulator> AggregateAsync<TModel, TAccumulator>(
-            Stream stream, bool leaveOpen = false, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken ct = default)
+            Stream stream, bool leaveOpen = false, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken cancellationToken = default)
             where TModel : IFixedWidthModel<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             ArgumentNullException.ThrowIfNull(stream);
             return ParallelStreamAggregator.RunAsync<TModel, GeneratedLineParser<TModel>, TAccumulator>(
-                default, stream, leaveOpen, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), ct);
+                default, stream, leaveOpen, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), cancellationToken);
         }
 
         /// <summary>
@@ -175,12 +175,12 @@ namespace FixedWidthParser
         /// <remarks>Carries the same contract as <see cref="AggregateFileAsync{TModel, TAccumulator}(string, FixedWidthReaderOptions?, FixedWidthParallelOptions?, CancellationToken)"/>.</remarks>
         /// <exception cref="InvalidOperationException"><paramref name="layout"/> has a column without a setter.</exception>
         public static Task<TAccumulator> AggregateAsync<TModel, TAccumulator>(
-            Stream stream, FixedWidthLayout<TModel> layout, bool leaveOpen = false, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken ct = default)
+            Stream stream, FixedWidthLayout<TModel> layout, bool leaveOpen = false, FixedWidthReaderOptions? options = null, FixedWidthParallelOptions? parallel = null, CancellationToken cancellationToken = default)
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             ArgumentNullException.ThrowIfNull(stream);
             return ParallelStreamAggregator.RunAsync<TModel, LayoutLineParser<TModel>, TAccumulator>(
-                ReadableLayout(layout), stream, leaveOpen, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), ct);
+                ReadableLayout(layout), stream, leaveOpen, FixedWidthReaderOptions.Validate(options), FixedWidthParallelOptions.Validate(parallel), cancellationToken);
         }
 
 

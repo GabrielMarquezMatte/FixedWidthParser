@@ -52,7 +52,7 @@ namespace FixedWidthParser.Tests
             var layout = FixedWidthLayout.FromAttributes<NameAgeModel>();
 
             var parallel = await FixedWidth.AggregateFileAsync<NameAgeModel, ParallelAggregateTests.Ages>(
-                _path, layout, parallel: new FixedWidthParallelOptions { DegreeOfParallelism = 4 }, ct: TestContext.Current.CancellationToken);
+                _path, layout, parallel: new FixedWidthParallelOptions { DegreeOfParallelism = 4 }, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Equal(SequentialAges(layout), parallel.Values);
         }
@@ -65,7 +65,7 @@ namespace FixedWidthParser.Tests
             using var stream = new MemoryStream(File.ReadAllBytes(_path));
 
             var parallel = await FixedWidth.AggregateAsync<NameAgeModel, ParallelAggregateTests.Ages>(
-                stream, layout, parallel: new FixedWidthParallelOptions { DegreeOfParallelism = 4 }, ct: TestContext.Current.CancellationToken);
+                stream, layout, parallel: new FixedWidthParallelOptions { DegreeOfParallelism = 4 }, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Equal(SequentialAges(layout), parallel.Values);
         }
