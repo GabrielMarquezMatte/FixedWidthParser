@@ -61,7 +61,7 @@ namespace FixedWidthParser.Native.Layouts
             error ??= ValidatePositions(columns);
             if (error is not null)
             {
-                return Fail(error);
+                return NativeApi.InvalidArgument(error);
             }
             return TryFinish(columns, settings, out layout);
         }
@@ -73,11 +73,11 @@ namespace FixedWidthParser.Native.Layouts
             int lineLength = settings.LineLength == 0 ? end : settings.LineLength;
             if (lineLength < end)
             {
-                return Fail($"line_length {settings.LineLength} is shorter than the columns, which end at {end}.");
+                return NativeApi.InvalidArgument($"line_length {settings.LineLength} is shorter than the columns, which end at {end}.");
             }
             if (!NativeOptions.TryAscii(settings.Filler, ' ', out char filler))
             {
-                return Fail($"filler {settings.Filler} is not an ASCII character.");
+                return NativeApi.InvalidArgument($"filler {settings.Filler} is not an ASCII character.");
             }
             layout = new NativeLayout(columns, lineLength, (byte)filler);
             return NativeStatus.Ok;
@@ -117,12 +117,6 @@ namespace FixedWidthParser.Native.Layouts
             }
             column = NativeColumnRules.Build(spec, name, format);
             return null;
-        }
-
-        private static int Fail(string message)
-        {
-            NativeApi.SetLastError(message);
-            return NativeStatus.InvalidArgument;
         }
     }
 }
