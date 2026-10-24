@@ -692,7 +692,6 @@ namespace FixedWidthParser.Generator
             }
         }
 
-        // Trailing trim arguments for a runtime parse call, omitted for the default (space, trailing).
         private static string ByteLiteral(char value)
         {
             return "(byte)" + SymbolDisplay.FormatLiteral(value, true);
@@ -729,73 +728,10 @@ namespace FixedWidthParser.Generator
 
         private enum WriteKind { String, Formattable, Utf8Formattable, Converter, Unsupported }
 
-        private readonly struct ColumnInfo(
-            string name, int start, int length, ColumnKind kind, string typeFqn, string? converterFqn, bool isNullable,
-            WriteKind writeKind, int alignment, char padding, string? format, int overflow, char trimChar, int trimMode) : IEquatable<ColumnInfo>
-        {
-            public readonly string Name = name;
-            public readonly int Start = start;
-            public readonly int Length = length;
-            public readonly ColumnKind Kind = kind;
-            public readonly string TypeFqn = typeFqn;
-            public readonly string? ConverterFqn = converterFqn;
-            public readonly bool IsNullable = isNullable;
-            public readonly WriteKind WKind = writeKind;
-            public readonly int Alignment = alignment;
-            public readonly char Padding = padding;
-            public readonly string? Format = format;
-            public readonly int Overflow = overflow;
-            public readonly char TrimChar = trimChar;
-            public readonly int TrimMode = trimMode;
-
-            public bool Equals(ColumnInfo other)
-            {
-                return Start == other.Start
-                       && Length == other.Length
-                       && Kind == other.Kind
-                       && IsNullable == other.IsNullable
-                       && WKind == other.WKind
-                       && Alignment == other.Alignment
-                       && Padding == other.Padding
-                       && Overflow == other.Overflow
-                       && TrimChar == other.TrimChar
-                       && TrimMode == other.TrimMode
-                       && string.Equals(Format, other.Format, StringComparison.Ordinal)
-                       && string.Equals(Name, other.Name, StringComparison.Ordinal)
-                       && string.Equals(TypeFqn, other.TypeFqn, StringComparison.Ordinal)
-                       && string.Equals(ConverterFqn, other.ConverterFqn, StringComparison.Ordinal);
-            }
-
-            [ExcludeFromCodeCoverage]
-            public override bool Equals(object? obj)
-            {
-                return obj is ColumnInfo other && Equals(other);
-            }
-
-            [ExcludeFromCodeCoverage]
-            public override int GetHashCode()
-            {
-                unchecked
-                {
-                    int hash = 17;
-                    hash = hash * 31 + StringComparer.Ordinal.GetHashCode(Name);
-                    hash = hash * 31 + Start;
-                    hash = hash * 31 + Length;
-                    hash = hash * 31 + (int)Kind;
-                    hash = hash * 31 + StringComparer.Ordinal.GetHashCode(TypeFqn);
-                    hash = hash * 31 + (ConverterFqn is null ? 0 : StringComparer.Ordinal.GetHashCode(ConverterFqn));
-                    hash = hash * 31 + (IsNullable ? 1 : 0);
-                    hash = hash * 31 + (int)WKind;
-                    hash = hash * 31 + Alignment;
-                    hash = hash * 31 + Padding;
-                    hash = hash * 31 + Overflow;
-                    hash = hash * 31 + TrimChar;
-                    hash = hash * 31 + TrimMode;
-                    hash = hash * 31 + (Format is null ? 0 : StringComparer.Ordinal.GetHashCode(Format));
-                    return hash;
-                }
-            }
-        }
+        // Value equality, so the incremental pipeline caches correctly.
+        private readonly record struct ColumnInfo(
+            string Name, int Start, int Length, ColumnKind Kind, string TypeFqn, string? ConverterFqn, bool IsNullable,
+            WriteKind WKind, int Alignment, char Padding, string? Format, int Overflow, char TrimChar, int TrimMode);
 
         private sealed class ModelInfo(string? ns, string typeKeywords, string typeName, string fullyQualifiedName,
                                        EquatableArray<ColumnInfo> columns, bool isPartial, bool isNested, Location location) : IEquatable<ModelInfo>
@@ -895,4 +831,14 @@ namespace FixedWidthParser.Generator
             }
         }
     }
+}
+
+namespace System.Runtime.CompilerServices
+{
+    // netstandard2.0 lacks it; the records' init accessors need it.
+#pragma warning disable S2094 // A marker type, empty by design.
+    internal static class IsExternalInit
+    {
+    }
+#pragma warning restore S2094
 }
