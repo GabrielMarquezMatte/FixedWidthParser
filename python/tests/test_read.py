@@ -5,7 +5,6 @@ import gc
 import io
 
 import numpy as np
-import pandas as pd
 import pytest
 
 import fixedwidth as fw
@@ -84,6 +83,8 @@ def test_views_keep_table_alive(cotahist, options):
 
 
 def test_read_pandas_matches_read_fwf(cotahist, options):
+    pd = pytest.importorskip("pandas")
+    pytest.importorskip("pyarrow")
     frame = fw.read_pandas(cotahist, layout(), options)
 
     expected = pd.read_fwf(
@@ -105,6 +106,8 @@ def test_read_pandas_matches_read_fwf(cotahist, options):
 
 
 def test_read_polars(cotahist, options):
+    pytest.importorskip("polars")
+    pytest.importorskip("pyarrow")
     frame = fw.read_polars(cotahist, layout(), options)
 
     assert frame.shape == (3, 6)

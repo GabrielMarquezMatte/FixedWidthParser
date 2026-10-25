@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import datetime as dt
 
-import pandas as pd
-import polars as pl
-import pyarrow as pa
 import pytest
 
 import fixedwidth as fw
 from conftest import CONTENT, layout
+
+# Writing goes through pyarrow, which has no musllinux wheels; the musl wheel job tests without it.
+pd = pytest.importorskip("pandas")
+pl = pytest.importorskip("polars")
+pa = pytest.importorskip("pyarrow")
 
 QUOTES = "".join(line + "\n" for line in CONTENT.splitlines()[1:4])
 

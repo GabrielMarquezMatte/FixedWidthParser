@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import datetime as dt
 
-import polars as pl
-import pyarrow as pa
+import pytest
 
 import fixedwidth as fw
 from conftest import CONTENT, layout
+
+# No pyarrow wheels for musllinux; the musl wheel job tests without it.
+pl = pytest.importorskip("polars")
+pa = pytest.importorskip("pyarrow")
 
 
 def test_read_arrow(cotahist, options):

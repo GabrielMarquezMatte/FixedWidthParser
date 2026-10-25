@@ -70,6 +70,9 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
 - The `fixedwidth` Python package over it (NumPy views, pyarrow, pandas, polars), 52 times faster than
   `pandas.read_fwf` on a 1,000,000-line COTAHIST-shaped file, and a header-only C++23 wrapper
   (`fixedwidth.hpp`) that also maps structs to columns through `FixedWidthMapper<T>`.
+- Releases publish the Python package to PyPI as `fixedwidthparser`, with wheels for Windows x64,
+  macOS arm64 and x64, and Linux glibc and musl on x64 and arm64, and attach each platform's native library
+  to the GitHub Release.
 - `ref struct` models on `Read`, `ReadFile`, `ReadAsync`, `ReadFileAsync`, `AggregateFileAsync` and
   `AggregateAsync`, generated and through a layout. The enumerators parse a line when `Current` is
   read, so reading it twice parses twice; with `OnParseError` set, each line is parsed once more to

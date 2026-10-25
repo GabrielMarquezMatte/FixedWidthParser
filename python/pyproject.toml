@@ -3,7 +3,7 @@ requires = ["hatchling", "packaging"]
 build-backend = "hatchling.build"
 
 [project]
-name = "fixedwidthparser-native"
+name = "fixedwidthparser"
 version = "0.1.0"
 description = "Read and write fixed-width files through the FixedWidthParser NativeAOT library"
 readme = "README.md"
