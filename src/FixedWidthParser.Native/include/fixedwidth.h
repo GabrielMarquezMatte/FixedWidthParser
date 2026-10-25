@@ -172,6 +172,25 @@ int32_t fw_reader_open_file(const uint8_t* path, int32_t path_len, const fw_layo
 int32_t fw_reader_open_memory(const uint8_t* data, int64_t data_len, const fw_layout* layout,
                               const fw_reader_options* options, fw_reader** out_reader);
 
+/* A forward-only source the library pulls from, for a pipe, a socket, a decompressor or a language's own stream
+ * objects. read copies up to len bytes into buf and returns how many, 0 at the end, or -1 on failure, after
+ * fw_set_source_error to say why; it is called from the thread reading. release, which may be NULL, is called
+ * once the library is done with the stream: when the reader is closed or the Arrow stream released, or right
+ * away if opening fails after the stream was accepted. A stream rejected as an argument is not released. */
+typedef struct fw_stream {
+    int32_t struct_size;
+    void* user_data;
+    int64_t (*read)(void* user_data, uint8_t* buf, int64_t len);
+    void (*release)(void* user_data);
+} fw_stream;
+
+/* Reads the stream from where it stands, skipping read.header_lines first; it never seeks. */
+int32_t fw_reader_open_stream(const fw_stream* stream, const fw_layout* layout,
+                              const fw_reader_options* options, fw_reader** out_reader);
+
+/* Called by a read callback before it returns -1: the message becomes the failure's fw_last_error. */
+void fw_set_source_error(const uint8_t* message, int32_t len);
+
 /* FW_OK with a table the caller frees with fw_free_table, FW_EOF at the end. After a failure the
  * reader is finished: later calls return FW_EOF. */
 int32_t fw_reader_next(fw_reader* reader, fw_table* out_table);

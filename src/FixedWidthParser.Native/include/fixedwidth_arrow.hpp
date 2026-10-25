@@ -120,4 +120,17 @@ namespace fw
         }
         return stream;
     }
+
+    /// Reads `in` lazily, without seeking: it must outlive the stream.
+    inline Result<ArrowStream> read_arrow_stream(std::istream& in, const Layout& layout, const ReaderOptions& options = {})
+    {
+        ArrowStream stream;
+        const fw_reader_options raw = options.to_c();
+        const fw_stream source = detail::istream_source(in);
+        if (auto ok = detail::check(fw_read_arrow_stream_stream(&source, layout.get(), &raw, stream.get())); !ok)
+        {
+            return std::unexpected(ok.error());
+        }
+        return stream;
+    }
 }

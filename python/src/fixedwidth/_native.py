@@ -68,6 +68,19 @@ class ReaderOptions(ctypes.Structure):
     _fields_ = [("struct_size", ctypes.c_int32), ("read", ReadOptions), ("batch_rows", ctypes.c_int64)]
 
 
+StreamRead = ctypes.CFUNCTYPE(ctypes.c_int64, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int64)
+StreamRelease = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+
+
+class NativeStream(ctypes.Structure):
+    _fields_ = [
+        ("struct_size", ctypes.c_int32),
+        ("user_data", ctypes.c_void_p),
+        ("read", StreamRead),
+        ("release", StreamRelease),
+    ]
+
+
 class Column(ctypes.Structure):
     _fields_ = [
         ("type", ctypes.c_int32),
@@ -172,12 +185,15 @@ _SIGNATURES: dict[str, tuple[object, list[object]]] = {
     "fw_free_table": (None, [_P(Table)]),
     "fw_reader_open_file": (ctypes.c_int32, [_u8p, ctypes.c_int32, ctypes.c_void_p, _P(ReaderOptions), _P(ctypes.c_void_p)]),
     "fw_reader_open_memory": (ctypes.c_int32, [ctypes.c_void_p, ctypes.c_int64, ctypes.c_void_p, _P(ReaderOptions), _P(ctypes.c_void_p)]),
+    "fw_reader_open_stream": (ctypes.c_int32, [_P(NativeStream), ctypes.c_void_p, _P(ReaderOptions), _P(ctypes.c_void_p)]),
+    "fw_set_source_error": (None, [ctypes.c_char_p, ctypes.c_int32]),
     "fw_reader_next": (ctypes.c_int32, [ctypes.c_void_p, _P(Table)]),
     "fw_reader_close": (None, [ctypes.c_void_p]),
     "fw_read_arrow_file": (ctypes.c_int32, [_u8p, ctypes.c_int32, ctypes.c_void_p, _P(ReadOptions), _P(ArrowArray), _P(ArrowSchema), _P(ReadResult)]),
     "fw_read_arrow_memory": (ctypes.c_int32, [ctypes.c_void_p, ctypes.c_int64, ctypes.c_void_p, _P(ReadOptions), _P(ArrowArray), _P(ArrowSchema), _P(ReadResult)]),
     "fw_read_arrow_stream_file": (ctypes.c_int32, [_u8p, ctypes.c_int32, ctypes.c_void_p, _P(ReaderOptions), _P(ArrowArrayStream)]),
     "fw_read_arrow_stream_memory": (ctypes.c_int32, [ctypes.c_void_p, ctypes.c_int64, ctypes.c_void_p, _P(ReaderOptions), _P(ArrowArrayStream)]),
+    "fw_read_arrow_stream_stream": (ctypes.c_int32, [_P(NativeStream), ctypes.c_void_p, _P(ReaderOptions), _P(ArrowArrayStream)]),
     "fw_write_file": (ctypes.c_int32, [_u8p, ctypes.c_int32, _P(Table), ctypes.c_void_p, _P(WriteOptions)]),
     "fw_write_memory": (ctypes.c_int32, [_P(Table), ctypes.c_void_p, _P(WriteOptions), _P(Buffer)]),
     "fw_free_buffer": (None, [_P(Buffer)]),

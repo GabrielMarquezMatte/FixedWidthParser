@@ -57,9 +57,19 @@ rest of `ColumnSpec`: `scale`, `format`, `trim_char`, `trim_mode`, `alignment`, 
 
 `TableView<T>` keeps the library's columns and converts a row on access; a `std::string_view` field points
 into it. `view[i]` is unchecked, `view.at(i)` returns an empty optional out of range, and `view.table()` is
-the `fw::Table` underneath, with `lines_read()` and `lines_skipped()`. `fw::TypedReader<T>::open_file` or
-`open_memory` reads in batches: `next()` returns the next `TableView<T>`, or an empty optional at the end.
-`fw::layout_for<T>()` returns the `fw::Layout` the bindings describe, for the untyped API.
+the `fw::Table` underneath, with `lines_read()` and `lines_skipped()`. `fw::TypedReader<T>::open_file`,
+`open_memory` or `open_stream` reads in batches: `next()` returns the next `TableView<T>`, or an empty optional at
+the end. `fw::layout_for<T>()` returns the `fw::Layout` the bindings describe, for the untyped API.
+
+`fw::Reader::open_stream`, `TypedReader<T>::open_stream` and `fw::read_arrow_stream` take a `std::istream&` and
+read it forward a batch at a time, in constant memory, so a decompressing or network stream works. The stream
+must outlive the reader; a stream that turns `bad()` fails the read.
+
+```cpp
+std::ifstream file("COTAHIST_A2023.TXT", std::ios::binary);
+auto reader = fw::TypedReader<Quote>::open_stream(file, {.read = {.header_lines = 1, .skip_invalid = true}});
+while (auto batch = reader->next(); batch && *batch) { /* (*batch)->size() rows */ }
+```
 
 An integer field narrower than `int64_t` that a value does not fit fails the read with
 `FW_INVALID_ARGUMENT` instead of wrapping.

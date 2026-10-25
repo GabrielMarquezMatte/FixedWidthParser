@@ -80,6 +80,9 @@ int32_t fw_read_arrow_stream_file(const uint8_t* path, int32_t path_len, const f
                                   const fw_reader_options* options, struct ArrowArrayStream* out_stream);
 int32_t fw_read_arrow_stream_memory(const uint8_t* data, int64_t data_len, const fw_layout* layout,
                                     const fw_reader_options* options, struct ArrowArrayStream* out_stream);
+/* The same over an fw_stream, which is released with the Arrow stream. */
+int32_t fw_read_arrow_stream_stream(const fw_stream* stream, const fw_layout* layout,
+                                    const fw_reader_options* options, struct ArrowArrayStream* out_stream);
 
 #ifdef __cplusplus
 }

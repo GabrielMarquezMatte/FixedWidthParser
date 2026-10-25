@@ -10,11 +10,14 @@ EXPORTS
     fw_read_arrow_memory
     fw_read_arrow_stream_file
     fw_read_arrow_stream_memory
+    fw_read_arrow_stream_stream
     fw_read_file
     fw_read_memory
     fw_reader_close
     fw_reader_next
     fw_reader_open_file
     fw_reader_open_memory
+    fw_reader_open_stream
+    fw_set_source_error
     fw_write_file
     fw_write_memory

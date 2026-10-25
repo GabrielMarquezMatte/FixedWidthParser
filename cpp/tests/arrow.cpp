@@ -3,6 +3,8 @@
 #include <fixedwidth_arrow.hpp>
 
 #include <cstring>
+#include <sstream>
+#include <string>
 
 int main()
 {
@@ -29,6 +31,16 @@ int main()
         batch.release(&batch);
     }
     CHECK(rows == 3);
+
+    std::istringstream in{std::string(content)};
+    auto from_stream = fw::read_arrow_stream(in, layout, {.read = skip_header_and_invalid(), .batch_rows = 2});
+    CHECK(from_stream.has_value());
+    int64_t streamed_rows = 0;
+    while (from_stream->get()->get_next(from_stream->get(), &batch) == 0 && batch.release != nullptr) {
+        streamed_rows += batch.length;
+        batch.release(&batch);
+    }
+    CHECK(streamed_rows == 3);
 
     std::puts("arrow ok");
     return 0;

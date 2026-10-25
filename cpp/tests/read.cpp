@@ -1,7 +1,9 @@
 #include "common.hpp"
 
 #include <cstdio>
+#include <sstream>
 #include <string>
+#include <vector>
 
 static void check_table(const fw::Table& table)
 {
@@ -58,6 +60,23 @@ int main()
         rows += (*batch)->row_count();
     }
     CHECK(rows == 3);
+
+    // The same batches from a std::istream, read forward without seeking.
+    std::istringstream in{std::string(content)};
+    auto streamed = fw::Reader::open_stream(in, layout, {.read = skip_header_and_invalid(), .batch_rows = 2});
+    CHECK(streamed.has_value());
+    std::vector<std::string> codes;
+    while (true) {
+        auto batch = streamed->next();
+        CHECK(batch.has_value());
+        if (!batch->has_value()) {
+            break;
+        }
+        for (int64_t row = 0; row < (*batch)->row_count(); ++row) {
+            codes.emplace_back((*batch)->string(1, row));
+        }
+    }
+    CHECK((codes == std::vector<std::string>{"PETR4", "VALE3", "ITUB4"}));
 
     std::vector<fw::ColumnSpec> overlap{
         {.name = "a", .start = 0, .length = 4, .type = fw::Type::String},

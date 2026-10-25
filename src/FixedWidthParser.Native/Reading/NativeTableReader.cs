@@ -31,16 +31,17 @@ namespace FixedWidthParser.Native.Reading
         private LineBufferState _lines;
         private bool _done;
 
-        internal NativeTableReader(Stream stream, long dataStart, long headerLines, NativeLayout layout, ReadSettings settings, long batchRows)
+        /// <param name="stream">Positioned at the first data line, past <paramref name="headerLines"/> header lines.</param>
+        /// <param name="atStart">Whether nothing of the source was skipped, so a byte order mark may begin it.</param>
+        internal NativeTableReader(Stream stream, bool atStart, long headerLines, NativeLayout layout, ReadSettings settings, long batchRows)
         {
             _stream = stream;
-            _stream.Position = dataStart;
             _layout = layout;
             _options = settings.ReaderOptions(new StrongBox<long>(), degreeOfParallelism: 1, chunkSize: 0);
             _context = _options.Context;
             _batchRows = batchRows == 0 ? DefaultBatchRows : batchRows;
             _lines = default;
-            _lines.Rent(_options, dataStart == 0 && _options.SkipsByteOrderMark);
+            _lines.Rent(_options, atStart && _options.SkipsByteOrderMark);
             _lines.LineNumber = headerLines;
         }
 
