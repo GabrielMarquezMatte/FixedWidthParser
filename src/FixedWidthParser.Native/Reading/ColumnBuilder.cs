@@ -29,8 +29,14 @@ namespace FixedWidthParser.Native.Reading
         private GrowableNativeBuffer<byte>? _validity;
 #pragma warning restore SS066
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ColumnBuilder"/> class.
+        /// </summary>
+        /// <param name="column">The native column this builder is for.</param>
+        /// <param name="maxTextBytes">The maximum number of text bytes expected for this column.</param>
         /// <param name="expectedRows">How many rows to size the buffers for up front, so a partition does not grow them row by row.</param>
-        internal ColumnBuilder(NativeColumn column, long maxTextBytes, long expectedRows)
+        /// <param name="lent">Room for <paramref name="expectedRows"/> values that a <see cref="TableArena"/> owns, or null.</param>
+        internal ColumnBuilder(NativeColumn column, long maxTextBytes, long expectedRows, void* lent = null)
         {
             _column = column;
             _maxTextBytes = maxTextBytes;
@@ -38,19 +44,40 @@ namespace FixedWidthParser.Native.Reading
             {
                 case NativeType.String:
                     _ints.Reserve(expectedRows + 1);
-                    _bytes.Reserve(Math.Min(expectedRows * column.Length, maxTextBytes));
+                    Size(_bytes, lent, Math.Min(expectedRows * column.Length, maxTextBytes));
                     _ints.Add(0);
                     break;
                 case NativeType.Float64:
-                    _doubles.Reserve(expectedRows);
+                    Size(_doubles, lent, expectedRows);
                     break;
                 case NativeType.Date:
-                    _ints.Reserve(expectedRows);
+                    Size(_ints, lent, expectedRows);
                     break;
                 default:
-                    _longs.Reserve(expectedRows);
+                    Size(_longs, lent, expectedRows);
                     break;
             }
+        }
+
+        private static void Size<T>(GrowableNativeBuffer<T> values, void* lent, long rows) where T : unmanaged
+        {
+            if (lent is null)
+            {
+                values.Reserve(rows);
+                return;
+            }
+            values.Borrow((T*)lent, (int)rows);
+        }
+
+        /// <summary>The bytes of one value of a column of <paramref name="type"/>; 0 for STRING, which has no fixed size.</summary>
+        internal static int ValueSize(int type)
+        {
+            return type switch
+            {
+                NativeType.String => 0,
+                NativeType.Date => sizeof(int),
+                _ => sizeof(long),
+            };
         }
 
         internal int Rows { get; private set; }
@@ -113,18 +140,23 @@ namespace FixedWidthParser.Native.Reading
             });
         }
 
-        /// <summary>Publishes the same column of several partitions, in order, as one column: the one copy a partitioned read makes.</summary>
-        internal static void Concat(ReadOnlySpan<ColumnBuilder> parts, NativeColumnRaw* target)
+        /// <summary>
+        /// Publishes the same column of several partitions, in order, as one column. Partitions that parsed into slices
+        /// of <paramref name="lent"/> are moved down in it to close the gaps between them, and it becomes the column;
+        /// otherwise, or once a partition outgrew its slice, they are copied into fresh memory.
+        /// </summary>
+        internal static void Concat(ReadOnlySpan<ColumnBuilder> parts, NativeColumnRaw* target, GrowableNativeBuffer<byte>? lent = null)
         {
-            if (parts.Length == 1)
-            {
-                parts[0].Publish(target);
-                return;
-            }
             long rows = 0;
             foreach (ref readonly var part in parts)
             {
                 rows += part.Rows;
+                lent = part.Lent ? lent : null;
+            }
+            if (parts.Length == 1 && lent is null)
+            {
+                parts[0].Publish(target);
+                return;
             }
             var column = parts[0]._column;
             target->Type = column.Type;
@@ -135,11 +167,20 @@ namespace FixedWidthParser.Native.Reading
             target->DataLen = 0;
             if (column.Type == NativeType.String)
             {
-                ConcatStrings(parts, rows, target);
+                ConcatStrings(parts, rows, target, lent);
                 return;
             }
-            target->Values = ConcatValues(parts);
+            target->Values = ConcatValues(parts, lent);
         }
+
+        /// <summary>Whether this partition's values, or a STRING column's bytes, still sit where a <see cref="TableArena"/> lent them.</summary>
+        private bool Lent => _column.Type switch
+        {
+            NativeType.String => _bytes.Borrowed,
+            NativeType.Float64 => _doubles.Borrowed,
+            NativeType.Date => _ints.Borrowed,
+            _ => _longs.Borrowed,
+        };
 
         private ReadOnlySpan<byte> ValueBytes => _column.Type switch
         {
@@ -148,25 +189,25 @@ namespace FixedWidthParser.Native.Reading
             _ => MemoryMarshal.AsBytes(_longs.Span),
         };
 
-        private static void* ConcatValues(ReadOnlySpan<ColumnBuilder> parts)
+        private static void* ConcatValues(ReadOnlySpan<ColumnBuilder> parts, GrowableNativeBuffer<byte>? lent)
         {
             long total = 0;
             foreach (ref readonly var part in parts)
             {
                 total += part.ValueBytes.Length;
             }
-            byte* values = (byte*)Marshal.AllocHGlobal((nint)total);
+            byte* values = lent is null ? (byte*)Marshal.AllocHGlobal((nint)total) : lent.Pointer;
             long at = 0;
             foreach (ref readonly var part in parts)
             {
                 var bytes = part.ValueBytes;
-                bytes.CopyTo(new Span<byte>(values + at, bytes.Length));
+                MoveTo(bytes, values + at);
                 at += bytes.Length;
             }
-            return values;
+            return lent is null ? values : (void*)lent.Detach();
         }
 
-        private static void ConcatStrings(ReadOnlySpan<ColumnBuilder> parts, long rows, NativeColumnRaw* target)
+        private static void ConcatStrings(ReadOnlySpan<ColumnBuilder> parts, long rows, NativeColumnRaw* target, GrowableNativeBuffer<byte>? lent)
         {
             long total = 0;
             foreach (ref readonly var part in parts)
@@ -178,24 +219,45 @@ namespace FixedWidthParser.Native.Reading
                 throw new InvalidOperationException(
                     $"Column '{parts[0]._column.Name}' holds more than 2 GiB of text; read in batches (fw_reader_open_*).");
             }
-            int* offsets = (int*)Marshal.AllocHGlobal((nint)((rows + 1) * sizeof(int)));
-            byte* data = (byte*)Marshal.AllocHGlobal((nint)total);
-            offsets[0] = 0;
+            byte* data = lent is null ? (byte*)Marshal.AllocHGlobal((nint)total) : lent.Pointer;
+            // One partition's offsets already start at 0.
+            int* offsets = parts.Length == 1 ? null : (int*)Marshal.AllocHGlobal((nint)((rows + 1) * sizeof(int)));
+            if (offsets is not null)
+            {
+                offsets[0] = 0;
+            }
             long row = 1;
             int baseOffset = 0;
             foreach (ref readonly var part in parts)
             {
-                var partOffsets = part._ints.Span;
-                foreach (ref readonly int offset in partOffsets[1..])
+                if (offsets is not null)
                 {
-                    offsets[row++] = baseOffset + offset;
+                    foreach (ref readonly int offset in part._ints.Span[1..])
+                    {
+                        offsets[row++] = baseOffset + offset;
+                    }
                 }
-                part._bytes.Span.CopyTo(new Span<byte>(data + baseOffset, part._bytes.Count));
+                MoveTo(part._bytes.Span, data + baseOffset);
                 baseOffset += part._bytes.Count;
             }
-            target->Values = offsets;
-            target->Data = data;
+            target->Values = offsets is null ? (void*)parts[0]._ints.Detach() : offsets;
+            target->Data = lent is null ? data : (byte*)lent.Detach();
             target->DataLen = total;
+        }
+
+        /// <summary>
+        /// Copies <paramref name="bytes"/> to <paramref name="to"/>, which may overlap them: partitions lent slices of one
+        /// buffer move down in order, each staying inside its own slice, so none overwrites one not yet moved.
+        /// </summary>
+        private static void MoveTo(ReadOnlySpan<byte> bytes, byte* to)
+        {
+            fixed (byte* from = bytes)
+            {
+                if (from != to)
+                {
+                    bytes.CopyTo(new Span<byte>(to, bytes.Length));
+                }
+            }
         }
 
         private static byte* ConcatValidity(ReadOnlySpan<ColumnBuilder> parts, long rows)

@@ -12,16 +12,32 @@ namespace FixedWidthParser.Native.Reading
         private readonly ColumnBuilder[] _columns;
         private readonly int _requiredLength;
         private readonly TableLimits _limits;
+#pragma warning disable SS066 // Shared by every partition; the read that made it disposes it.
+        private readonly TableArena? _arena;
+#pragma warning restore SS066
         private int _failedColumn;
         private List<TableSink>? _following;
 
-        /// <param name="expectedBytes">The bytes this sink will see, if known: fixed-width lines make that a row count.</param>
-        internal TableSink(NativeLayout layout, TableLimits limits, long expectedBytes = 0)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TableSink"/> struct.
+        /// </summary>
+        /// <param name="arena">The final buffers to parse into, shared by every partition; null for buffers of its own.</param>
+        /// <param name="start">Where the bytes this sink will see start, if known: fixed-width lines make them a row count.</param>
+        /// <param name="end">Where those bytes end.</param>
+        internal unsafe TableSink(NativeLayout layout, TableLimits limits, TableArena? arena = null, long start = 0, long end = 0)
         {
             _layout = layout;
             _limits = limits;
-            long expectedRows = Math.Min(expectedBytes / (layout.LineLength + 1), limits.MaxRows);
-            _columns = [.. layout.Columns.Select(c => new ColumnBuilder(c, limits.MaxTextBytes, expectedRows))];
+            _arena = arena;
+            int firstRow = arena?.RowAt(start) ?? 0;
+            long expectedRows = arena is null
+                ? Math.Min((end - start) / (layout.LineLength + 1), limits.MaxRows)
+                : arena.RowAt(end) - firstRow;
+            _columns = new ColumnBuilder[layout.Columns.Length];
+            for (int i = 0; i < _columns.Length; i++)
+            {
+                _columns[i] = new ColumnBuilder(layout.Columns[i], limits.MaxTextBytes, expectedRows, arena is null ? null : arena.Lend(i, firstRow));
+            }
             _requiredLength = layout.Columns.Max(c => c.Start + c.Length);
             _failedColumn = -1;
             _following = null;
@@ -93,7 +109,7 @@ namespace FixedWidthParser.Native.Reading
             table->ColumnCount = _columns.Length;
             try
             {
-                if (chunks.Length == 1)
+                if (chunks.Length == 1 && _arena is null)
                 {
                     for (int i = 0; i < _columns.Length; i++)
                     {
@@ -102,7 +118,7 @@ namespace FixedWidthParser.Native.Reading
                 }
                 else
                 {
-                    ConcatInParallel(chunks, columns);
+                    ConcatInParallel(chunks, columns, _arena);
                 }
                 table->RowCount = TotalRows;
             }
@@ -115,7 +131,7 @@ namespace FixedWidthParser.Native.Reading
 
         // A concatenated column is all fresh memory, and its page faults are most of the copy's cost: one
         // column per thread spreads them out.
-        private static unsafe void ConcatInParallel(ColumnBuilder[][] chunks, NativeColumnRaw* columns)
+        private static unsafe void ConcatInParallel(ColumnBuilder[][] chunks, NativeColumnRaw* columns, TableArena? arena)
         {
             nint target = (nint)columns;
             try
@@ -127,7 +143,7 @@ namespace FixedWidthParser.Native.Reading
                     {
                         parts[c] = chunks[c][i];
                     }
-                    ColumnBuilder.Concat(parts, (NativeColumnRaw*)target + i);
+                    ColumnBuilder.Concat(parts, (NativeColumnRaw*)target + i, arena?.Block(i));
                 });
             }
             catch (AggregateException ex)

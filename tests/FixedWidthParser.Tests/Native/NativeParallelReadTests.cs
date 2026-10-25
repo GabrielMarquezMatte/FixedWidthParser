@@ -72,6 +72,38 @@ namespace FixedWidthParser.Tests.Native
             Assert.Equal(200 - (200 / 13) + 1, parallel.RowCount);
         }
 
+        // Lines of one length with invalid ones among them leave gaps in the shared columns that publishing closes in
+        // place; a longer first line makes every partition outgrow the room it was lent.
+        [Theory]
+        [InlineData(1, false)]
+        [InlineData(7, false)]
+        [InlineData(64, false)]
+        [InlineData(4096, false)]
+        [InlineData(7, true)]
+        [InlineData(64, true)]
+        public void ParallelRead_UniformLines_EqualsSequential(int chunkSize, bool longFirstLine)
+        {
+            var layout = Layout();
+            var text = new StringBuilder(longFirstLine ? "AB000001000003 trailing\n" : "");
+            for (int i = 1; i <= 300; i++)
+            {
+                string price = i % 11 == 0 ? "XXXXXX" : (i * 3).ToString("D6", System.Globalization.CultureInfo.InvariantCulture);
+                text.Append(System.Globalization.CultureInfo.InvariantCulture, $"AB{i % 100:D2}{i % 10000:D4}{price}\n");
+            }
+            byte[] content = Encoding.UTF8.GetBytes(text.ToString());
+
+            var sequential = FromMemory(content, layout, Options(skipInvalid: true, degreeOfParallelism: 1));
+            var parallel = FromMemory(content, layout, Options(skipInvalid: true, degreeOfParallelism: 4), chunkSize);
+
+            Assert.True(parallel.Status == NativeStatus.Ok, parallel.Error);
+            Assert.Equal(300 - (300 / 11) + (longFirstLine ? 1 : 0), parallel.RowCount);
+            Assert.Equal(sequential.RowCount, parallel.RowCount);
+            for (int column = 0; column < 3; column++)
+            {
+                Assert.Equal(sequential.Column(column), parallel.Column(column));
+            }
+        }
+
         [Theory]
         [InlineData(1)]
         [InlineData(7)]

@@ -120,5 +120,21 @@ Three changes, together:
 | fw.read | 0.250 s | 0.169 s |
 | fw.read, 1 thread | 0.678 s | 0.580 s |
 
-Not done: the concatenation still copies every column, and its page faults are the next cost. Handing
-`read_arrow` the partitions as Arrow chunks would skip that copy for pyarrow, pandas and polars.
+### Parsing into the final columns
+
+The concatenation still wrote every column into fresh memory a second time. Fixed-width lines fix where each
+partition's rows land in the result: with the first line's length as the stride, a partition starting at byte
+`b` starts at row `(b - dataStart) / stride`, rounded up. The read now allocates the final columns once and lends
+each partition its slice; numeric, date and time values go straight there, and so do STRING bytes, with room
+for the column's full width on every row. Publishing moves each partition down to close the gaps that skipped
+lines and trimmed text leave, in memory already touched, and hands the buffers over. A partition with more
+rows than its slice, as when line lengths vary, copies its column out, and that column is concatenated as
+before. STRING offsets are still copied: each slice's leading 0 would fall on the previous slice's last offset.
+
+Same machine, same run order, best of 9:
+
+| Reader | Before | After |
+|---|---:|---:|
+| fw.read | 0.184 s | 0.153 s |
+| fw.read_polars | 0.198 s | 0.165 s |
+| fw.read, 1 thread | 0.588 s | 0.593 s |
