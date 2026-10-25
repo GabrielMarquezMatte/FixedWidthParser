@@ -48,6 +48,15 @@ memory, since they split the source into byte ranges.
 `include/fixedwidth.def` lists them for import-library generation on Windows; a test fails when it drifts
 from the `[UnmanagedCallersOnly]` entry points.
 
+## Threads
+
+Any thread may call any function, and calls on different tables, readers and streams run concurrently. A layout
+is immutable and may be shared by every thread; handles live in a concurrent table. `fw_last_error` and
+`fw_last_parse_error` belong to the calling thread, so read them on the thread whose call failed. A reader or an
+Arrow stream is used by one thread at a time, and an `fw_stream`'s `read` runs on whichever thread is reading.
+A read or write with `degree_of_parallelism` 0 splits across every processor; several such calls at once share
+the same thread pool, so give each `1` when the calls themselves are the parallelism.
+
 ## Consuming from C
 
 Check `fw_abi_version()` against `FW_ABI_VERSION` first. NativeAOT ships no import library on Windows: load

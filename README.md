@@ -110,7 +110,8 @@ layout = fw.Layout([
 df = fw.read_pandas("COTAHIST_A2023.TXT", layout, fw.ReadOptions(header_lines=1, skip_invalid=True))
 ```
 
-On a 1,000,000-line COTAHIST-shaped file, `fw.read_pandas` is 52 times faster than `pandas.read_fwf`
+On a 1,000,000-line COTAHIST-shaped file, `fw.read_pandas` is 96 times faster than `pandas.read_fwf`, and
+`fw.read_polars` 114 times
 ([measurements](docs/python-benchmarks.md)). The [Python README](python/README.md), the
 [C++ README](cpp/README.md) and the [native library README](src/FixedWidthParser.Native/README.md) cover
 the rest.

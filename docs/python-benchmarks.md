@@ -15,22 +15,23 @@ could not reproduce a 16-digit one from a float64 either.
 
 ## Reading
 
-1,000,000 lines (235 MiB). AMD Ryzen 7 5700X (8 cores, 16 threads), Windows 10, Python 3.14.7, pandas 3.1.0,
-pyarrow 26.0.0, polars 2.0.0. `read_fwf` best of 1 run, the others best of 5.
+1,000,000 lines (235 MiB). AMD Ryzen 7 5700X (8 cores, 16 threads), Windows 10, Python 3.14.7, pandas 3.0.5,
+pyarrow 26.0.0, polars 1.44.1. `read_fwf` best of 1 run, the others best of 5.
 
 | Reader | Seconds | vs read_fwf |
 |---|---:|---:|
-| pandas.read_fwf | 14.751 | 1.0x |
-| polars str.slice (reference) | 0.349 | 42x |
-| fw.read_pandas | 0.212 | 70x |
-| fw.read_pandas, 1 thread | 0.655 | 23x |
-| fw.read_polars | 0.198 | 74x |
-| fw.read_arrow | 0.195 | 76x |
-| fw.read (NumPy views) | 0.166 | 89x |
-| fw.read, 1 thread | 0.600 | 25x |
+| pandas.read_fwf | 15.353 | 1.0x |
+| polars str.slice (reference) | 0.217 | 71x |
+| fw.read_pandas | 0.160 | 96x |
+| fw.read_pandas, 1 thread | 0.625 | 25x |
+| fw.read_polars | 0.135 | 114x |
+| fw.read_arrow | 0.123 | 125x |
+| fw.read (NumPy views) | 0.125 | 123x |
+| fw.read, 1 thread | 0.581 | 26x |
 
-A single thread is already 25x faster than `read_fwf`; the default, one thread per processor, adds another 3.6x.
-`fw.read_pandas` costs about 40 ms over `fw.read_arrow`, pyarrow's conversion to pandas.
+A single thread is already 26x faster than `read_fwf`; the default, one thread per processor, adds another 4.6x.
+`fw.read_pandas` costs about 40 ms over `fw.read_arrow`, pyarrow's conversion to pandas. The sections below trace
+how the read got here; their before and after columns come from runs of their own.
 
 ## Writing
 
@@ -48,17 +49,17 @@ Same machine and versions; `numpy.savetxt` best of 1 run, the others best of 5.
 
 | Writer | Seconds | vs savetxt |
 |---|---:|---:|
-| numpy.savetxt (pandas) | 4.302 | 1.0x |
-| polars pad + concat_str | 0.707 | 6.1x |
-| fw.write (pandas) | 0.219 | 20x |
+| numpy.savetxt (pandas) | 4.288 | 1.0x |
+| polars pad + concat_str | 0.710 | 6.0x |
+| fw.write (pandas) | 0.221 | 19x |
 | fw.write (polars) | 0.190 | 23x |
-| fw.write (pyarrow) | 0.162 | 27x |
-| fw.write (pyarrow), 1 thread | 0.550 | 7.8x |
-| fw.write_bytes (pyarrow) | 0.342 | 13x |
+| fw.write (pyarrow) | 0.148 | 29x |
+| fw.write (pyarrow), 1 thread | 0.559 | 7.7x |
+| fw.write_bytes (pyarrow) | 0.337 | 13x |
 
-`fw.write` is 4.4x faster than the polars pipeline. A pandas frame costs ~60 ms more than a pyarrow table, its
+`fw.write` is 4.8x faster than the polars pipeline. A pandas frame costs ~70 ms more than a pyarrow table, its
 conversion to Arrow; `write_bytes` timing includes copying the 235 MB into a `bytes` and writing it to the file.
-Of `fw.write`'s 0.16 s, ~20 ms is the Python side handing the columns over and ~140 ms the native write.
+Of `fw.write`'s 0.15 s, ~20 ms is the Python side handing the columns over and the rest the native write.
 
 ### Making the native write faster
 

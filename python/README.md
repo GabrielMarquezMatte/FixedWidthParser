@@ -64,6 +64,23 @@ A line that fails to parse raises `fw.ParseError` with `line_number` and `column
 when the column has no nulls) and `to_arrow()`, which shares the native buffers. Without pyarrow,
 `read_polars` reads sequentially through the Arrow stream.
 
+## Threads and asyncio
+
+Every function releases the GIL for its native work, so reads and writes on several threads, or through
+`asyncio.to_thread`, run in parallel:
+
+```python
+frames = await asyncio.gather(*(asyncio.to_thread(fw.read_polars, path, layout, options) for path in paths))
+```
+
+- A `fw.Layout` is immutable and can be shared by every thread at once.
+- A failure is raised on the thread whose call failed, with that call's message and line number.
+- A `read_batches` iterator, and the stream it reads, belong to one thread at a time.
+- A stream's `read()` is called on the thread doing the read and takes the GIL while it runs; Python's files,
+  sockets and `zlib` release it again while they wait or decompress, so other threads keep going.
+- `degree_of_parallelism=0` gives each call one thread per processor. When many calls already run at once, pass
+  `1`: the calls are the parallelism, and splitting each one too only makes them queue for the same cores.
+
 ## Columns
 
 `fw.Column(name, start, length, type, *, nullable, scale, format, trim_char, trim_mode, alignment, padding, overflow)`.
