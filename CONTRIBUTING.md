@@ -92,6 +92,19 @@ mood, lowercase summary, no trailing period. Common types in this repo: `feat`, 
   dependencies, publishes and runs the NativeAOT smoke app, and runs CodeQL and the benchmark
   comparison. A change that only builds on one OS isn't ready to merge.
 
+## Releasing
+
+Push a `v*` tag (`v2.0.0`, or `v2.0.0-rc.1` for a prerelease). [release.yml](.github/workflows/release.yml)
+takes the version from the tag, tests and packs the NuGet package, builds the native library on Windows x64,
+macOS arm64 and x64, Linux glibc and musl x64 and arm64, tests one Python wheel per platform, then publishes
+the package to NuGet, the wheels to PyPI as `fixedwidthparser`, and the native libraries and an SBOM
+to the GitHub Release. Both registries publish through Trusted Publishing, so no API keys are stored:
+
+- nuget.org: a trusted publishing policy for this repository and `release.yml`, and the repository variable
+  `NUGET_USER` set to the nuget.org user.
+- PyPI: a trusted publisher for this repository and `release.yml`. Before the first release, add it as a
+  pending publisher for the project name `fixedwidthparser`.
+
 ## Reporting bugs / requesting features
 
 Use the [issue templates](https://github.com/GabrielMarquezMatte/FixedWidthParser/issues/new/choose).

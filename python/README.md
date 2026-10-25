@@ -1,7 +1,16 @@
-# fixedwidthparser-native
+# fixedwidthparser
 
 Read and write fixed-width files from Python through FixedWidthParser's NativeAOT library: no .NET runtime,
 parallel reads, results as NumPy views, Arrow, pandas or polars.
+
+```bash
+pip install "fixedwidthparser[numpy]"    # fw.read: NumPy views
+pip install "fixedwidthparser[pandas]"    # or [pyarrow], [polars]
+```
+
+Wheels ship for Windows x64, macOS (arm64, x64) and Linux (glibc and musl, x64 and arm64). The package installs
+as `fixedwidthparser` and imports as `fixedwidth`. pyarrow has no musllinux wheels, so on Alpine and other
+musl systems Arrow, pandas, polars and writing need a pyarrow built for them.
 
 ```python
 import fixedwidth as fw
@@ -72,6 +81,8 @@ A value that is NaN, infinite or outside int64 once scaled raises before anythin
 
 ## Building from source
 
-    python python/scripts/build_native.py      # publishes the library into src/fixedwidth/_lib
+    python python/scripts/build_native.py      # requires the .NET 10 SDK; publishes the library into src/fixedwidth/_lib
     pip install -e "python[dev,pandas,polars]"
     pytest python/tests
+
+To point at a library built elsewhere, set `FIXEDWIDTH_NATIVE_LIB` to its full path.
