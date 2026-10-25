@@ -67,8 +67,8 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
   Reads fill a columnar `fw_table` or Arrow C Data Interface arrays and streams, in parallel by byte range,
   with `header_lines` and `skip_invalid`; writes take a columnar table and are byte-identical whatever the
   thread count. Not on NuGet.
-- The `fixedwidth` Python package over it (NumPy views, pyarrow, pandas, polars), 52 times faster than
-  `pandas.read_fwf` on a 1,000,000-line COTAHIST-shaped file, and a header-only C++23 wrapper
+- The `fixedwidth` Python package over it (NumPy views, pyarrow, pandas, polars): `read_pandas` is 96 times
+  faster than `pandas.read_fwf` on a 1,000,000-line COTAHIST-shaped file. And a header-only C++23 wrapper
   (`fixedwidth.hpp`) that also maps structs to columns through `FixedWidthMapper<T>`. It installs as a CMake
   package (`find_package(fixedwidth)`) or through FetchContent, and downloads the release's native library for
   the platform, so it needs no .NET SDK.
