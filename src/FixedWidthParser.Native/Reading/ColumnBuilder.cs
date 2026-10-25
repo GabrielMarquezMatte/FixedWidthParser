@@ -36,16 +36,27 @@ namespace FixedWidthParser.Native.Reading
         /// <param name="maxTextBytes">The maximum number of text bytes expected for this column.</param>
         /// <param name="expectedRows">How many rows to size the buffers for up front, so a partition does not grow them row by row.</param>
         /// <param name="lent">Room for <paramref name="expectedRows"/> values that a <see cref="TableArena"/> owns, or null.</param>
-        internal ColumnBuilder(NativeColumn column, long maxTextBytes, long expectedRows, void* lent = null)
+        /// <param name="lentOffsets">For a STRING column, room for its <paramref name="expectedRows"/> + 1 offsets, or null.</param>
+        /// <param name="firstSlice">Whether <paramref name="lentOffsets"/> starts the column: only the first slice writes its leading 0.</param>
+        internal ColumnBuilder(NativeColumn column, long maxTextBytes, long expectedRows, void* lent = null, int* lentOffsets = null, bool firstSlice = true)
         {
             _column = column;
             _maxTextBytes = maxTextBytes;
             switch (column.Type)
             {
                 case NativeType.String:
-                    _ints.Reserve(expectedRows + 1);
+                    Size(_ints, lentOffsets, expectedRows + 1);
                     Size(_bytes, lent, Math.Min(expectedRows * column.Length, maxTextBytes));
-                    _ints.Add(0);
+                    // A later slice's index 0 is the previous slice's last offset, which that slice writes: this one
+                    // claims it without writing, and reads it nowhere (Truncate knows row 0 starts at 0).
+                    if (lentOffsets is null || firstSlice)
+                    {
+                        _ints.Add(0);
+                    }
+                    else
+                    {
+                        _ints.Append(1);
+                    }
                     break;
                 case NativeType.Float64:
                     Size(_doubles, lent, expectedRows);
@@ -121,7 +132,8 @@ namespace FixedWidthParser.Native.Reading
                 return;
             }
             _ints.Truncate(rows + 1);
-            _bytes.Truncate(_ints[rows]);
+            // Index 0 of a lent slice belongs to the slice before; row 0 always starts at 0.
+            _bytes.Truncate(rows == 0 ? 0 : _ints[rows]);
         }
 
         internal void Publish(NativeColumnRaw* target)
@@ -145,15 +157,18 @@ namespace FixedWidthParser.Native.Reading
         /// of <paramref name="lent"/> are moved down in it to close the gaps between them, and it becomes the column;
         /// otherwise, or once a partition outgrew its slice, they are copied into fresh memory.
         /// </summary>
-        internal static void Concat(ReadOnlySpan<ColumnBuilder> parts, NativeColumnRaw* target, GrowableNativeBuffer<byte>? lent = null)
+        /// <param name="lentOffsets">The block a STRING column's offsets were lent from, closed up and handed over the same way.</param>
+        internal static void Concat(ReadOnlySpan<ColumnBuilder> parts, NativeColumnRaw* target, GrowableNativeBuffer<byte>? lent = null,
+            GrowableNativeBuffer<int>? lentOffsets = null)
         {
             long rows = 0;
             foreach (ref readonly var part in parts)
             {
                 rows += part.Rows;
                 lent = part.Lent ? lent : null;
+                lentOffsets = part._ints.Borrowed ? lentOffsets : null;
             }
-            if (parts.Length == 1 && lent is null)
+            if (parts.Length == 1 && lent is null && lentOffsets is null)
             {
                 parts[0].Publish(target);
                 return;
@@ -167,7 +182,7 @@ namespace FixedWidthParser.Native.Reading
             target->DataLen = 0;
             if (column.Type == NativeType.String)
             {
-                ConcatStrings(parts, rows, target, lent);
+                ConcatStrings(parts, rows, target, lent, lentOffsets);
                 return;
             }
             target->Values = ConcatValues(parts, lent);
@@ -207,7 +222,8 @@ namespace FixedWidthParser.Native.Reading
             return lent is null ? values : (void*)lent.Detach();
         }
 
-        private static void ConcatStrings(ReadOnlySpan<ColumnBuilder> parts, long rows, NativeColumnRaw* target, GrowableNativeBuffer<byte>? lent)
+        private static void ConcatStrings(ReadOnlySpan<ColumnBuilder> parts, long rows, NativeColumnRaw* target, GrowableNativeBuffer<byte>? lent,
+            GrowableNativeBuffer<int>? lentOffsets)
         {
             long total = 0;
             foreach (ref readonly var part in parts)
@@ -220,8 +236,17 @@ namespace FixedWidthParser.Native.Reading
                     $"Column '{parts[0]._column.Name}' holds more than 2 GiB of text; read in batches (fw_reader_open_*).");
             }
             byte* data = lent is null ? (byte*)Marshal.AllocHGlobal((nint)total) : lent.Pointer;
-            // One partition's offsets already start at 0.
-            int* offsets = parts.Length == 1 ? null : (int*)Marshal.AllocHGlobal((nint)((rows + 1) * sizeof(int)));
+            // Lent offsets are rebased in place, moving down in order as values do; one partition of its own already
+            // starts at 0; several of their own are copied into fresh memory.
+            int* offsets = null;
+            if (lentOffsets is not null)
+            {
+                offsets = lentOffsets.Pointer;
+            }
+            else if (parts.Length > 1)
+            {
+                offsets = (int*)Marshal.AllocHGlobal((nint)((rows + 1) * sizeof(int)));
+            }
             if (offsets is not null)
             {
                 offsets[0] = 0;
@@ -239,6 +264,10 @@ namespace FixedWidthParser.Native.Reading
                 }
                 MoveTo(part._bytes.Span, data + baseOffset);
                 baseOffset += part._bytes.Count;
+            }
+            if (lentOffsets is not null)
+            {
+                offsets = (int*)lentOffsets.Detach();
             }
             target->Values = offsets is null ? (void*)parts[0]._ints.Detach() : offsets;
             target->Data = lent is null ? data : (byte*)lent.Detach();
