@@ -88,9 +88,12 @@ mood, lowercase summary, no trailing period. Common types in this repo: `feat`, 
 - If a change is user-visible (new API, behavior change, performance claim), add it to
   [CHANGELOG.md](CHANGELOG.md) and mention it in the PR description.
 - CI builds and tests on Linux, Windows, and macOS: the .NET suite, and the native library with its
-  Python, C and C++ bindings. It also validates the package against the last release, audits
-  dependencies, publishes and runs the NativeAOT smoke app, and runs CodeQL and the benchmark
-  comparison. A change that only builds on one OS isn't ready to merge.
+  Python, C and C++ bindings on every platform a release ships. It also checks whitespace formatting,
+  validates the package against the last release, publishes and runs the NativeAOT smoke app, and runs
+  CodeQL. Each job runs only when the paths it covers change, and draft PRs run nothing. A change that only
+  builds on one OS isn't ready to merge.
+- Benchmarks are opt-in: label the PR `run-benchmarks` to get a comment comparing it with the latest master
+  run. A new benchmark class must be added to a group in `tests/Benchmarks/benchmark-groups.json`.
 
 ## Releasing
 

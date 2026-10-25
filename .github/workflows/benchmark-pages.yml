@@ -1,7 +1,8 @@
 name: Benchmarks → GitHub Pages
 
-# Runs on every push to master. Benchmark classes are split across parallel
-# runners and the results are merged and published to GitHub Pages.
+# Runs on each push to master that can move a benchmark. The groups in tests/Benchmarks/benchmark-groups.json
+# run on parallel runners, and the results are merged and published to GitHub Pages, where benchmark-pr.yml
+# reads them as its baseline.
 #
 # Prerequisites (one-time setup in GitHub repo settings):
 #   Settings → Pages → Source: "Deploy from a branch" → Branch: gh-pages / root
@@ -11,74 +12,64 @@ name: Benchmarks → GitHub Pages
 on:
   push:
     branches: [master]
+    paths:
+      - 'src/FixedWidthParser/**'
+      - 'src/FixedWidthParser.Generator/**'
+      - 'tests/Benchmarks/**'
+      - 'Directory.Build.props'
+      - 'global.json'
+      - '.github/workflows/benchmark-pages.yml'
 
 concurrency:
   group: benchmark-pages
   cancel-in-progress: true
 
 permissions:
-  contents: write   # needed to push data to the gh-pages branch
+  contents: read
 
 jobs:
+  groups:
+    name: Load benchmark groups
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.load.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: load
+        run: echo "matrix=$(jq -c . tests/Benchmarks/benchmark-groups.json)" >> "$GITHUB_OUTPUT"
+
   benchmark:
     name: Run (${{ matrix.group.name }})
+    needs: groups
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        group:
-          # Space-separated fully-qualified class patterns.
-          # Each pattern becomes a separate --filter flag (BenchmarkDotNet ORs them).
-          - name: parser
-            filter: >-
-              Benchmarks.Perf.ParserBenchmarks.*
-              Benchmarks.Perf.SourceGenParserBenchmarks.*
-              Benchmarks.Perf.IntHeavyParserBenchmarks.*
-          - name: reader
-            filter: >-
-              Benchmarks.Perf.ReaderBenchmarks.*
-              Benchmarks.Perf.ReaderStartupBenchmarks.*
-              Benchmarks.Perf.AsyncReaderBenchmarks.*
-          - name: byte
-            filter: >-
-              Benchmarks.Perf.ReaderPoolingBenchmarks.*
-          - name: writer
-            filter: Benchmarks.Perf.WriterBenchmarks.*
-          - name: comparison
-            filter: >-
-              Benchmarks.Perf.ComparisonWriterBenchmarks.*
-              Benchmarks.Perf.ComparisonBenchmarks.*
+        group: ${{ fromJSON(needs.groups.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
-
-      - name: Cache NuGet packages
-        uses: actions/cache@v6
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/*.csproj'
 
       - name: Restore
         run: dotnet restore tests/Benchmarks/Benchmarks.csproj
 
       - name: Build (Release)
-        run: dotnet build tests/Benchmarks/Benchmarks.csproj --configuration Release --no-restore
+        run: dotnet build tests/Benchmarks/Benchmarks.csproj --configuration Release --no-restore -p:RunAnalyzers=false
 
       - name: Run benchmarks
         run: |
-          # --filter accepts multiple space-separated patterns as values of a
-          # single flag: `--filter Pat1 Pat2 Pat3`.
-          # Single-quoting the substitution prevents bash glob-expanding the '*'.
+          # --filter takes several space-separated patterns as values of one flag; single-quoting the
+          # substitution keeps bash from glob-expanding the '*'.
           IFS=' ' read -ra patterns <<< '${{ matrix.group.filter }}'
           dotnet run --project tests/Benchmarks/Benchmarks.csproj \
             --configuration Release --no-build \
-            -- --filter "${patterns[@]}" --warmupCount 3 --iterationCount 10
+            -- --filter "${patterns[@]}" ${{ matrix.group.pagesArgs }}
 
       - name: Upload JSON results
         uses: actions/upload-artifact@v7
@@ -93,6 +84,8 @@ jobs:
     # Run even when some matrix shards fail so partial results are still published.
     if: always() && needs.benchmark.result != 'cancelled'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # pushes to the gh-pages branch
 
     steps:
       - uses: actions/checkout@v7
