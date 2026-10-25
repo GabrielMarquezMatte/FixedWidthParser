@@ -2,8 +2,10 @@
   <Folder Name="/src/">
     <Project Path="src/FixedWidthParser/FixedWidthParser.csproj" />
     <Project Path="src/FixedWidthParser.Generator/FixedWidthParser.Generator.csproj" />
+    <Project Path="src/FixedWidthParser.Native/FixedWidthParser.Native.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/AotSmoke/AotSmoke.csproj" />
     <Project Path="tests/Benchmarks/Benchmarks.csproj" />
     <Project Path="tests/FixedWidthParser.Generator.Tests/FixedWidthParser.Generator.Tests.csproj" />
     <Project Path="tests/FixedWidthParser.Tests/FixedWidthParser.Tests.csproj" />

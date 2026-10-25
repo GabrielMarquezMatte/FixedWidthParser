@@ -1,0 +1,7 @@
+# Versioning
+
+The package follows [Semantic Versioning](https://semver.org/). A minor version may add types, members, options and enum values, but does not remove or change anything; every pull request checks the package, binary-compatibly, against the last release.
+
+- **Settings** arrive as new properties on the options objects (`FixedWidthReaderOptions`, `FixedWidthWriterOptions`, `FixedWidthColumnOptions`) or on `FixedWidthContext`, never as a new parameter on an existing method.
+- **Interfaces you implement** — `IFixedWidthModel<TSelf>` (normally through the generator), `IFixedWidthConverter<T>` and `IRecordAccumulator<TSelf, TModel>` — never gain a required member. Anything added comes with a default implementation (`static virtual` or a default interface method).
+- **`FixedWidthParser.Infrastructure`** holds what is public only because generated code calls it (`FixedWidthRuntime`, `ColumnParseOptions`, `ColumnFormatOptions`) or because a method returns it so `foreach` allocates nothing (the `*RecordEnumerable`/`*RecordEnumerator` types and the `*LineParser` strategies). These types are hidden from IntelliSense and not meant for direct use, but they follow the same rules as everything else: code compiled against one 2.x version, generated code included, keeps working with every later 2.x version. A new setting for generated code is a new constructor overload on the options structs.

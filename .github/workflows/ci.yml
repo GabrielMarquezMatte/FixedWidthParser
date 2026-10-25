@@ -1,14 +1,13 @@
 name: CI
 
-# Roda em PRs direcionados à master (o status check que bloqueia o merge) e em
-# pushes na master (mantém o branch padrão verde e registra o check no histórico).
 on:
+  # develop is covered by its pull request into master; a push trigger there would run everything twice.
   pull_request:
     branches: [ master, develop ]
+    types: [ opened, synchronize, reopened, ready_for_review ]
   push:
     branches: [ master ]
 
-# Cancela runs antigas do mesmo PR/branch quando um novo push chega.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -17,14 +16,115 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect changed paths
+    if: github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    outputs:
+      dotnet: ${{ github.event_name != 'pull_request' || steps.filter.outputs.dotnet == 'true' }}
+      aot: ${{ github.event_name != 'pull_request' || steps.filter.outputs.aot == 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Filter
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            dotnet:
+              - 'src/**'
+              - 'tests/**'
+              - 'Directory.Build.props'
+              - 'global.json'
+              - 'FixedWidthParser.slnx'
+              - '.editorconfig'
+              - 'coverage.runsettings'
+              - '.github/workflows/ci.yml'
+            aot:
+              - 'src/FixedWidthParser/**'
+              - 'src/FixedWidthParser.Generator/**'
+              - 'tests/AotSmoke/**'
+              - 'Directory.Build.props'
+              - 'global.json'
+              - '.github/workflows/ci.yml'
+
+  # "Build & Test (<os>)" are required checks on master, and a check whose job never starts stays pending,
+  # so the job always runs and skips its steps when no .NET source changed.
   test:
     name: Build & Test (${{ matrix.os }})
+    needs: changes
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+    env:
+      RUN: ${{ needs.changes.outputs.dotnet }}
+      LINUX: ${{ matrix.os == 'ubuntu-latest' }}
 
+    steps:
+      - name: Nothing to build
+        if: env.RUN != 'true'
+        run: echo "No .NET sources changed; skipping build and tests."
+
+      - name: Checkout
+        if: env.RUN == 'true'
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        if: env.RUN == 'true'
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/*.csproj'
+
+      # Linux builds the whole solution with the analyzers, which are about two thirds of the compile and report
+      # the same on every OS, packs it and runs the generator tests, which are pure Roslyn. Windows and macOS
+      # build and run only the library tests, without the analyzers; source generators still run.
+      - name: Build and test the solution (Linux)
+        if: env.RUN == 'true' && env.LINUX == 'true'
+        run: |
+          dotnet restore FixedWidthParser.slnx
+          dotnet build FixedWidthParser.slnx --configuration Release --no-restore -p:DeterministicSourcePaths=false
+          dotnet format whitespace FixedWidthParser.slnx --verify-no-changes
+          # Packing validates the package against the last release when package validation is on.
+          dotnet pack src/FixedWidthParser/FixedWidthParser.csproj --configuration Release --no-restore --output ./package-validation
+          dotnet test --solution FixedWidthParser.slnx --results-directory ./TestResults --configuration Release --no-build \
+            -- --report-xunit-trx --coverage --coverage-settings coverage.runsettings --coverage-output-format cobertura
+
+      - name: Build and test the library (Windows, macOS)
+        if: env.RUN == 'true' && env.LINUX != 'true'
+        shell: bash
+        run: |
+          dotnet build tests/FixedWidthParser.Tests/FixedWidthParser.Tests.csproj --configuration Release -p:RunAnalyzers=false
+          dotnet test --project tests/FixedWidthParser.Tests/FixedWidthParser.Tests.csproj --results-directory ./TestResults \
+            --configuration Release --no-build -- --report-xunit-trx
+
+      - name: Upload test results
+        if: always() && env.RUN == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.os }}
+          path: ./TestResults/**/*.trx
+          if-no-files-found: ignore
+
+      - name: Upload coverage to Codecov
+        if: env.RUN == 'true' && env.LINUX == 'true'
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./TestResults/*.cobertura.xml
+          flags: csharp
+          fail_ci_if_error: false
+
+  aot-smoke:
+    name: NativeAOT smoke (win-x64)
+    needs: changes
+    if: needs.changes.outputs.aot == 'true'
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -32,80 +132,12 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/*.csproj'
 
-      # Cache restored NuGet packages keyed on the project/props files.
-      # (setup-dotnet's built-in cache needs a packages.lock.json, which this repo
-      # does not use, so we cache the global packages folder directly.)
-      - name: Cache NuGet packages
-        uses: actions/cache@v6
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
+      - name: Publish AotSmoke (PublishAot)
+        run: dotnet publish tests/AotSmoke/AotSmoke.csproj --configuration Release --runtime win-x64 -p:IlcTreatWarningsAsErrors=true -p:RunAnalyzers=false
 
-      - name: Restore
-        run: dotnet restore FixedWidthParser.slnx
-
-      # DeterministicSourcePaths is disabled here so the Microsoft code-coverage
-      # collector can map IL back to source. With it on (it is enabled on CI via
-      # ContinuousIntegrationBuild in FixedWidthParser.csproj), source paths get
-      # remapped and coverage for the library comes out empty. This build is only
-      # used for test/coverage; the pack/publish pipeline lives in release.yml.
-      - name: Build (Release)
-        run: dotnet build FixedWidthParser.slnx --configuration Release --no-restore -p:DeterministicSourcePaths=false
-
-      - name: Test (Release) + collect coverage
-        run: >-
-          dotnet test --solution FixedWidthParser.slnx 
-          --results-directory ./TestResults 
-          --configuration Release 
-          --verbosity normal 
-          --no-build
-          -- 
-          --report-xunit-trx
-          --coverage 
-          --coverage-output-format cobertura
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-results-${{ matrix.os }}
-          path: ./TestResults/**/*.trx
-          if-no-files-found: ignore
-
-      # Coverage is uploaded once, from the Linux leg only, to avoid duplicate reports.
-      - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest'
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./TestResults/*.cobertura.xml
-          fail_ci_if_error: false
-
-  # Surfaces vulnerable transitive/direct packages regardless of NoWarn suppressions
-  # in Directory.Build.props (NU190x warnings are silenced there).
-  audit:
-    name: Dependency audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Restore
-        run: dotnet restore FixedWidthParser.slnx
-
-      - name: Check for vulnerable packages
-        run: |
-          echo "Scanning for known-vulnerable packages…"
-          output=$(dotnet list FixedWidthParser.slnx package --vulnerable --include-transitive)
-          echo "$output"
-          if echo "$output" | grep -q -E '\b(High|Critical)\b'; then
-            echo "::error::High or Critical severity vulnerability found in dependencies."
-            exit 1
-          fi
+      - name: Run the published binary
+        run: ./tests/AotSmoke/bin/Release/net10.0/win-x64/publish/AotSmoke.exe

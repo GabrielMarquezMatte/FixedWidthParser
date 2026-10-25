@@ -480,3 +480,13 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# CMake build trees (native smoke and C++ tests)
+build/
+
+# Python package
+python/.venv/
+python/src/fixedwidth/_lib/*
+!python/src/fixedwidth/_lib/.gitkeep
+__pycache__/
+.pytest_cache/

@@ -1,11 +1,8 @@
-using System.Globalization;
 using System.Text;
 using BenchmarkDotNet.Attributes;
 using FileHelpers;
-using FlatFiles;
 using FixedWidthParser;
-using FixedWidthParser.Readers;
-using FixedWidthParser.Writers;
+using FlatFiles;
 using RecordParser.Builders.Reader;
 using RecordParser.Extensions;
 
@@ -16,30 +13,31 @@ namespace Benchmarks.Perf
     public sealed class FileHelpersRecord
     {
         [FieldFixedLength(10)]
-        [FieldTrim(TrimMode.Both)]
+        [FieldTrim(FileHelpers.TrimMode.Both)]
         public string? Name;
         [FieldFixedLength(5)]
-        [FieldTrim(TrimMode.Both)]
+        [FieldTrim(FileHelpers.TrimMode.Both)]
         public int Age;
         [FieldFixedLength(10)]
-        [FieldTrim(TrimMode.Both)]
+        [FieldTrim(FileHelpers.TrimMode.Both)]
         public double Salary;
     }
 #pragma warning restore CA1051
 
     /// <summary>
-    /// Cross-library comparison: FileHelpers and FlatFiles against FixedWidthParser on the same
-    /// in-memory fixed-width data (25 chars/line: 10 string + 5 int + 10 double).
+    /// Cross-library comparison on the same in-memory fixed-width data (25 bytes/line: 10 string + 5
+    /// int + 10 double). The other libraries read text, so they get the decoded string; FixedWidthParser
+    /// reads the file's bytes, which is what a caller holding the file would hand each of them.
     /// </summary>
     [Config(typeof(RegressionConfig))]
     public class ComparisonBenchmarks
     {
-        private static readonly CultureInfo Culture = CultureInfo.InvariantCulture;
-        private readonly FixedWidthReader<SampleModel> _reader = new(CultureInfo.InvariantCulture);
+        private static readonly FixedWidthLayout<SampleModel> _layout = FixedWidthLayout.FromAttributes<SampleModel>();
         private readonly FileHelperEngine<FileHelpersRecord> _engine = new();
         private readonly FixedLengthSchema _schema = CreateSchema();
         private readonly FixedLengthReaderOptions<SampleModel> _options = CreateReader();
         private string _text = string.Empty;
+        private byte[] _bytes = [];
 
         [Params(100, 1000)]
         public int Count { get; set; }
@@ -60,21 +58,14 @@ namespace Benchmarks.Perf
                                 .Map(m => m.Age, 10, 5)
                                 .Map(m => m.Salary, 15, 10)
                                 .Build();
-            return new (){ Parser = parser.Parse, ParallelismOptions = new() { Enabled = false } };
+            return new() { Parser = parser.Parse, ParallelismOptions = new() { Enabled = false } };
         }
 
         [GlobalSetup]
         public void Setup()
         {
-            var models = new SampleModel[Count];
-            for (int i = 0; i < Count; i++)
-            {
-                models[i] = new SampleModel { Name = "Name" + (i % 100), Age = 20 + (i % 50), Salary = 1000.0 + i };
-            }
-            var writer = new FixedWidthWriter<SampleModel>();
-            using var ms = new MemoryStream();
-            writer.WriteMany(ms, models.AsSpan(), Culture);
-            _text = Encoding.UTF8.GetString(ms.ToArray());
+            _bytes = SampleData.Bytes(Count);
+            _text = Encoding.UTF8.GetString(_bytes);
         }
 
         [Benchmark(Baseline = true)]
@@ -119,9 +110,8 @@ namespace Benchmarks.Perf
         [Benchmark]
         public int FixedWidthParser_Read()
         {
-            using var stringReader = new StringReader(_text);
             int sum = 0;
-            foreach (var model in _reader.Read(stringReader))
+            foreach (var model in FixedWidth.Read(new MemoryStream(_bytes, writable: false), _layout))
             {
                 sum += model.Age;
             }
@@ -132,9 +122,8 @@ namespace Benchmarks.Perf
         [Benchmark]
         public int FixedWidthParser_Generated()
         {
-            using var stringReader = new StringReader(_text);
             int sum = 0;
-            foreach (var model in FixedWidth.Read<GenSampleModel>(stringReader, formatProvider: Culture))
+            foreach (var model in FixedWidth.Read<GenSampleModel>(new MemoryStream(_bytes, writable: false)))
             {
                 sum += model.Age;
             }

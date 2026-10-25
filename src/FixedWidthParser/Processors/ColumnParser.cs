@@ -1,20 +1,15 @@
-using CommunityToolkit.HighPerformance.Buffers;
+using System.Diagnostics.CodeAnalysis;
+using FixedWidthParser.Infrastructure;
 
 namespace FixedWidthParser.Processors
 {
     /// <summary>
-    /// Parses the already-sliced text of a single column and assigns it to the model. The parser
-    /// slices each column out of the line (honoring start/length) and hands the resulting span here,
-    /// so this delegate never deals with offsets. Replaces the old <c>IColumnProcessor</c>
-    /// abstraction: one delegate per column. Returns <see langword="false"/> to reject the line.
+    /// Parses the already-sliced bytes of a single column and assigns the value to the model. Returns
+    /// <see langword="false"/> to reject the line.
     /// </summary>
-    public delegate bool ColumnParser<TModel>(
-        ReadOnlySpan<char> column,
-        IFormatProvider? formatProvider,
-        StringPool? stringPool,
-#if NET9_0_OR_GREATER
-        ref TModel model) where TModel : allows ref struct;
-#else
-        ref TModel model);
-#endif
+    internal delegate bool ColumnParser<TModel>(ReadOnlySpan<byte> column, in FixedWidthContext context, ref TModel model)
+        where TModel : allows ref struct;
+
+    /// <summary>Parses the already-sliced bytes of a single column: the shape of the <see cref="FixedWidthRuntime"/> parse helpers.</summary>
+    internal delegate bool ColumnValueParser<TValue>(ReadOnlySpan<byte> column, in FixedWidthContext context, in ColumnParseOptions options, [MaybeNullWhen(false)] out TValue value);
 }
