@@ -1,109 +1,57 @@
-using System.Text;
-using FixedWidthParser.Parsers;
-using FixedWidthParser.Writers;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
 {
     /// <summary>
-    /// Covers nullable value-type columns (<c>T?</c>): a blank (all-spaces) column parses to
-    /// <see langword="null"/> without invoking the underlying parser, and a present value round-trips
-    /// exactly as the non-nullable <c>T</c> would. Exercises reflection parse/write (char + UTF-8) and
-    /// the generated parity, plus the combination with a custom converter.
+    /// Nullable value-type columns (<c>T?</c>): a blank column parses to <see langword="null"/> without
+    /// invoking the underlying parser, and a present value round-trips exactly as <c>T</c> would.
     /// </summary>
     public class NullableColumnTests
     {
-        // NullableModel is Age[0,5) + Amount[5,15): build lines by padding each field to its column
-        // width, rather than hand-counting spaces in a literal (an easy off-by-one to get wrong).
-        private static string Line(string age, string amount)
+        // NullableModel is Age[0,5) + Amount[5,15).
+        private static byte[] Line(string age, string amount)
         {
-            return age.PadRight(5) + amount.PadRight(10);
+            return Bytes(age.PadRight(5) + amount.PadRight(10));
         }
 
-        private static readonly string Blank = Line("", "");
-
         [Fact]
-        public void Reflection_Char_BlankColumn_ParsesToNull()
+        public void BlankColumn_ParsesToNull()
         {
-            var parser = new FixedWidthParser<NullableModel>();
-
-            bool ok = parser.TryParse(Blank, Inv, null, out var model);
-
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse(Line("", ""), FixedWidthLayout.FromAttributes<NullableModel>(), Ctx, out var model));
             Assert.Null(model.Age);
             Assert.Null(model.Amount);
         }
 
         [Fact]
-        public void Reflection_Char_PresentValue_Parses()
+        public void PresentValue_Parses()
         {
-            var parser = new FixedWidthParser<NullableModel>();
-
-            bool ok = parser.TryParse(Line("30", "123.45"), Inv, null, out var model);
-
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse(Line("30", "123.45"), FixedWidthLayout.FromAttributes<NullableModel>(), Ctx, out var model));
             Assert.Equal(30, model.Age);
             Assert.Equal(123.45m, model.Amount);
         }
 
         [Fact]
-        public void Reflection_Char_InvalidValue_ReturnsFalse()
+        public void InvalidValue_ReturnsFalse()
         {
-            var parser = new FixedWidthParser<NullableModel>();
-
-            bool ok = parser.TryParse(Line("XX", ""), Inv, null, out _);
-
-            Assert.False(ok);
+            Assert.False(FixedWidth.TryParse(Line("XX", ""), FixedWidthLayout.FromAttributes<NullableModel>(), Ctx, out _));
         }
 
         [Fact]
-        public void Reflection_Utf8_BlankColumn_ParsesToNull()
+        public void Write_Null_WritesBlank()
         {
-            var parser = new Utf8FixedWidthParser<NullableModel>();
-            byte[] bytes = Encoding.UTF8.GetBytes(Blank);
+            string line = WriteOne(FixedWidthLayout.FromAttributes<NullableModel>(), new NullableModel { Age = null, Amount = null });
 
-            bool ok = parser.TryParse(bytes, Inv, null, out var model);
-
-            Assert.True(ok);
-            Assert.Null(model.Age);
-            Assert.Null(model.Amount);
+            Assert.Equal(new string(' ', 15), line);
         }
 
         [Fact]
-        public void Reflection_Utf8_PresentValue_Parses()
+        public void RoundTrip_PreservesNullAndValue()
         {
-            var parser = new Utf8FixedWidthParser<NullableModel>();
-            byte[] bytes = Encoding.UTF8.GetBytes(Line("30", "123.45"));
-
-            bool ok = parser.TryParse(bytes, Inv, null, out var model);
-
-            Assert.True(ok);
-            Assert.Equal(30, model.Age);
-            Assert.Equal(123.45m, model.Amount);
-        }
-
-        [Fact]
-        public void Reflection_Write_Null_WritesBlank()
-        {
-            var writer = new FixedWidthWriter<NullableModel>();
-            var model = new NullableModel { Age = null, Amount = null };
-
-            string line = WriteOne(writer, model);
-
-            Assert.Equal(Blank, line);
-        }
-
-        [Fact]
-        public void Reflection_RoundTrip_PreservesNullAndValue()
-        {
-            var writer = new FixedWidthWriter<NullableModel>();
-            var parser = new FixedWidthParser<NullableModel>();
             var original = new NullableModel { Age = 42, Amount = null };
 
-            string line = WriteOne(writer, original);
-            bool ok = parser.TryParse(line, Inv, null, out var parsed);
+            string line = WriteOne(FixedWidthLayout.FromAttributes<NullableModel>(), original);
 
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<NullableModel>(), Ctx, out var parsed));
             Assert.Equal(original.Age, parsed.Age);
             Assert.Null(parsed.Amount);
         }
@@ -112,95 +60,42 @@ namespace FixedWidthParser.Tests
         [InlineData("               ")]
         [InlineData("30   123.45    ")]
         [InlineData("XX             ")]
-        public void Generated_Char_MatchesReflection(string line)
+        public void Generated_MatchesReflection(string line)
         {
-            var reflection = new FixedWidthParser<NullableModel>();
-
-            bool okR = reflection.TryParse(line, Inv, null, out var r);
-            bool okG = FixedWidth.TryParse<GenNullableModel>(line, Inv, null, out var g);
-
-            Assert.Equal(okR, okG);
-            if (okR)
-            {
-                Assert.Equal(r.Age, g.Age);
-                Assert.Equal(r.Amount, g.Amount);
-            }
-        }
-
-        [Theory]
-        [InlineData("               ")]
-        [InlineData("30   123.45    ")]
-        public void Generated_Utf8_MatchesReflection(string line)
-        {
-            byte[] bytes = Encoding.UTF8.GetBytes(line);
-            var reflection = new Utf8FixedWidthParser<NullableModel>();
-
-            bool okR = reflection.TryParse(bytes, Inv, null, out var r);
-            bool okG = FixedWidthUtf8.TryParse<GenNullableModel>(bytes, Inv, null, out var g);
+            bool okR = FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<NullableModel>(), Ctx, out var r);
+            bool okG = FixedWidth.TryParse<GenNullableModel>(Bytes(line), Ctx, out var g);
 
             Assert.Equal(okR, okG);
             Assert.Equal(r.Age, g.Age);
             Assert.Equal(r.Amount, g.Amount);
         }
 
-        [Fact]
-        public void NullableConverter_Blank_ParsesToNull()
+        [Theory]
+        [InlineData("        ")]
+        [InlineData("12345   ")]
+        public void NullableConverter_Generated_MatchesReflection(string line)
         {
-            var parser = new FixedWidthParser<NullableConverterModel>();
+            bool okR = FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<NullableConverterModel>(), Ctx, out var r);
+            bool okG = FixedWidth.TryParse<GenNullableConverterModel>(Bytes(line), Ctx, out var g);
 
-            bool ok = parser.TryParse("        ", Inv, null, out var model);
-
-            Assert.True(ok);
-            Assert.Null(model.Amount);
+            Assert.True(okR);
+            Assert.True(okG);
+            Assert.Equal(r.Amount, g.Amount);
         }
 
         [Fact]
         public void NullableConverter_PresentValue_Parses()
         {
-            var parser = new FixedWidthParser<NullableConverterModel>();
-
-            bool ok = parser.TryParse("12345   ", Inv, null, out var model);
-
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse("12345   "u8, FixedWidthLayout.FromAttributes<NullableConverterModel>(), Ctx, out var model));
             Assert.Equal(new CentsValue(12345), model.Amount);
         }
 
         [Fact]
         public void NullableConverter_Write_Null_WritesBlank()
         {
-            var writer = new FixedWidthWriter<NullableConverterModel>();
-            var model = new NullableConverterModel { Amount = null };
-
-            string line = WriteOne(writer, model);
+            string line = WriteOne(FixedWidthLayout.FromAttributes<NullableConverterModel>(), new NullableConverterModel { Amount = null });
 
             Assert.Equal(new string(' ', 8), line);
-        }
-
-        [Fact]
-        public void NullableConverter_Generated_Char_MatchesReflection()
-        {
-            var reflection = new FixedWidthParser<NullableConverterModel>();
-            const string line = "12345   ";
-
-            bool okR = reflection.TryParse(line, Inv, null, out var r);
-            bool okG = FixedWidth.TryParse<GenNullableConverterModel>(line, Inv, null, out var g);
-
-            Assert.Equal(okR, okG);
-            Assert.Equal(r.Amount, g.Amount);
-        }
-
-        [Fact]
-        public void NullableConverter_Generated_Char_Blank_MatchesReflection()
-        {
-            var reflection = new FixedWidthParser<NullableConverterModel>();
-            const string line = "        ";
-
-            bool okR = reflection.TryParse(line, Inv, null, out var r);
-            bool okG = FixedWidth.TryParse<GenNullableConverterModel>(line, Inv, null, out var g);
-
-            Assert.Equal(okR, okG);
-            Assert.Null(r.Amount);
-            Assert.Null(g.Amount);
         }
     }
 }

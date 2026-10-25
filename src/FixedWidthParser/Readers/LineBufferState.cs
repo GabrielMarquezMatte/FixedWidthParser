@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Text;
 
 namespace FixedWidthParser.Readers
 {
@@ -11,111 +10,82 @@ namespace FixedWidthParser.Readers
     }
 
     /// <summary>
-    /// Element-type specifics for <see cref="LineBufferState{T, TFormat}"/>: the line-break markers
-    /// and an optional preamble (BOM) to skip before the first line. Implemented by
-    /// <see langword="struct"/>s so the calls devirtualize inside the generic buffer state, exactly
-    /// like the <c>TParser</c> strategy on the enumerator cores.
+    /// Buffers bytes read in blocks from a stream and splits them into lines as
+    /// <see cref="ReadOnlySpan{T}"/> slices, with no per-line allocation. Splits on <c>\n</c>, dropping
+    /// a preceding <c>\r</c>, skips a UTF-8 byte order mark when asked, and refuses a line longer than
+    /// the maximum, which bounds how far the buffer grows on a source without line breaks.
     /// </summary>
-    public interface ILineFormat<T> where T : unmanaged
+    internal struct LineBufferState
     {
-        static abstract T Cr { get; }
-        static abstract T Lf { get; }
-
-        /// <summary>
-        /// Decides how many leading elements to skip before the first line (e.g. a UTF-8 BOM).
-        /// Returns <see langword="false"/> when more buffered data is needed to decide.
-        /// </summary>
-        static abstract bool TrySkipPreamble(ReadOnlySpan<T> data, bool eof, out int skip);
-
-        /// <summary>Formats a line for a parsing exception.</summary>
-        static abstract string FormatForException(ReadOnlySpan<T> line);
-    }
-
-    /// <summary>Char line format: no preamble — the <see cref="TextReader"/> already handled the BOM.</summary>
-    public readonly struct CharLineFormat : ILineFormat<char>
-    {
-        public static char Cr => '\r';
-        public static char Lf => '\n';
-
-        public static bool TrySkipPreamble(ReadOnlySpan<char> data, bool eof, out int skip)
-        {
-            skip = 0;
-            return true;
-        }
-
-        public static string FormatForException(ReadOnlySpan<char> line)
-        {
-            return line.ToString();
-        }
-    }
-
-    /// <summary>UTF-8 byte line format: skips a leading byte-order mark (EF BB BF).</summary>
-    public readonly struct Utf8LineFormat : ILineFormat<byte>
-    {
-        public static byte Cr => (byte)'\r';
-        public static byte Lf => (byte)'\n';
-
-        // Needs at least 3 buffered bytes to decide; otherwise wait for more data (unless the
-        // stream already ended).
-        public static bool TrySkipPreamble(ReadOnlySpan<byte> data, bool eof, out int skip)
-        {
-            if (data.Length >= 3)
-            {
-                skip = data is [0xEF, 0xBB, 0xBF, ..] ? 3 : 0;
-                return true;
-            }
-            skip = 0;
-            return eof;
-        }
-
-        public static string FormatForException(ReadOnlySpan<byte> line)
-        {
-            return Encoding.UTF8.GetString(line);
-        }
-    }
-
-    /// <summary>
-    /// Buffers elements read in blocks from the underlying source and splits them into lines as
-    /// <see cref="ReadOnlySpan{T}"/>, with no string (or per-line buffer) allocated. Splits on
-    /// <see cref="ILineFormat{T}.Lf"/>, dropping a preceding <see cref="ILineFormat{T}.Cr"/> (CRLF),
-    /// and skips the format's preamble before the first line. Used as
-    /// <see cref="char"/>/<see cref="CharLineFormat"/> by the <see cref="TextReader"/>-based cores and
-    /// as <see cref="byte"/>/<see cref="Utf8LineFormat"/> by the <see cref="Stream"/>-based UTF-8 cores.
-    /// </summary>
-    internal struct LineBufferState<T, TFormat>
-        where T : unmanaged, IEquatable<T>
-        where TFormat : struct, ILineFormat<T>
-    {
-        internal T[] Buffer;
+        internal byte[] Buffer;
         internal int Start;
         internal int End;
         internal int ScanFrom;
         internal bool Eof;
-        internal int LineNumber;
+        internal long LineNumber;
+        // Offset, from the first byte read, of the line TryGetLine last returned: the byte after the
+        // previous line break, so a skipped byte order mark belongs to the first line.
+        internal long LineStart;
+        private long _nextLineStart;
+        private long _compacted;
+        private int _lineOffset;
+        private int _lineLength;
+        private int _maxLineLength;
         private bool _preambleChecked;
 
-        internal void Rent(int bufferSize)
+        /// <summary>Offset, from the first byte read, of the first byte no line has consumed yet.</summary>
+        internal readonly long Consumed => _compacted + Start;
+
+        /// <summary>The line <see cref="TryGetLine"/> last returned, valid until the next <see cref="Compact"/>.</summary>
+        internal readonly ReadOnlySpan<byte> CurrentLine => Buffer.AsSpan(_lineOffset, _lineLength);
+
+        internal void Rent(FixedWidthReaderOptions options)
         {
-            Buffer = ArrayPool<T>.Shared.Rent(bufferSize);
-            Start = 0;
-            End = 0;
-            ScanFrom = 0;
-            Eof = false;
-            LineNumber = 0;
-            _preambleChecked = false;
+            Rent(options, options.SkipsByteOrderMark);
         }
 
-        internal LineStatus TryGetLine(out ReadOnlySpan<T> line)
+        internal void Rent(FixedWidthReaderOptions options, bool skipByteOrderMark)
+        {
+            Init(ArrayPool<byte>.Shared.Rent(options.BufferSize), 0, eof: false, linesBefore: 0, options, skipByteOrderMark);
+        }
+
+        /// <summary>
+        /// Takes ownership of a pooled <paramref name="buffer"/> already holding the whole input: its
+        /// first <paramref name="length"/> bytes, numbered from the line after <paramref name="linesBefore"/>.
+        /// </summary>
+        internal void Wrap(byte[] buffer, int length, long linesBefore, FixedWidthReaderOptions options, bool skipByteOrderMark)
+        {
+            Init(buffer, length, eof: true, linesBefore, options, skipByteOrderMark);
+        }
+
+        private void Init(byte[] buffer, int end, bool eof, long linesBefore, FixedWidthReaderOptions options, bool skipByteOrderMark)
+        {
+            Buffer = buffer;
+            Start = 0;
+            End = end;
+            ScanFrom = 0;
+            Eof = eof;
+            LineNumber = linesBefore;
+            LineStart = 0;
+            _nextLineStart = 0;
+            _compacted = 0;
+            _maxLineLength = options.MaxLineLength;
+            _preambleChecked = !skipByteOrderMark;
+        }
+
+        internal LineStatus TryGetLine(out ReadOnlySpan<byte> line)
         {
             if (!_preambleChecked)
             {
-                if (!TFormat.TrySkipPreamble(Buffer.AsSpan(Start, End - Start), Eof, out int skip))
+                if (End - Start < 3 && !Eof)
                 {
                     line = default;
                     return LineStatus.NeedData;
                 }
-
-                Start += skip;
+                if (Buffer.AsSpan(Start, End - Start) is [0xEF, 0xBB, 0xBF, ..])
+                {
+                    Start += 3;
+                }
                 ScanFrom = Start;
                 _preambleChecked = true;
             }
@@ -124,11 +94,10 @@ namespace FixedWidthParser.Readers
             {
                 if (ScanFrom < End)
                 {
-                    int rel = Buffer.AsSpan(ScanFrom, End - ScanFrom).IndexOf(TFormat.Lf);
+                    int rel = Buffer.AsSpan(ScanFrom, End - ScanFrom).IndexOf((byte)'\n');
                     if (rel >= 0)
                     {
                         int nlIndex = ScanFrom + rel;
-                        // Content ends at the '\n' (trimming a preceding '\r'); resume past the '\n'.
                         if (TrySliceLine(rawEnd: nlIndex, nextStart: nlIndex + 1, out line))
                         {
                             return LineStatus.Line;
@@ -158,24 +127,40 @@ namespace FixedWidthParser.Readers
         }
 
         /// <summary>
-        /// Slices the line ending at <paramref name="rawEnd"/> (dropping a trailing
-        /// <see cref="ILineFormat{T}.Cr"/>), advances <see cref="Start"/>/<see cref="ScanFrom"/> to
-        /// <paramref name="nextStart"/>, and counts the line. Returns <see langword="false"/> for an
-        /// empty line so the caller skips it while still having consumed it.
+        /// Slices the line ending at <paramref name="rawEnd"/> (dropping a trailing <c>\r</c>), advances to
+        /// <paramref name="nextStart"/> and counts the line. Returns <see langword="false"/> for an empty
+        /// line so the caller skips it while still having consumed it.
         /// </summary>
-        private bool TrySliceLine(int rawEnd, int nextStart, out ReadOnlySpan<T> line)
+        private bool TrySliceLine(int rawEnd, int nextStart, out ReadOnlySpan<byte> line)
         {
             int contentEnd = rawEnd;
-            if (contentEnd > Start && Buffer[contentEnd - 1].Equals(TFormat.Cr))
+            if (contentEnd > Start && Buffer[contentEnd - 1] == (byte)'\r')
             {
                 contentEnd--;
             }
 
-            line = Buffer.AsSpan(Start, contentEnd - Start);
+            if (contentEnd - Start > _maxLineLength)
+            {
+                throw ParseErrors.LineTooLong(LineNumber + 1L, _maxLineLength);
+            }
+
+            _lineOffset = Start;
+            _lineLength = contentEnd - Start;
+            line = Buffer.AsSpan(_lineOffset, _lineLength);
+            LineStart = _nextLineStart;
+            _nextLineStart = _compacted + nextStart;
             Start = nextStart;
             ScanFrom = nextStart;
             LineNumber++;
             return !line.IsEmpty;
+        }
+
+        /// <summary>Makes room in the buffer and reads the next block of <paramref name="stream"/> into it.</summary>
+        internal void Fill(Stream stream)
+        {
+            Compact();
+            GrowIfFull();
+            Advance(stream.Read(Buffer.AsSpan(End)));
         }
 
         internal void Compact()
@@ -193,6 +178,7 @@ namespace FixedWidthParser.Readers
 
             End = len;
             ScanFrom -= Start;
+            _compacted += Start;
             Start = 0;
         }
 
@@ -203,9 +189,16 @@ namespace FixedWidthParser.Readers
                 return;
             }
 
-            var bigger = ArrayPool<T>.Shared.Rent(Buffer.Length * 2);
+            // A full buffer after Compact holds one unterminated line; +1 leaves room for its '\r'.
+            if (End - Start > _maxLineLength + 1L)
+            {
+                throw ParseErrors.LineTooLong(LineNumber + 1L, _maxLineLength);
+            }
+
+            int size = (int)Math.Min(Buffer.Length * 2L, _maxLineLength + 2L);
+            var bigger = ArrayPool<byte>.Shared.Rent(size);
             Array.Copy(Buffer, 0, bigger, 0, End);
-            ArrayPool<T>.Shared.Return(Buffer);
+            ArrayPool<byte>.Shared.Return(Buffer);
             Buffer = bigger;
         }
 
@@ -225,7 +218,7 @@ namespace FixedWidthParser.Readers
         {
             if (Buffer is not null)
             {
-                ArrayPool<T>.Shared.Return(Buffer);
+                ArrayPool<byte>.Shared.Return(Buffer);
                 Buffer = null!;
             }
         }

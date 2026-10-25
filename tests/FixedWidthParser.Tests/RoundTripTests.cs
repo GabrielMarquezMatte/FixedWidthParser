@@ -1,5 +1,3 @@
-using FixedWidthParser.Parsers;
-using FixedWidthParser.Writers;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
@@ -21,12 +19,12 @@ namespace FixedWidthParser.Tests
         [MemberData(nameof(PersonCases))]
         public void RoundTrip_Person_PreservesValues(string name, int age, double salary)
         {
-            var writer = new FixedWidthWriter<PersonModel>();
-            var parser = new FixedWidthParser<PersonModel>();
+            var writer = FixedWidthLayout.FromAttributes<PersonModel>();
+            var parser = FixedWidthLayout.FromAttributes<PersonModel>();
             var original = new PersonModel { Name = name, Age = age, Salary = salary };
 
             string line = WriteOne(writer, original);
-            bool ok = parser.TryParse(line, Inv, null, out var parsed);
+            bool ok = FixedWidth.TryParse(Bytes(line), parser, Ctx, out var parsed);
 
             Assert.True(ok);
             Assert.Equal(original.Name, parsed.Name);
@@ -37,12 +35,12 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void RoundTrip_FieldModel_PreservesValues()
         {
-            var writer = new FixedWidthWriter<ProductModel>();
-            var parser = new FixedWidthParser<ProductModel>();
+            var writer = FixedWidthLayout.FromAttributes<ProductModel>();
+            var parser = FixedWidthLayout.FromAttributes<ProductModel>();
             var original = new ProductModel { Code = "ABCDE", Quantity = 1234 };
 
             string line = WriteOne(writer, original);
-            bool ok = parser.TryParse(line, Inv, null, out var parsed);
+            bool ok = FixedWidth.TryParse(Bytes(line), parser, Ctx, out var parsed);
 
             Assert.True(ok);
             Assert.Equal(original.Code, parsed.Code);
