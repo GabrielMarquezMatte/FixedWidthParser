@@ -137,6 +137,10 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
 - Native and Python whole-file reads size their column buffers once per partition, skip bad lines under
   `skip_invalid` without numbering them, and concatenate the partitions' columns in parallel: a parallel
   COTAHIST read is about 32% faster.
+- Native and Python whole-file reads parse every partition straight into the final columns, at the row its
+  byte offset gives when all lines have the first line's length, instead of copying the partitions together
+  afterwards. Numeric, date and time values and STRING bytes skip the copy, and a parallel COTAHIST read is
+  another 17% faster. A file whose lines vary in length still reads correctly; its columns are copied as before.
 - Writing: right-aligned `int`/`long` columns without a format put their digits straight into the line,
   digit-only date and time formats reuse the reader's fast path, and `fw_write_file` opens its file for
   asynchronous I/O so parallel batches write at once. A COTAHIST write through Python is about 37% faster.

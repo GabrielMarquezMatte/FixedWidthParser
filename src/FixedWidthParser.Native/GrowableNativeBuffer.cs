@@ -23,6 +23,21 @@ namespace FixedWidthParser.Native
 
         internal ReadOnlySpan<T> Span => new(_data, Count);
 
+        internal T* Pointer => _data;
+
+        /// <summary>Whether the elements still sit in memory lent by <see cref="Borrow"/>.</summary>
+        internal bool Borrowed => _block is null && _data is not null;
+
+        /// <summary>
+        /// Fills <paramref name="capacity"/> elements at <paramref name="data"/>, which the caller owns and frees, and
+        /// copies them into a block of its own if it outgrows them.
+        /// </summary>
+        internal void Borrow(T* data, int capacity)
+        {
+            _data = data;
+            _capacity = capacity;
+        }
+
         /// <summary>Grows once to hold at least <paramref name="capacity"/> elements, clamped to what a buffer can hold.</summary>
         internal void Reserve(long capacity)
         {
@@ -111,9 +126,14 @@ namespace FixedWidthParser.Native
         {
             int capacity = NextCapacity(_capacity, minimum);
             nint bytes = checked((nint)capacity * sizeof(T));
+            T* lent = Borrowed ? _data : null;
             _block ??= new Block();
             _data = (T*)_block.Resize(bytes);
             _capacity = capacity;
+            if (lent is not null)
+            {
+                new ReadOnlySpan<T>(lent, Count).CopyTo(new Span<T>(_data, Count));
+            }
         }
 
         private sealed class Block : SafeHandle

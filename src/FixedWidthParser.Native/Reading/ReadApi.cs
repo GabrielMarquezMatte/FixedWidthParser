@@ -51,7 +51,8 @@ namespace FixedWidthParser.Native.Reading
                 var skipped = new StrongBox<long>(headerLines);
                 var readerOptions = settings.ReaderOptions(skipped, settings.DegreeOfParallelism, chunkSize);
 #pragma warning disable VSTHRD002 // An export is synchronous and runs with no synchronization context.
-                using var table = ParallelAggregator.RunAsync(source, dataStart, bytes => new TableSink(layout, limits, bytes), readerOptions, CancellationToken.None)
+                using var arena = TableArena.TryCreate(source, dataStart, layout, limits);
+                using var table = ParallelAggregator.RunAsync(source, dataStart, (start, end) => new TableSink(layout, limits, arena, start, end), readerOptions, CancellationToken.None)
                     .GetAwaiter().GetResult();
 #pragma warning restore VSTHRD002
                 table.Publish(outTable);
