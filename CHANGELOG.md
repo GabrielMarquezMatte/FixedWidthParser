@@ -72,6 +72,12 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
   (`fixedwidth.hpp`) that also maps structs to columns through `FixedWidthMapper<T>`. It installs as a CMake
   package (`find_package(fixedwidth)`) or through FetchContent, and downloads the release's native library for
   the platform, so it needs no .NET SDK.
+- Batched and Arrow-stream reads from a forward-only source, as ExcelReader's `xl_stream`: an `fw_stream` of
+  `read` and `release` callbacks (`fw_reader_open_stream`, `fw_read_arrow_stream_stream`, and
+  `fw_set_source_error` for a callback's failure). Header lines are skipped without seeking, and the batches
+  stay in constant memory. Python's readers take any object with `readinto()` or `read()` (an open file,
+  `gzip.open`, `zipfile.ZipFile.open`), and an `io.BytesIO` is read in place; the C++ wrapper takes a
+  `std::istream&` (`Reader::open_stream`, `TypedReader<T>::open_stream`, `read_arrow_stream`).
 - Releases publish the Python package to PyPI as `fixedwidthparser`, with wheels for Windows x64,
   macOS arm64 and x64, and Linux glibc and musl on x64 and arm64, and attach each platform's native library
   to the GitHub Release.

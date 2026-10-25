@@ -39,7 +39,20 @@ df = fw.read_pandas("COTAHIST_A2023.TXT", layout, options)
 | `fw.read_batches(source, layout, fw.ReaderOptions(batch_rows=...))` | an iterator of `fw.Table` |
 | `fw.read_arrow_stream(source, layout, fw.ReaderOptions(...))` | an Arrow PyCapsule stream for `polars.DataFrame(...)` or `pyarrow.RecordBatchReader.from_stream(...)` |
 
-`source` is a path, or `bytes`/`bytearray`/`memoryview` to read from memory. Every optional setting lives in
+`source` is a path, `bytes`/`bytearray`/`memoryview`/`io.BytesIO` to read from memory (a `BytesIO` in place,
+from its position), or any stream with `readinto()` or `read()`: an open file, a pipe, `gzip.open(...)`,
+`zipfile.ZipFile(...).open(...)`. `read_batches` and `read_arrow_stream` pull from a stream as the batches are
+taken, in constant memory; the whole-table reads read it into memory first, since they split it into byte ranges.
+
+```python
+import zipfile
+
+with zipfile.ZipFile("COTAHIST_A2023.ZIP") as archive, archive.open("COTAHIST_A2023.TXT") as stream:
+    for batch in fw.read_batches(stream, layout, fw.ReaderOptions(read=options, batch_rows=100_000)):
+        ...
+```
+
+Every optional setting lives in
 `fw.ReadOptions`: `header_lines`, `skip_invalid`, `degree_of_parallelism` (0 = one thread per processor,
 1 = sequential), `encoding` (a code page or `"latin-1"`, `"cp1252"`, ...), `max_line_length` and
 `skip_byte_order_mark`. A parallel read gives the same rows, in the same order, as a sequential one.

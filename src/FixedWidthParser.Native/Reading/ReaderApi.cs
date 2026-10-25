@@ -23,6 +23,14 @@ namespace FixedWidthParser.Native.Reading
             return status;
         }
 
+        /// <inheritdoc cref="CreateStream"/>
+        internal static int OpenStream(Stream source, NativeLayout layout, NativeReaderOptionsRaw* options, out nint reader)
+        {
+            int status = CreateStream(source, layout, options, out var created);
+            reader = status == NativeStatus.Ok ? NativeHandleTable.Register(created!) : 0;
+            return status;
+        }
+
 #pragma warning restore CA2000, IDISP001
 
         internal static int CreateFile(ReadOnlySpan<byte> path, NativeLayout layout, NativeReaderOptionsRaw* options, out NativeTableReader? reader)
@@ -38,7 +46,8 @@ namespace FixedWidthParser.Native.Reading
             {
                 stream = new FileStream(Encoding.UTF8.GetString(path), FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.SequentialScan);
                 long dataStart = ReadApi.HeaderEnd(new FileSource(stream.SafeFileHandle), settings!.HeaderLines, out long headerLines);
-                reader = new NativeTableReader(stream, dataStart, headerLines, layout, settings, batchRows);
+                stream.Position = dataStart;
+                reader = new NativeTableReader(stream, dataStart == 0, headerLines, layout, settings, batchRows);
                 return NativeStatus.Ok;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
@@ -59,10 +68,63 @@ namespace FixedWidthParser.Native.Reading
             }
             long dataStart = ReadApi.HeaderEnd(new PointerSource(data, length), settings!.HeaderLines, out long headerLines);
 #pragma warning disable CA2000 // The reader owns and disposes the stream.
-            var stream = new UnmanagedMemoryStream(data, length);
+            var stream = new UnmanagedMemoryStream(data, length) { Position = dataStart };
 #pragma warning restore CA2000
-            reader = new NativeTableReader(stream, dataStart, headerLines, layout, settings, batchRows);
+            reader = new NativeTableReader(stream, dataStart == 0, headerLines, layout, settings, batchRows);
             return NativeStatus.Ok;
+        }
+
+        /// <summary>
+        /// Reads <paramref name="source"/> forward from where it is, skipping the header lines as it goes. Takes ownership:
+        /// <paramref name="source"/> is disposed, so its <c>release</c> runs, if this fails, or with the reader.
+        /// </summary>
+        internal static int CreateStream(Stream source, NativeLayout layout, NativeReaderOptionsRaw* options, out NativeTableReader? reader)
+        {
+            reader = null;
+            int status = TrySettings(options, out var settings, out long batchRows);
+            if (status != NativeStatus.Ok)
+            {
+#pragma warning disable IDISP007 // CreateStream owns the source it is handed.
+                source.Dispose();
+#pragma warning restore IDISP007
+                return status;
+            }
+            // Buffered so the header skip reads a byte at a time from memory, not from the caller's callback.
+#pragma warning disable CA2000 // The reader owns and disposes the stream, and with it the source.
+            var stream = new BufferedStream(source, StreamBufferSize);
+#pragma warning restore CA2000
+            try
+            {
+                long headerLines = SkipLines(stream, settings!.HeaderLines);
+                reader = new NativeTableReader(stream, settings.HeaderLines == 0, headerLines, layout, settings, batchRows);
+                return NativeStatus.Ok;
+            }
+            catch (IOException ex)
+            {
+                stream.Dispose();
+                NativeApi.SetLastError(ex.Message);
+                return NativeStatus.Error;
+            }
+        }
+
+        private const int StreamBufferSize = 64 * 1024;
+
+        /// <summary>Skips <paramref name="count"/> physical lines, as <see cref="ReadApi.HeaderEnd"/> counts them, and returns how many there were.</summary>
+        private static long SkipLines(Stream stream, long count)
+        {
+            long skipped = 0;
+            bool partial = false;
+            while (skipped < count)
+            {
+                int b = stream.ReadByte();
+                if (b < 0)
+                {
+                    return skipped + (partial ? 1 : 0);
+                }
+                partial = b != '\n';
+                skipped += partial ? 0 : 1;
+            }
+            return skipped;
         }
 
         internal static int Next(nint handle, NativeTableRaw* table)

@@ -46,6 +46,14 @@ namespace FixedWidthParser.Native.Arrow
             return status == NativeStatus.Ok ? Publish(reader!, outStream) : status;
         }
 
+        /// <summary>Reads <paramref name="source"/> lazily and owns it: it is disposed when this fails or the stream is released.</summary>
+        internal static int OpenStreamStream(Stream source, NativeLayout layout, NativeReaderOptionsRaw* options, ArrowArrayStream* outStream)
+        {
+            *outStream = default;
+            int status = ReaderApi.CreateStream(source, layout, options, out var reader);
+            return status == NativeStatus.Ok ? Publish(reader!, outStream) : status;
+        }
+
         private static int Publish(NativeTableReader reader, ArrowArrayStream* outStream)
         {
             *outStream = new ArrowArrayStream

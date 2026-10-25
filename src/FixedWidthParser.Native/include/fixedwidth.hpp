@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <istream>
 #include <iterator>
 #include <limits>
 #include <optional>
@@ -90,6 +91,33 @@ namespace fw
         inline const uint8_t* bytes(std::string_view text)
         {
             return reinterpret_cast<const uint8_t*>(text.data());
+        }
+
+        // fw_stream.read over a std::istream: a short count at the end, -1 once the stream is bad. An exception
+        // must not unwind into the library, so it fails the read too.
+        inline int64_t read_istream(void* user_data, uint8_t* buffer, int64_t length) noexcept
+        {
+            constexpr std::string_view failed = "the std::istream failed";
+            try
+            {
+                auto& in = *static_cast<std::istream*>(user_data);
+                in.read(reinterpret_cast<char*>(buffer), static_cast<std::streamsize>(length));
+                if (!in.bad())
+                {
+                    return static_cast<int64_t>(in.gcount());
+                }
+            }
+            catch (...)
+            {
+            }
+            fw_set_source_error(bytes(failed), static_cast<int32_t>(failed.size()));
+            return -1;
+        }
+
+        /// An fw_stream reading `in`, which the caller keeps alive; nothing to release.
+        inline fw_stream istream_source(std::istream& in)
+        {
+            return {.struct_size = sizeof(fw_stream), .user_data = &in, .read = &read_istream, .release = nullptr};
         }
     }
 
@@ -314,6 +342,19 @@ namespace fw
             const fw_reader_options raw = options.to_c();
             fw_reader* reader = nullptr;
             if (auto ok = detail::check(fw_reader_open_memory(detail::bytes(data), static_cast<int64_t>(data.size()), layout.get(), &raw, &reader)); !ok)
+            {
+                return std::unexpected(ok.error());
+            }
+            return Reader(reader);
+        }
+
+        /// Reads `in` forward, a batch at a time, without seeking: it must outlive the reader.
+        static Result<Reader> open_stream(std::istream& in, const Layout& layout, const ReaderOptions& options = {})
+        {
+            const fw_reader_options raw = options.to_c();
+            const fw_stream stream = detail::istream_source(in);
+            fw_reader* reader = nullptr;
+            if (auto ok = detail::check(fw_reader_open_stream(&stream, layout.get(), &raw, &reader)); !ok)
             {
                 return std::unexpected(ok.error());
             }
@@ -737,6 +778,14 @@ namespace fw
         {
             return layout_for<T>()
                 .and_then([&](const Layout& layout) { return Reader::open_memory(data, layout, options); })
+                .transform([](Reader reader) { return TypedReader(std::move(reader)); });
+        }
+
+        /// Reads `in` forward without seeking: it must outlive the reader.
+        static Result<TypedReader> open_stream(std::istream& in, const ReaderOptions& options = {})
+        {
+            return layout_for<T>()
+                .and_then([&](const Layout& layout) { return Reader::open_stream(in, layout, options); })
                 .transform([](Reader reader) { return TypedReader(std::move(reader)); });
         }
 

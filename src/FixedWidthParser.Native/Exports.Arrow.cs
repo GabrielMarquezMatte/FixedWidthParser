@@ -52,6 +52,29 @@ namespace FixedWidthParser.Native
             return WithLayout(layout, l => ArrowApi.OpenStreamMemory(data, dataLength, l, options, outStream));
         }
 
+        [UnmanagedCallersOnly(EntryPoint = "fw_read_arrow_stream_stream")]
+        public static int ReadArrowStreamStream(NativeStreamRaw* stream, nint layout, NativeReaderOptionsRaw* options, ArrowArrayStream* outStream)
+        {
+            if (outStream is null)
+            {
+                return InvalidArgument("fw_read_arrow_stream_stream needs out_stream.");
+            }
+            *outStream = default;
+#pragma warning disable CA2000 // The reader takes the stream over, or it is disposed below.
+            if (!CallbackReadStream.TryCreate(stream, "fw_read_arrow_stream_stream", out var source))
+            {
+                return NativeStatus.InvalidArgument;
+            }
+            int status = WithLayout(layout, l => ArrowApi.OpenStreamStream(source, l, options, outStream));
+            if (status != NativeStatus.Ok)
+            {
+                // A layout that is not live never reached OpenStreamStream, which releases the stream on its own failures.
+                source.Dispose();
+            }
+#pragma warning restore CA2000
+            return status;
+        }
+
         [UnmanagedCallersOnly]
         internal static void ReleaseArrowSchemaCallback(ArrowSchema* schema)
         {
