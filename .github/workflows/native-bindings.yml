@@ -205,6 +205,15 @@ jobs:
           cmake --build build/cpp --config Release
           ctest --test-dir build/cpp --output-on-failure -C Release
 
+      - name: Install the package and build a find_package() consumer against it
+        shell: bash
+        run: |
+          cmake --install build/cpp --config Release --prefix "${{ github.workspace }}/build/prefix"
+          cmake -S cpp/tests/package -B build/consumer -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/build/prefix"
+          cmake --build build/consumer --config Release
+          ctest --test-dir build/consumer --output-on-failure -C Release
+
   # The one check branch protection requires from this workflow. A matrix job skipped by its `if` never reports
   # its expanded name, so requiring those names would leave the check pending whenever no binding changed.
   result:
