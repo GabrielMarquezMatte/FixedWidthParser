@@ -204,3 +204,17 @@ jobs:
           cmake -S cpp -B build/cpp -DCMAKE_BUILD_TYPE=Release
           cmake --build build/cpp --config Release
           ctest --test-dir build/cpp --output-on-failure -C Release
+
+  # The one check branch protection requires from this workflow. A matrix job skipped by its `if` never reports
+  # its expanded name, so requiring those names would leave the check pending whenever no binding changed.
+  result:
+    name: Bindings result
+    needs: [changes, build-native, test-python, test-musl, test-cpp]
+    if: always() && github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "A bindings job failed or was cancelled."
+          exit 1
