@@ -41,7 +41,7 @@ namespace FixedWidthParser.Native.Arrow
             try
             {
                 *outSchema = BuildSchema(layout);
-                *outArray = BuildArray(table);
+                *outArray = BuildArray(table, layout);
                 return NativeStatus.Ok;
             }
             catch (Exception ex)
@@ -67,6 +67,7 @@ namespace FixedWidthParser.Native.Arrow
                 return;
             }
             ReleaseChildren(schema->Children, schema->NChildren, &ReleaseArrowSchema);
+            ReleaseDictionary(schema->Dictionary, &ReleaseArrowSchema);
             FreeIfSet(schema->Format);
             FreeIfSet(schema->Name);
             schema->Release = IntPtr.Zero;
@@ -80,6 +81,7 @@ namespace FixedWidthParser.Native.Arrow
                 return;
             }
             ReleaseChildren(array->Children, array->NChildren, &ReleaseArrowArray);
+            ReleaseDictionary(array->Dictionary, &ReleaseArrowArray);
             var buffers = (IntPtr*)array->Buffers;
             for (long i = 0; i < array->NBuffers; i++)
             {
@@ -98,6 +100,15 @@ namespace FixedWidthParser.Native.Arrow
                 Marshal.FreeHGlobal(pointers[i]);
             }
             FreeIfSet(children);
+        }
+
+        private static void ReleaseDictionary(IntPtr dictionary, delegate*<IntPtr, void> release)
+        {
+            if (dictionary != IntPtr.Zero)
+            {
+                release(dictionary);
+                Marshal.FreeHGlobal(dictionary);
+            }
         }
 
         private static void FreeIfSet(IntPtr pointer)
@@ -129,6 +140,7 @@ namespace FixedWidthParser.Native.Arrow
                         Format = AllocUtf8Z(FormatCode(column)),
                         Name = AllocUtf8Z(column.Name),
                         Flags = column.Nullable ? ArrowFlags.Nullable : 0,
+                        Dictionary = column.Dictionary ? DictionaryValuesSchema() : IntPtr.Zero,
                         Release = SchemaReleaseCallback,
                     };
                     children[schema.NChildren++] = (IntPtr)child;
@@ -142,8 +154,15 @@ namespace FixedWidthParser.Native.Arrow
             }
         }
 
+        private static IntPtr DictionaryValuesSchema()
+        {
+            var values = (ArrowSchema*)Marshal.AllocHGlobal(sizeof(ArrowSchema));
+            *values = new ArrowSchema { Format = AllocUtf8Z("u"), Release = SchemaReleaseCallback };
+            return (IntPtr)values;
+        }
+
         /// <summary>Moves every column of <paramref name="table"/> into a struct array, leaving the table's buffers empty.</summary>
-        internal static ArrowArray BuildArray(NativeTableRaw* table)
+        internal static ArrowArray BuildArray(NativeTableRaw* table, NativeLayout layout)
         {
             var children = (IntPtr*)Marshal.AllocHGlobal(Math.Max(1, table->ColumnCount) * IntPtr.Size);
             var buffers = (IntPtr*)Marshal.AllocHGlobal(IntPtr.Size);
@@ -163,9 +182,19 @@ namespace FixedWidthParser.Native.Arrow
                     var child = (ArrowArray*)Marshal.AllocHGlobal(sizeof(ArrowArray));
                     *child = default;
                     children[array.NChildren++] = (IntPtr)child;
-                    *child = BuildChild(table->Columns + i);
                 }
+                // Encoding a dictionary column hashes every row, so the columns are built side by side.
+                nint columns = (nint)table->Columns;
+                nint built = (nint)children;
+                Parallel.For(0, table->ColumnCount, i =>
+                    *((ArrowArray**)built)[i] = BuildChild((NativeColumnRaw*)columns + i, layout.Columns[i].Dictionary));
                 return array;
+            }
+            catch (AggregateException ex)
+            {
+                ReleaseArrowArray((IntPtr)(&array));
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(ex.InnerExceptions[0]);
+                throw;
             }
             catch
             {
@@ -174,8 +203,12 @@ namespace FixedWidthParser.Native.Arrow
             }
         }
 
-        private static ArrowArray BuildChild(NativeColumnRaw* column)
+        private static ArrowArray BuildChild(NativeColumnRaw* column, bool dictionary)
         {
+            if (dictionary)
+            {
+                return BuildDictionaryChild(column);
+            }
             bool isString = column->Type == NativeType.String;
             int bufferCount = isString ? 3 : 2;
             var buffers = (IntPtr*)Marshal.AllocHGlobal(bufferCount * IntPtr.Size);
@@ -193,6 +226,37 @@ namespace FixedWidthParser.Native.Arrow
                 NullCount = CountUnset(buffers[0], column->Length),
                 NBuffers = bufferCount,
                 Buffers = (IntPtr)buffers,
+                Release = ArrayReleaseCallback,
+            };
+        }
+
+        private static ArrowArray BuildDictionaryChild(NativeColumnRaw* column)
+        {
+            long rows = column->Length;
+            int* indices = DictionaryEncoder.Encode((int*)column->Values, column->Data, rows,
+                out int* valueOffsets, out byte* valueBytes, out long valueCount, out _);
+            FreeIfSet((IntPtr)column->Values);
+            FreeIfSet((IntPtr)column->Data);
+            column->Values = null;
+            column->Data = null;
+
+            var valueBuffers = (IntPtr*)Marshal.AllocHGlobal(3 * IntPtr.Size);
+            valueBuffers[0] = IntPtr.Zero;
+            valueBuffers[1] = (IntPtr)valueOffsets;
+            valueBuffers[2] = (IntPtr)valueBytes;
+            var values = (ArrowArray*)Marshal.AllocHGlobal(sizeof(ArrowArray));
+            *values = new ArrowArray { Length = valueCount, NBuffers = 3, Buffers = (IntPtr)valueBuffers, Release = ArrayReleaseCallback };
+
+            var buffers = (IntPtr*)Marshal.AllocHGlobal(2 * IntPtr.Size);
+            buffers[0] = Take(ref column->Validity);
+            buffers[1] = (IntPtr)indices;
+            return new ArrowArray
+            {
+                Length = rows,
+                NullCount = CountUnset(buffers[0], rows),
+                NBuffers = 2,
+                Buffers = (IntPtr)buffers,
+                Dictionary = (IntPtr)values,
                 Release = ArrayReleaseCallback,
             };
         }
@@ -253,7 +317,8 @@ namespace FixedWidthParser.Native.Arrow
         {
             return column.Type switch
             {
-                NativeType.String => "u",
+                // A dictionary column's own format is its index type; the values' utf8 is in its dictionary schema.
+                NativeType.String => column.Dictionary ? "i" : "u",
                 NativeType.Int64 => "l",
                 NativeType.Float64 => "g",
                 NativeType.Decimal => string.Create(CultureInfo.InvariantCulture, $"d:18,{column.Scale}"),

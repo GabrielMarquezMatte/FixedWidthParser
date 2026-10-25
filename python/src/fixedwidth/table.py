@@ -44,9 +44,12 @@ class Table:
     list of `str` for strings. Null rows are marked by `validity(name)`. Views stay valid after the
     Table is gone; the native memory is freed when the last one is."""
 
-    def __init__(self, owner: _Owner, names: list[str], lines_read: int = 0, lines_skipped: int = 0) -> None:
+    def __init__(
+        self, owner: _Owner, names: list[str], lines_read: int = 0, lines_skipped: int = 0, dictionaries: frozenset[str] = frozenset()
+    ) -> None:
         self._owner = owner
         self._names = names
+        self._dictionaries = dictionaries
         self.lines_read = lines_read
         self.lines_skipped = lines_skipped
 
@@ -110,7 +113,8 @@ class Table:
         if kind is ColumnType.STRING:
             offsets = pa.foreign_buffer(column.values, (n + 1) * 4, base=self._owner)
             data = pa.foreign_buffer(column.data, column.data_len, base=self._owner) if column.data else pa.py_buffer(b"")
-            return pa.Array.from_buffers(pa.string(), n, [validity, offsets, data])
+            strings = pa.Array.from_buffers(pa.string(), n, [validity, offsets, data])
+            return strings.dictionary_encode() if name in self._dictionaries else strings
         arrow_type = {
             ColumnType.INT64: pa.int64(),
             ColumnType.FLOAT64: pa.float64(),

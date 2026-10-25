@@ -117,7 +117,7 @@ namespace FixedWidthParser.Native.Arrow
             }
             try
             {
-                *outArray = BuildArray(&table);
+                *outArray = BuildArray(&table, state.Reader.Layout);
                 return 0;
             }
             catch (Exception ex)

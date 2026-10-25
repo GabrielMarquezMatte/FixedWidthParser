@@ -136,6 +136,8 @@ namespace fw
         Align alignment = Align::Default;
         char padding = 0;
         Overflow overflow = Overflow::Throw;
+        /// A String column reaches Arrow dictionary-encoded (int32 indices into its distinct values); fw::Table keeps strings.
+        bool dictionary = false;
     };
 
     struct LayoutOptions
@@ -170,6 +172,7 @@ namespace fw
                     .alignment = static_cast<int32_t>(column.alignment),
                     .padding = static_cast<unsigned char>(column.padding),
                     .overflow = static_cast<int32_t>(column.overflow),
+                    .dictionary = column.dictionary ? 1 : 0,
                 });
             }
             const fw_layout_options raw{.struct_size = sizeof(fw_layout_options), .line_length = options.line_length,

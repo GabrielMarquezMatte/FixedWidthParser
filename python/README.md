@@ -83,11 +83,17 @@ frames = await asyncio.gather(*(asyncio.to_thread(fw.read_polars, path, layout, 
 
 ## Columns
 
-`fw.Column(name, start, length, type, *, nullable, scale, format, trim_char, trim_mode, alignment, padding, overflow)`.
+`fw.Column(name, start, length, type, *, nullable, scale, format, trim_char, trim_mode, alignment, padding, overflow, dictionary)`.
 Positions are bytes. Types: `fw.String`, `fw.Int64`, `fw.Float64`, `fw.Decimal` (int64 unscaled, Arrow
 `decimal128(18, scale)`), `fw.Date`, `fw.Time`, `fw.Timestamp`. `scale` is the number of implied decimals:
 `0000000123456` with `scale=2` reads as `1234.56`. `format` uses .NET date syntax (`yyyyMMdd`, `HHmmss`).
 `trim_mode`, `alignment` and `overflow` take `fw.TrimMode`, `fw.Alignment` and `fw.Overflow`.
+
+`dictionary=True` on a `fw.String` column hands it to Arrow dictionary-encoded, so `read_pandas` gives a
+`category` column and `read_polars` a `Categorical` one: for a column of few distinct values (a market code, a
+currency, a record type) far less memory, and faster group-bys. The encoding costs a pass over the column, about
+3 ms per million rows per column, run in parallel across columns. `fw.read`'s Table keeps plain strings, and its
+`to_arrow()` encodes the same columns. Categorical columns write like strings.
 
 `fw.Layout(columns, fw.LayoutOptions(line_length=..., filler=...))` sets how written lines are laid out:
 `line_length` past the last column pads each line, and `filler` (default a space) fills the gaps between

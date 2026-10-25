@@ -63,6 +63,64 @@ namespace FixedWidthParser.Tests.Native
             };
         }
 
+        [Theory]
+        [InlineData(1)]
+        [InlineData(4)]
+        public void Arrow_DictionaryColumn_DecodesToTheSameStrings(int degree)
+        {
+            string[] codes = ["PETR4", "VALE3", "ITUB4", "", "B3SA3"];
+            string content = string.Concat(Enumerable.Range(0, 5000).Select(i => $"{codes[i * 7 % codes.Length],-6}{i % 97:D5}\n"));
+            var options = Options(degreeOfParallelism: degree);
+            using var plain = ReadBatch(content, Build(new Col("code", 0, 6, TString) { Nullable = true }, new Col("n", 6, 5, TInt64)), options);
+            using var encoded = ReadBatch(content, Build(new Col("code", 0, 6, TString) { Nullable = true, Dictionary = 1 }, new Col("n", 6, 5, TInt64)), options);
+
+            var dictionary = Assert.IsType<DictionaryArray>(encoded.Column(0));
+            var values = (StringArray)dictionary.Dictionary;
+            var indices = (Int32Array)dictionary.Indices;
+            // First-seen order: i * 7 % 5 visits 0, 2, 4, 1, 3. A null row's index points at the empty string.
+            Assert.Equal(["PETR4", "ITUB4", "B3SA3", "VALE3", ""], Enumerable.Range(0, values.Length).Select(i => values.GetString(i)));
+            var decoded = Enumerable.Range(0, indices.Length).Select(i => dictionary.IsNull(i) ? null : values.GetString(indices.GetValue(i)!.Value));
+            Assert.Equal(Values(plain.Column(0)), decoded);
+            Assert.Equal(1000, dictionary.NullCount);
+            Assert.Equal(Values(plain.Column(1)), Values(encoded.Column(1)));
+        }
+
+        [Fact]
+        public void Dictionary_OnANonStringColumn_IsRejected()
+        {
+            Assert.Equal(NativeStatus.InvalidArgument, Create(out _, new Col("n", 0, 5, TInt64) { Dictionary = 1 }));
+            Assert.Contains("dictionary", LastError(), StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public async Task ArrowStream_DictionaryColumn_HasADictionaryPerBatch()
+        {
+            var layout = Build(new Col("code", 0, 6, TString) { Dictionary = 1 });
+            byte[] bytes = Encoding.UTF8.GetBytes(string.Concat(Enumerable.Repeat("AAAAAA\nBBBBBB\nAAAAAA\n", 4)));
+
+            var decoded = new List<string>();
+            IArrowArrayStream stream = OpenStream(bytes, layout, new NativeReaderOptionsRaw { StructSize = ReaderOptionsSize, BatchRows = 5 });
+            try
+            {
+                while (await stream.ReadNextRecordBatchAsync() is { } batch)
+                {
+                    using (batch)
+                    {
+                        var dictionary = (DictionaryArray)batch.Column(0);
+                        var values = (StringArray)dictionary.Dictionary;
+                        var indices = (Int32Array)dictionary.Indices;
+                        decoded.AddRange(Enumerable.Range(0, indices.Length).Select(i => values.GetString(indices.GetValue(i)!.Value)));
+                    }
+                }
+            }
+            finally
+            {
+                stream.Dispose();
+            }
+
+            Assert.Equal(Enumerable.Repeat(new[] { "AAAAAA", "BBBBBB", "AAAAAA" }, 4).SelectMany(x => x), decoded);
+        }
+
         [Fact]
         public void Arrow_EveryType_MatchesColumnarRead()
         {

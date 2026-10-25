@@ -41,6 +41,7 @@ namespace FixedWidthParser.Native.Layouts
         public int Alignment;
         public int Padding;
         public int Overflow;
+        public int Dictionary;
     }
 
     /// <summary><c>fw_layout_options</c>.</summary>
