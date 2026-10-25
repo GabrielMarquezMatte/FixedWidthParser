@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <expected>
 #include <istream>
+#include <ostream>
 #include <iterator>
 #include <limits>
 #include <optional>
@@ -443,6 +444,42 @@ namespace fw
     inline Result<std::vector<uint8_t>> write_memory(const Table& table, const Layout& layout, const WriteOptions& options = {})
     {
         return write_memory(table.get(), layout, options);
+    }
+
+    namespace detail
+    {
+        // fw_sink.write over a std::ostream: -1 once the stream is bad, or if it throws.
+        inline int32_t write_ostream(void* user_data, const uint8_t* buffer, int64_t length) noexcept
+        {
+            constexpr std::string_view failed = "the std::ostream failed";
+            try
+            {
+                auto& out = *static_cast<std::ostream*>(user_data);
+                out.write(reinterpret_cast<const char*>(buffer), static_cast<std::streamsize>(length));
+                if (!out.bad())
+                {
+                    return 0;
+                }
+            }
+            catch (...)
+            {
+            }
+            fw_set_source_error(bytes(failed), static_cast<int32_t>(failed.size()));
+            return -1;
+        }
+    }
+
+    /// Writes to `out` in order, a batch at a time, while batches format in parallel; memory stays at a batch per thread.
+    inline Result<void> write_stream(std::ostream& out, const fw_table& table, const Layout& layout, const WriteOptions& options = {})
+    {
+        const fw_write_options raw = detail::write_options(options);
+        const fw_sink sink{.struct_size = sizeof(fw_sink), .user_data = &out, .write = &detail::write_ostream};
+        return detail::check(fw_write_stream(&table, layout.get(), &raw, &sink));
+    }
+
+    inline Result<void> write_stream(std::ostream& out, const Table& table, const Layout& layout, const WriteOptions& options = {})
+    {
+        return write_stream(out, table.get(), layout, options);
     }
 
     // ---- Struct mapping ----------------------------------------------------------------------------

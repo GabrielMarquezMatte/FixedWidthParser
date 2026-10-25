@@ -63,7 +63,8 @@ the end. `fw::layout_for<T>()` returns the `fw::Layout` the bindings describe, f
 
 `fw::Reader::open_stream`, `TypedReader<T>::open_stream` and `fw::read_arrow_stream` take a `std::istream&` and
 read it forward a batch at a time, in constant memory, so a decompressing or network stream works. The stream
-must outlive the reader; a stream that turns `bad()` fails the read.
+must outlive the reader; a stream that turns `bad()` fails the read. `fw::write_stream(std::ostream&, table,
+layout)` writes the same way, in order, a batch at a time.
 
 `ColumnSpec::dictionary` hands a String column to Arrow (`read_arrow_*`) dictionary-encoded: int32 indices into
 its distinct values. `fw::Table` keeps the strings.

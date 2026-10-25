@@ -104,7 +104,15 @@ columns.
 ```python
 fw.write(df, "out.txt", layout, fw.WriteOptions(degree_of_parallelism=0))
 data = fw.write_bytes(df, layout)
+
+with gzip.open("out.txt.gz", "wb") as stream:   # or an open file, a socket's makefile("wb"), ...
+    fw.write(df, stream, layout)
 ```
+
+`fw.write` takes a path or a binary stream with `write()`. A stream gets the lines in order, a batch per call on
+the calling thread, while the next batches format in parallel, so memory stays at a batch per thread; writing
+to an open file is as fast as writing to its path. For the bytes themselves, `write_bytes` beats an `io.BytesIO`,
+which copies itself each time it grows.
 
 Takes pandas, polars, pyarrow or anything with `__arrow_c_stream__` (needs pyarrow), matching columns by name.
 `padding="0"` writes zero-padded numbers with the sign leftmost; a null writes as its column filled with

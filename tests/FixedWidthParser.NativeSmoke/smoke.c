@@ -39,6 +39,11 @@ FW_STATIC_ASSERT(offsetof(fw_column_spec, format) == 40, spec_format);
 FW_STATIC_ASSERT(offsetof(fw_column_spec, overflow) == 68, spec_overflow);
 FW_STATIC_ASSERT(offsetof(fw_column_spec, dictionary) == 72, spec_dictionary);
 FW_STATIC_ASSERT(sizeof(fw_column_spec) == 80, spec_size);
+FW_STATIC_ASSERT(offsetof(fw_stream, user_data) == 8, stream_user_data);
+FW_STATIC_ASSERT(offsetof(fw_stream, read) == 16, stream_read);
+FW_STATIC_ASSERT(sizeof(fw_stream) == 32, stream_size);
+FW_STATIC_ASSERT(offsetof(fw_sink, write) == 16, sink_write);
+FW_STATIC_ASSERT(sizeof(fw_sink) == 24, sink_size);
 FW_STATIC_ASSERT(sizeof(fw_layout_options) == 12, layout_options_size);
 FW_STATIC_ASSERT(offsetof(fw_read_options, header_lines) == 8, read_header_lines);
 FW_STATIC_ASSERT(offsetof(fw_read_options, skip_byte_order_mark) == 32, read_bom);
@@ -137,6 +142,11 @@ static void load(const char* path)
     symbol(lib, "fw_reader_open_file");
     symbol(lib, "fw_read_arrow_file");
     symbol(lib, "fw_read_arrow_stream_file");
+    /* Exercised by the C++ tests through std::istream and std::ostream. */
+    symbol(lib, "fw_reader_open_stream");
+    symbol(lib, "fw_read_arrow_stream_stream");
+    symbol(lib, "fw_set_source_error");
+    symbol(lib, "fw_write_stream");
 }
 
 /* A COTAHIST-like file: a header, quotes, an invalid line and a trailer. */

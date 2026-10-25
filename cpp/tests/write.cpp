@@ -1,6 +1,7 @@
 #include "common.hpp"
 
 #include <cstdio>
+#include <sstream>
 #include <string>
 
 int main()
@@ -21,6 +22,10 @@ int main()
 
     auto crlf = fw::write_memory(*table, layout, {.newline = "\r\n"});
     CHECK(crlf.has_value() && crlf->size() == expected.size() + 3);
+
+    std::ostringstream out;
+    CHECK(fw::write_stream(out, *table, layout, {.degree_of_parallelism = 4, .batch_rows = 1}).has_value());
+    CHECK(out.str() == std::string(serial->begin(), serial->end()));
 
     const std::string path = "fw_cpp_write.txt";
     CHECK(fw::write_file(path, *table, layout).has_value());

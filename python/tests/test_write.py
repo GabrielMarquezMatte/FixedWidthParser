@@ -115,3 +115,50 @@ def test_write_mismatched_columns_raise():
 
     with pytest.raises(fw.FixedWidthError, match="b"):
         fw.write_bytes(pa.table({"a": ["x"]}), columns)
+
+
+def test_write_to_streams_equals_write_bytes(tmp_path, cotahist, options):
+    import gzip
+    import io
+
+    table = fw.read_arrow(cotahist, layout(), options)
+    batched = fw.WriteOptions(degree_of_parallelism=4, batch_rows=1)
+    expected = fw.write_bytes(table, layout())
+
+    buffer = io.BytesIO()
+    fw.write(table, buffer, layout(), batched)
+    with gzip.open(tmp_path / "out.txt.gz", "wb") as compressed:
+        fw.write(table, compressed, layout(), batched)
+
+    assert buffer.getvalue() == expected
+    assert gzip.decompress((tmp_path / "out.txt.gz").read_bytes()) == expected
+
+
+class Chunks:
+    """A duck-typed sink that keeps every chunk it is given and returns nothing from write()."""
+
+    def __init__(self) -> None:
+        self.chunks: list[object] = []
+
+    def write(self, data) -> None:
+        self.chunks.append(data)
+
+
+def test_write_to_a_duck_typed_sink_gets_copies_it_may_keep(cotahist, options):
+    table = fw.read_arrow(cotahist, layout(), options)
+    sink = Chunks()
+
+    fw.write(table, sink, layout(), fw.WriteOptions(degree_of_parallelism=2, batch_rows=1))
+
+    assert all(isinstance(chunk, bytes) for chunk in sink.chunks)
+    assert b"".join(sink.chunks) == fw.write_bytes(table, layout())
+
+
+class Full:
+    def write(self, data) -> int:
+        raise OSError("no space left on device")
+
+
+def test_a_failing_sink_reports_its_error(cotahist, options):
+    with pytest.raises(fw.FixedWidthError, match="no space left on device"):
+        fw.write(fw.read_arrow(cotahist, layout(), options), Full(), layout())

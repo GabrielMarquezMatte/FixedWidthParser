@@ -225,6 +225,19 @@ int32_t fw_write_memory(const fw_table* table, const fw_layout* layout,
                         const fw_write_options* options, fw_buffer* out_buffer);
 void fw_free_buffer(fw_buffer* buffer);
 
+/* A destination the library pushes the lines to, in order: a pipe, a socket, a compressor, a language's own
+ * stream objects. write consumes all len bytes and returns 0, or -1 after fw_set_source_error to say why. It is
+ * called from the thread that called fw_write_stream, a batch per call, while batches format in parallel. */
+typedef struct fw_sink {
+    int32_t struct_size;
+    void* user_data;
+    int32_t (*write)(void* user_data, const uint8_t* buf, int64_t len);
+} fw_sink;
+
+/* The same lines as fw_write_file, to a sink; memory stays at one batch per thread whatever the table's size. */
+int32_t fw_write_stream(const fw_table* table, const fw_layout* layout, const fw_write_options* options,
+                        const fw_sink* sink);
+
 #ifdef __cplusplus
 }
 #endif
