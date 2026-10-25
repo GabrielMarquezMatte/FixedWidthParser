@@ -91,7 +91,16 @@ Each column can be tuned through named attribute arguments:
 
 ## Column Types
 
-`string`, `double` and `float`, any `IUtf8SpanParsable<T>` (parsed straight from bytes), any other `ISpanParsable<T>` (decoded first), `T?` of any of them (a blank column is `null`), and anything with a `Converter`. Writing needs `string`, `ISpanFormattable` or a converter.
+`string`, `double` and `float`, enums, any `IUtf8SpanParsable<T>` (parsed straight from bytes), any other `ISpanParsable<T>` (decoded first), `T?` of any of them (a blank column is `null`), and anything with a `Converter`. Writing needs `string`, `ISpanFormattable` (enums included) or a converter.
+
+An enum column reads a member's name in any case or its number (`2`, `02`), and rejects a number no member has and a combination of `[Flags]` members. It writes the name; `Format = "D"` writes the number, which `Padding = '0'` and `Alignment.Right` zero-pad. Fluent layouts add one with `EnumColumn` or `NullableEnumColumn`.
+
+```csharp
+public enum Side { Buy = 1, Sell = 2 }
+
+[FixedColumn(0, 2, Format = "D", Padding = '0', Alignment = Alignment.Right)]
+public Side Side { get; set; }   // "02" reads and writes as Side.Sell
+```
 
 ## Encodings
 

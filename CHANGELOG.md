@@ -89,6 +89,9 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
 - `FixedWidth.TryFormat(in model, layout, Span<byte>, in FixedWidthContext, out int)`.
 - `FixedColumnAttribute.Converter`: a per-property `IFixedWidthConverter<T>` that takes priority over the
   built-in parsing and formatting, with diagnostic `FWP008` when it targets the wrong type.
+- Enum columns, as ExcelReader reads them: a member's name in any case or its number, and nothing the enum
+  does not define. They write the name, or the number with `Format = "D"`. Attribute layouts and generated
+  models take an enum property as it is; fluent layouts add `EnumColumn` and `NullableEnumColumn`.
 - Nullable value-type columns (`int?`, `decimal?`, `DateTime?`, …): a blank column parses to `null`
   without invoking the parser or converter, and `null` writes as a blank column.
 - The source-generated writer: `IFixedWidthModel<TSelf>.TryFormat`, with the same alignment, padding,
