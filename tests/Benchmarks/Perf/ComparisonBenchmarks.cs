@@ -58,7 +58,7 @@ namespace Benchmarks.Perf
                                 .Map(m => m.Age, 10, 5)
                                 .Map(m => m.Salary, 15, 10)
                                 .Build();
-            return new (){ Parser = parser.Parse, ParallelismOptions = new() { Enabled = false } };
+            return new() { Parser = parser.Parse, ParallelismOptions = new() { Enabled = false } };
         }
 
         [GlobalSetup]

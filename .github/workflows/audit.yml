@@ -1,0 +1,48 @@
+name: Dependency audit
+
+# A newly published advisory flags a package without any change here, so the audit runs weekly as well as when
+# the dependencies change.
+on:
+  pull_request:
+    branches: [ master, develop ]
+    paths:
+      - '**/*.csproj'
+      - 'Directory.Build.props'
+      - 'global.json'
+      - '.github/workflows/audit.yml'
+  push:
+    branches: [ master ]
+    paths:
+      - '**/*.csproj'
+      - 'Directory.Build.props'
+      - 'global.json'
+      - '.github/workflows/audit.yml'
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore FixedWidthParser.slnx
+
+      - name: Check for vulnerable packages
+        run: |
+          output=$(dotnet list FixedWidthParser.slnx package --vulnerable --include-transitive)
+          echo "$output"
+          if echo "$output" | grep -q -E '\b(High|Critical)\b'; then
+            echo "::error::High or Critical severity vulnerability found in dependencies."
+            exit 1
+          fi

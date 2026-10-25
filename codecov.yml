@@ -1,0 +1,22 @@
+coverage:
+  status:
+    project:
+      csharp:
+        flags:
+          - csharp
+      python:
+        flags:
+          - python
+
+# Each language uploads under its own flag from a path-filtered job, so a flag a commit did not run keeps its
+# last report instead of dropping to nothing.
+flag_management:
+  default_rules:
+    carryforward: true
+  individual_flags:
+    - name: csharp
+      paths:
+        - src/
+    - name: python
+      paths:
+        - python/
