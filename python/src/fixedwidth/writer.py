@@ -1,13 +1,16 @@
-"""Writing: a pandas, polars or pyarrow table through a layout, to a file or to bytes. Requires pyarrow."""
+"""Writing: a pandas, polars or pyarrow table through a layout, to a file, a stream or bytes. Requires pyarrow."""
 
 from __future__ import annotations
 
 import ctypes
+import io
+import operator
 import os
-from typing import Any
+from typing import IO, Any
 
 from fixedwidth import _native
 from fixedwidth.layout import Layout, check
+from fixedwidth.reader import _fail
 from fixedwidth.types import (
     Column,
     ColumnType,
@@ -17,16 +20,54 @@ from fixedwidth.types import (
 )
 
 
-def write(data: Any, path: str | os.PathLike[str], layout: Layout, options: WriteOptions | None = None) -> None:
-    """Writes every row of `data` (pandas, polars, pyarrow, or anything with `__arrow_c_stream__`) to `path`.
+def write(data: Any, destination: str | os.PathLike[str] | IO[bytes], layout: Layout, options: WriteOptions | None = None) -> None:
+    """Writes every row of `data` (pandas, polars, pyarrow, or anything with `__arrow_c_stream__`) to `destination`:
+    a path, or a binary stream with `write()` (an open file, `gzip.open(..., "wb")`, a socket's `makefile("wb")`).
 
-    Columns are matched to the layout by name. A null writes as its column filled with `trim_char`."""
+    A stream gets the lines in order, a batch per `write()` call on this thread, while batches format in parallel;
+    memory stays at a batch per thread. Columns are matched to the layout by name. A null writes as its column
+    filled with `trim_char`."""
     lib = _native.load_library()
     table, keep = _native_table(data, layout)
     raw, newline = _write_options(options)
-    name, name_len = _native.utf8(os.fspath(path))
-    check(lib.fw_write_file(name, name_len, ctypes.byref(table), layout.handle, ctypes.byref(raw) if raw else None))
+    raw_ref = ctypes.byref(raw) if raw else None
+    if isinstance(destination, (str, os.PathLike)):
+        name, name_len = _native.utf8(os.fspath(destination))
+        check(lib.fw_write_file(name, name_len, ctypes.byref(table), layout.handle, raw_ref))
+    else:
+        sink, callback = _sink(destination)
+        check(lib.fw_write_stream(ctypes.byref(table), layout.handle, raw_ref, ctypes.byref(sink)))
+        del callback
     del keep, newline
+
+
+def _sink(stream: Any) -> tuple[_native.Sink, object]:
+    """An fw_sink over `stream`'s write(); keep the callback alive until the native call returns."""
+    # The standard streams copy or write a buffer before write() returns, so they get the native memory itself;
+    # anything else gets a copy it may keep.
+    zero_copy = isinstance(stream, io.IOBase)
+
+    def write(_user_data: int, buffer: int, length: int) -> int:
+        try:
+            view = memoryview((ctypes.c_ubyte * length).from_address(buffer)).cast("B")
+            data = view if zero_copy else bytes(view)
+            done = 0
+            while done < length:
+                count = stream.write(data[done:])
+                if count is None:
+                    if isinstance(stream, io.RawIOBase):
+                        raise OSError("the stream would block; writing needs a blocking stream")
+                    break  # a write() that returns nothing took everything
+                count = operator.index(count)
+                if count <= 0:
+                    raise OSError("the stream accepted no bytes")
+                done += count
+            return 0
+        except BaseException as error:  # noqa: BLE001 - every failure must reach the native side
+            return _fail(error)
+
+    callback = _native.SinkWrite(write)
+    return _native.Sink(ctypes.sizeof(_native.Sink), None, callback), callback
 
 
 def write_bytes(data: Any, layout: Layout, options: WriteOptions | None = None) -> bytes:

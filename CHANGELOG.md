@@ -72,6 +72,9 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
   (`fixedwidth.hpp`) that also maps structs to columns through `FixedWidthMapper<T>`. It installs as a CMake
   package (`find_package(fixedwidth)`) or through FetchContent, and downloads the release's native library for
   the platform, so it needs no .NET SDK.
+- Writing to a sink: `fw_write_stream` pushes the lines, in order, to an `fw_sink`'s `write` callback while
+  batches format in parallel, so memory stays at a batch per thread. Python's `fw.write` takes any binary stream
+  (an open file, `gzip.open(..., "wb")`), as fast as writing to a path; C++ has `write_stream(std::ostream&, ...)`.
 - Dictionary-encoded STRING columns for Arrow (`fw_column_spec.dictionary`, Python `fw.Column(dictionary=True)`,
   C++ `ColumnSpec::dictionary`): int32 indices into the column's distinct values, which pandas reads as
   `category` and polars as `Categorical`. `fw_table` and `fw.read` keep strings; categorical columns write like

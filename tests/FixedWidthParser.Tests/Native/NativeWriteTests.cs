@@ -208,6 +208,113 @@ namespace FixedWidthParser.Tests.Native
             }
         }
 
+        [Theory]
+        [InlineData(1, 0)]
+        [InlineData(4, 1)]
+        [InlineData(4, 7)]
+        [InlineData(16, 3)]
+        public void WriteStream_EqualsMemory(int degree, long batchRows)
+        {
+            var layout = EveryTypeLayout();
+            var table = ReadTable(Encoding.UTF8.GetBytes(string.Concat(Enumerable.Repeat(EveryType, 25))), layout);
+            try
+            {
+                var options = WriteOptions(degree, batchRows);
+                using var sink = new MemoryStream();
+                Assert.Equal(NativeStatus.Ok, WriteApi.WriteStream(&table, layout, &options, sink));
+
+                Assert.Equal(WriteMemory(&table, layout).Bytes, sink.ToArray());
+            }
+            finally
+            {
+                NativeTable.Free(&table);
+            }
+        }
+
+        private sealed class Collected
+        {
+            public readonly List<byte> Bytes = [];
+            public int Calls;
+            public int FailAfter = int.MaxValue;
+        }
+
+        [UnmanagedCallersOnly]
+        private static int SinkWrite(void* userData, byte* buffer, long length)
+        {
+            var collected = (Collected)GCHandle.FromIntPtr((IntPtr)userData).Target!;
+            if (++collected.Calls > collected.FailAfter)
+            {
+                SourceErrors.Set("the disk is full");
+                return -1;
+            }
+            collected.Bytes.AddRange(new ReadOnlySpan<byte>(buffer, (int)length).ToArray());
+            return 0;
+        }
+
+        private static int WriteThroughSink(NativeTableRaw* table, NativeLayout layout, NativeWriteOptionsRaw options, Collected collected)
+        {
+            var handle = GCHandle.Alloc(collected);
+            try
+            {
+                var raw = new NativeSinkRaw { StructSize = sizeof(NativeSinkRaw), UserData = (void*)GCHandle.ToIntPtr(handle), Write = &SinkWrite };
+                Assert.True(CallbackWriteStream.TryCreate(&raw, out var sink));
+                using (sink)
+                {
+                    return WriteApi.WriteStream(table, layout, &options, sink);
+                }
+            }
+            finally
+            {
+                handle.Free();
+            }
+        }
+
+        [Fact]
+        public void WriteStream_CallbackSink_GetsEveryBatchInOrder()
+        {
+            var layout = EveryTypeLayout();
+            var table = ReadTable(Encoding.UTF8.GetBytes(string.Concat(Enumerable.Repeat(EveryType, 10))), layout);
+            try
+            {
+                var collected = new Collected();
+                Assert.Equal(NativeStatus.Ok, WriteThroughSink(&table, layout, WriteOptions(degree: 4, batchRows: 3), collected));
+
+                Assert.Equal(WriteMemory(&table, layout).Bytes, collected.Bytes);
+                Assert.Equal(7, collected.Calls);
+            }
+            finally
+            {
+                NativeTable.Free(&table);
+            }
+        }
+
+        [Fact]
+        public void WriteStream_FailingSink_ReportsItsMessage()
+        {
+            var layout = EveryTypeLayout();
+            var table = ReadTable(Encoding.UTF8.GetBytes(string.Concat(Enumerable.Repeat(EveryType, 10))), layout);
+            try
+            {
+                var collected = new Collected { FailAfter = 2 };
+                Assert.Equal(NativeStatus.Error, WriteThroughSink(&table, layout, WriteOptions(degree: 4, batchRows: 3), collected));
+
+                Assert.Equal("the disk is full", LastError());
+                Assert.Equal(3, collected.Calls);
+            }
+            finally
+            {
+                NativeTable.Free(&table);
+            }
+        }
+
+        [Fact]
+        public void WriteStream_SinkWithoutWrite_IsRejected()
+        {
+            var raw = new NativeSinkRaw { StructSize = sizeof(NativeSinkRaw) };
+            Assert.False(CallbackWriteStream.TryCreate(&raw, out _));
+            Assert.Contains("sizeof(fw_sink)", LastError(), StringComparison.Ordinal);
+        }
+
         [Fact]
         public void Write_Latin1_EncodesText()
         {

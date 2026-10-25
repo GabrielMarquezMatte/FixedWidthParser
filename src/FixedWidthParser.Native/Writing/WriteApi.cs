@@ -60,6 +60,66 @@ namespace FixedWidthParser.Native.Writing
             }
         }
 
+        /// <summary>
+        /// Writes to <paramref name="sink"/> in order, from the calling thread. A window of one batch per thread formats
+        /// in parallel, then goes to the sink, so memory stays at a window of batches whatever the table's size.
+        /// </summary>
+        // ponytail: the sink waits while a window formats, and the window while the sink writes; overlapping them
+        // with two windows would hide the slower of the two.
+        internal static int WriteStream(NativeTableRaw* table, NativeLayout layout, NativeWriteOptionsRaw* options, Stream sink)
+        {
+            int status = Prepare(table, layout, options, out var formatter, out var settings, out long lineBytes);
+            if (status != NativeStatus.Ok)
+            {
+                return status;
+            }
+            long rows = formatter!.Rows;
+            long batchRows = Math.Max(1, Math.Min(settings!.BatchRows, int.MaxValue / lineBytes));
+            long batches = (rows + batchRows - 1) / batchRows;
+            int window = (int)Math.Min(settings.DegreeOfParallelism, Math.Max(1, batches));
+            var buffers = new byte[window][];
+            try
+            {
+                foreach (ref byte[] buffer in buffers.AsSpan())
+                {
+                    buffer = ArrayPool<byte>.Shared.Rent((int)(Math.Min(batchRows, rows) * lineBytes));
+                }
+                for (long first = 0; first < batches; first += window)
+                {
+                    int count = (int)Math.Min(window, batches - first);
+                    Parallel.For(0, count, new ParallelOptions { MaxDegreeOfParallelism = window }, i =>
+                    {
+                        long row = (first + i) * batchRows;
+                        FormatBatch(formatter, settings, layout, row, buffers[i].AsSpan(0, (int)(Math.Min(batchRows, rows - row) * lineBytes)));
+                    });
+                    for (int i = 0; i < count; i++)
+                    {
+                        long row = (first + i) * batchRows;
+                        sink.Write(buffers[i], 0, (int)(Math.Min(batchRows, rows - row) * lineBytes));
+                    }
+                }
+                sink.Flush();
+                return NativeStatus.Ok;
+            }
+            catch (AggregateException ex)
+            {
+                NativeApi.SetLastError(ex.InnerExceptions[0].Message);
+                return NativeStatus.Error;
+            }
+            catch (Exception ex)
+            {
+                NativeApi.SetLastError(ex.Message);
+                return NativeStatus.Error;
+            }
+            finally
+            {
+                foreach (byte[]? buffer in buffers.Where(b => b is not null))
+                {
+                    ArrayPool<byte>.Shared.Return(buffer);
+                }
+            }
+        }
+
         internal static void FreeBuffer(NativeBufferRaw* buffer)
         {
             if (buffer is null)

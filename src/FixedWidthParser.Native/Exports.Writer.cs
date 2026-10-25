@@ -27,6 +27,23 @@ namespace FixedWidthParser.Native
             return WithLayout(layout, l => WriteApi.WriteMemory(table, l, options, outBuffer));
         }
 
+        [UnmanagedCallersOnly(EntryPoint = "fw_write_stream")]
+        public static int WriteStream(NativeTableRaw* table, nint layout, NativeWriteOptionsRaw* options, NativeSinkRaw* sink)
+        {
+            if (table is null)
+            {
+                return InvalidArgument("fw_write_stream needs a table.");
+            }
+#pragma warning disable CA2000 // Disposed by the using below; the sink has nothing to release.
+            if (!CallbackWriteStream.TryCreate(sink, out var created))
+            {
+                return NativeStatus.InvalidArgument;
+            }
+#pragma warning restore CA2000
+            using var stream = created;
+            return WithLayout(layout, l => WriteApi.WriteStream(table, l, options, stream));
+        }
+
         [UnmanagedCallersOnly(EntryPoint = "fw_free_buffer")]
         public static void FreeBuffer(NativeBufferRaw* buffer)
         {

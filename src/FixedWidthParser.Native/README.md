@@ -37,13 +37,17 @@ struct starts with `struct_size`; `NULL` means all defaults.
 | Batches | `fw_reader_open_file`, `fw_reader_open_memory`, `fw_reader_open_stream`, `fw_reader_next`, `fw_reader_close` |
 | Arrow | `fw_read_arrow_file`, `fw_read_arrow_memory`, `fw_read_arrow_stream_file`, `fw_read_arrow_stream_memory`, `fw_read_arrow_stream_stream` |
 | Streams | `fw_set_source_error` |
-| Writes | `fw_write_file`, `fw_write_memory`, `fw_free_buffer` |
+| Writes | `fw_write_file`, `fw_write_memory`, `fw_write_stream`, `fw_free_buffer` |
 
 A batched read or an Arrow stream can pull from an `fw_stream` instead of a file or memory: a `read` callback
 that fills a buffer and returns the count, 0 at the end or -1 after `fw_set_source_error`, and an optional
 `release` the library calls once it is done. It reads forward only, skipping the header lines as it goes, so a
 pipe, a socket or a decompressor works; the batches stay in constant memory. Whole-table reads take a file or
 memory, since they split the source into byte ranges.
+
+`fw_write_stream` pushes the lines to an `fw_sink` instead: a `write` callback that takes every byte it is
+given and returns 0, or -1 after `fw_set_source_error`. It is called in order from the calling thread, a batch at
+a time, while batches format in parallel, so memory stays at a batch per thread.
 
 `include/fixedwidth.def` lists them for import-library generation on Windows; a test fails when it drifts
 from the `[UnmanagedCallersOnly]` entry points.

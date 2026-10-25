@@ -21,3 +21,4 @@ EXPORTS
     fw_set_source_error
     fw_write_file
     fw_write_memory
+    fw_write_stream
