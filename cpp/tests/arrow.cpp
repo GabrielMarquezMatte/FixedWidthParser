@@ -42,6 +42,17 @@ int main()
     }
     CHECK(streamed_rows == 3);
 
+    // A dictionary column: int32 indices whose dictionary holds the distinct strings.
+    std::vector<fw::ColumnSpec> coded{{.name = "codneg", .start = 2, .length = 12, .type = fw::Type::String, .dictionary = true}};
+    auto coded_layout = fw::Layout::create(coded);
+    CHECK(coded_layout.has_value());
+    auto encoded = fw::read_arrow_memory(content, *coded_layout, skip_header_and_invalid());
+    CHECK(encoded.has_value());
+    const ArrowSchema& codes_schema = *encoded->schema().children[0];
+    const ArrowArray& codes = *encoded->array().children[0];
+    CHECK(std::strcmp(codes_schema.format, "i") == 0 && std::strcmp(codes_schema.dictionary->format, "u") == 0);
+    CHECK(codes.length == 4 && codes.dictionary->length == 4);
+
     std::puts("arrow ok");
     return 0;
 }

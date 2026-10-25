@@ -12,6 +12,10 @@ namespace FixedWidthParser.Native.Layouts
         internal int Length { get; init; }
         internal int Type { get; init; }
         internal bool Nullable { get; init; }
+
+        /// <summary>A STRING column handed to Arrow dictionary-encoded: int32 indices into its distinct values.</summary>
+        internal bool Dictionary { get; init; }
+
         internal int Scale { get; init; }
         internal ColumnParseOptions Parse { get; init; }
         internal ColumnFormatOptions FormatOptions { get; init; }

@@ -65,6 +65,9 @@ the end. `fw::layout_for<T>()` returns the `fw::Layout` the bindings describe, f
 read it forward a batch at a time, in constant memory, so a decompressing or network stream works. The stream
 must outlive the reader; a stream that turns `bad()` fails the read.
 
+`ColumnSpec::dictionary` hands a String column to Arrow (`read_arrow_*`) dictionary-encoded: int32 indices into
+its distinct values. `fw::Table` keeps the strings.
+
 ```cpp
 std::ifstream file("COTAHIST_A2023.TXT", std::ios::binary);
 auto reader = fw::TypedReader<Quote>::open_stream(file, {.read = {.header_lines = 1, .skip_invalid = true}});

@@ -16,6 +16,7 @@ namespace FixedWidthParser.Tests.Native
         public int Alignment { get; init; }
         public int Padding { get; init; }
         public int Overflow { get; init; }
+        public int Dictionary { get; init; }
         public int StructSize { get; init; } = Marshal.SizeOf<NativeColumnSpecRaw>();
     }
 
@@ -100,6 +101,7 @@ namespace FixedWidthParser.Tests.Native
                 Alignment = column.Alignment,
                 Padding = column.Padding,
                 Overflow = column.Overflow,
+                Dictionary = column.Dictionary,
             };
         }
 

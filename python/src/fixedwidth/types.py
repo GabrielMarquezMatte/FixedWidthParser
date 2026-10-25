@@ -46,6 +46,8 @@ class Column:
     - `format`: the exact date/time format (.NET syntax, e.g. `yyyyMMdd`), or a number format on write.
     - `trim_char`, `trim_mode`: what is stripped before parsing; a null is written as `trim_char`.
     - `alignment`, `padding`, `overflow`: how a value is written. `padding='0'` keeps a sign leftmost.
+    - `dictionary`: a String column reaches Arrow dictionary-encoded, so pandas reads it as `category` and polars
+      as `Categorical`: much less memory for a column of few distinct values. `fw.read`'s Table keeps strings.
     """
 
     name: str
@@ -61,6 +63,7 @@ class Column:
     alignment: Alignment | None = None
     padding: str | None = None
     overflow: Overflow | None = None
+    dictionary: bool = False
 
 
 @dataclass(frozen=True)

@@ -40,6 +40,10 @@ namespace FixedWidthParser.Native.Layouts
             {
                 return "truncate overflow applies only to STRING columns.";
             }
+            if (spec.Dictionary is < 0 or > 1 || (spec.Dictionary == 1 && spec.Type != NativeType.String))
+            {
+                return "dictionary is 0 or 1, and applies only to STRING columns.";
+            }
             return null;
         }
 
@@ -54,6 +58,7 @@ namespace FixedWidthParser.Native.Layouts
                 Length = spec.Length,
                 Type = spec.Type,
                 Nullable = spec.Nullable != 0,
+                Dictionary = spec.Dictionary == 1,
                 Scale = spec.Scale,
                 Parse = new ColumnParseOptions(trimChar, TrimModeOf(spec.TrimMode), format),
                 FormatOptions = new ColumnFormatOptions(AlignmentOf(spec.Alignment, spec.Type), padding, format ?? IsoFormat(spec.Type),

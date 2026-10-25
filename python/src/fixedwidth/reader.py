@@ -145,7 +145,7 @@ def read(source: Source, layout: Layout, options: ReadOptions | None = None) -> 
     else:
         status = lib.fw_read_memory(data.address, data.length, layout.handle, _ref(raw), ctypes.byref(table), ctypes.byref(result))
     check(status)
-    return Table(_Owner(table), layout.names, int(result.lines_read), int(result.lines_skipped))
+    return Table(_Owner(table), layout.names, int(result.lines_read), int(result.lines_skipped), layout.dictionaries)
 
 
 def read_arrow(source: Source, layout: Layout, options: ReadOptions | None = None) -> Any:
@@ -202,7 +202,7 @@ def read_batches(source: Source, layout: Layout, options: ReaderOptions | None =
             if status == _native.FW_EOF:
                 return
             check(status)
-            yield Table(_Owner(table), layout.names)
+            yield Table(_Owner(table), layout.names, dictionaries=layout.dictionaries)
     finally:
         lib.fw_reader_close(reader)
         del data

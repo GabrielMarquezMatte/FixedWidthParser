@@ -45,6 +45,7 @@ class ColumnSpec(ctypes.Structure):
         ("alignment", ctypes.c_int32),
         ("padding", ctypes.c_int32),
         ("overflow", ctypes.c_int32),
+        ("dictionary", ctypes.c_int32),
     ]
 
 

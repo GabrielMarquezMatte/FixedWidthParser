@@ -71,6 +71,7 @@ class Layout:
         spec.alignment = int(column.alignment or 0)
         spec.padding = ascii_option(column.padding, "padding")
         spec.overflow = int(column.overflow or 0)
+        spec.dictionary = int(column.dictionary)
         return name, fmt
 
     @property
@@ -80,6 +81,11 @@ class Layout:
     @property
     def names(self) -> list[str]:
         return [column.name for column in self._columns]
+
+    @property
+    def dictionaries(self) -> frozenset[str]:
+        """The columns set to reach Arrow dictionary-encoded."""
+        return frozenset(column.name for column in self._columns if column.dictionary)
 
     @property
     def handle(self) -> int:

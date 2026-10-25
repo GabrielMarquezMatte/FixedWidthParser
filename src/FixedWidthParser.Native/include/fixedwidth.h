@@ -96,6 +96,8 @@ typedef struct fw_column_spec {
     int32_t alignment;         /* FW_ALIGN_*, on write */
     int32_t padding;           /* ASCII; 0 = space, on write. '0' keeps a sign leftmost. */
     int32_t overflow;          /* FW_OVERFLOW_*, on write */
+    int32_t dictionary;        /* 1: a STRING column reaches Arrow dictionary-encoded, as int32 indices into its
+                                * distinct values (pandas category, polars Categorical); fw_table keeps strings */
 } fw_column_spec;
 
 typedef struct fw_layout_options {
