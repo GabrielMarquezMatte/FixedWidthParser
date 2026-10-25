@@ -69,7 +69,9 @@ Windows-1252 after registering `CodePagesEncodingProvider`).
   thread count. Not on NuGet.
 - The `fixedwidth` Python package over it (NumPy views, pyarrow, pandas, polars), 52 times faster than
   `pandas.read_fwf` on a 1,000,000-line COTAHIST-shaped file, and a header-only C++23 wrapper
-  (`fixedwidth.hpp`) that also maps structs to columns through `FixedWidthMapper<T>`.
+  (`fixedwidth.hpp`) that also maps structs to columns through `FixedWidthMapper<T>`. It installs as a CMake
+  package (`find_package(fixedwidth)`) or through FetchContent, and downloads the release's native library for
+  the platform, so it needs no .NET SDK.
 - Releases publish the Python package to PyPI as `fixedwidthparser`, with wheels for Windows x64,
   macOS arm64 and x64, and Linux glibc and musl on x64 and arm64, and attach each platform's native library
   to the GitHub Release.

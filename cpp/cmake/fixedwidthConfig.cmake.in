@@ -1,0 +1,26 @@
+@PACKAGE_INIT@
+
+# The same two targets cpp/CMakeLists.txt defines for an in-tree build, pointed at the installed copies. The
+# native library was resolved once, at install time, so find_package() never downloads anything.
+
+if(NOT TARGET fw::native)
+    add_library(fw::native SHARED IMPORTED)
+    set_target_properties(fw::native PROPERTIES
+        IMPORTED_LOCATION "@PACKAGE_FIXEDWIDTH_INSTALLED_NATIVE_DIR@/@FIXEDWIDTH_INSTALLED_NATIVE_NAME@")
+    if(WIN32)
+        set_target_properties(fw::native PROPERTIES
+            IMPORTED_IMPLIB "@PACKAGE_FIXEDWIDTH_INSTALLED_IMPLIB_DIR@/@FIXEDWIDTH_INSTALLED_IMPLIB_NAME@")
+    endif()
+endif()
+
+if(NOT TARGET fw::fixedwidth)
+    add_library(fw::fixedwidth INTERFACE IMPORTED)
+    set_target_properties(fw::fixedwidth PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "@PACKAGE_FIXEDWIDTH_INSTALLED_INCLUDE_DIR@"
+        INTERFACE_COMPILE_FEATURES cxx_std_23
+        INTERFACE_LINK_LIBRARIES fw::native)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/CopyNativeLibrary.cmake")
+
+check_required_components(fixedwidth)

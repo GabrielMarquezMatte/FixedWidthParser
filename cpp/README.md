@@ -64,14 +64,60 @@ the `fw::Table` underneath, with `lines_read()` and `lines_skipped()`. `fw::Type
 An integer field narrower than `int64_t` that a value does not fit fails the read with
 `FW_INVALID_ARGUMENT` instead of wrapping.
 
-## CMake
+## Install
+
+Needs a C++23 compiler and CMake 3.16 or later; on Windows, `lib.exe` (run CMake from a Visual Studio developer
+prompt) or MinGW's `dlltool`. No .NET SDK: CMake downloads the prebuilt native library for your platform from
+the GitHub Release of the tag you build (Windows x64, macOS arm64/x64, Linux glibc x64/arm64).
+
+**FetchContent**, the simplest:
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(fixedwidth
+    GIT_REPOSITORY https://github.com/GabrielMarquezMatte/FixedWidthParser.git
+    GIT_TAG v2.0.0
+    SOURCE_SUBDIR cpp)
+FetchContent_MakeAvailable(fixedwidth)
+
+target_link_libraries(app PRIVATE fw::fixedwidth)
+fixedwidth_copy_native_library(app)   # Windows: puts the DLL next to app.exe; a no-op elsewhere
+```
+
+**Installed package**, for `find_package`:
+
+    git clone --branch v2.0.0 https://github.com/GabrielMarquezMatte/FixedWidthParser.git
+    cmake -S FixedWidthParser/cpp -B build -DCMAKE_BUILD_TYPE=Release
+    cmake --install build --prefix <prefix>
+
+```cmake
+find_package(fixedwidth 2 REQUIRED)      # with <prefix> in CMAKE_PREFIX_PATH
+target_link_libraries(app PRIVATE fw::fixedwidth)
+fixedwidth_copy_native_library(app)
+```
+
+The install puts the headers in `include/`, the library in `bin/` (Windows) or `lib/`, the Windows import
+library in `lib/`, and the package in `lib/cmake/fixedwidth`. `find_package` never downloads anything.
+
+Settings:
+
+- `FIXEDWIDTH_VERSION`: the release tag whose library is downloaded. Empty takes the tag checked out, which
+  `GIT_TAG` and `--branch` above set.
+- `FIXEDWIDTH_NATIVE_LIB` (CMake or environment variable): a library you built or downloaded yourself, such as
+  musl's `fixedwidth-native-linux-musl-x64.so` from the release, saved as `FixedWidthParser.Native.so`. Nothing
+  is downloaded then.
+
+On Windows an import library is generated from `include/fixedwidth.def`. GCC's `-Wextra` warns about designated
+initializers that leave defaulted options out; that is the intended use, so build with
+`-Wno-missing-field-initializers`.
+
+## Developing
 
     python python/scripts/build_native.py
     cmake -S cpp -B build/cpp
     cmake --build build/cpp && ctest --test-dir build/cpp --output-on-failure
 
-`add_subdirectory(cpp)` gives the `fw::fixedwidth` target; `FIXEDWIDTH_NATIVE_LIB` points at the published
-library (by default the copy in `python/src/fixedwidth/_lib`). On Windows an import library is generated from
-`include/fixedwidth.def` with `lib.exe` or `dlltool`, and `fixedwidth_copy_native_library(<target>)` copies
-the DLL next to an executable. GCC's `-Wextra` warns about designated initializers that leave defaulted
-options out; that is the intended use, so build with `-Wno-missing-field-initializers`.
+In a checkout, the library `build_native.py` publishes into `python/src/fixedwidth/_lib` takes precedence over
+the download. `FIXEDWIDTH_BUILD_TESTS` and `FIXEDWIDTH_INSTALL` default to on when `cpp/` is the top-level
+project and off under FetchContent or `add_subdirectory`. `cpp/tests/package` builds against an installed prefix,
+as CI does.
