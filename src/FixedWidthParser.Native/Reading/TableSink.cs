@@ -36,7 +36,9 @@ namespace FixedWidthParser.Native.Reading
             _columns = new ColumnBuilder[layout.Columns.Length];
             for (int i = 0; i < _columns.Length; i++)
             {
-                _columns[i] = new ColumnBuilder(layout.Columns[i], limits.MaxTextBytes, expectedRows, arena is null ? null : arena.Lend(i, firstRow));
+                _columns[i] = arena is null
+                    ? new ColumnBuilder(layout.Columns[i], limits.MaxTextBytes, expectedRows)
+                    : new ColumnBuilder(layout.Columns[i], limits.MaxTextBytes, expectedRows, arena.Lend(i, firstRow), arena.LendOffsets(i, firstRow), firstRow == 0);
             }
             _requiredLength = layout.Columns.Max(c => c.Start + c.Length);
             _failedColumn = -1;
@@ -143,7 +145,7 @@ namespace FixedWidthParser.Native.Reading
                     {
                         parts[c] = chunks[c][i];
                     }
-                    ColumnBuilder.Concat(parts, (NativeColumnRaw*)target + i, arena?.Block(i));
+                    ColumnBuilder.Concat(parts, (NativeColumnRaw*)target + i, arena?.Block(i), arena?.OffsetsBlock(i));
                 });
             }
             catch (AggregateException ex)

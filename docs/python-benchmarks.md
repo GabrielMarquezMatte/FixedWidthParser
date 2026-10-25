@@ -130,7 +130,9 @@ each partition its slice; numeric, date and time values go straight there, and s
 for the column's full width on every row. Publishing moves each partition down to close the gaps that skipped
 lines and trimmed text leave, in memory already touched, and hands the buffers over. A partition with more
 rows than its slice, as when line lengths vary, copies its column out, and that column is concatenated as
-before. STRING offsets are still copied: each slice's leading 0 would fall on the previous slice's last offset.
+before. STRING offsets are lent too: each slice's index 0 is the previous slice's last offset, so only the first
+slice writes the column's leading 0, and publishing rebases the rest in place. That last copy was ~32 MB here and
+saved only about 4 ms.
 
 Same machine, same run order, best of 9:
 

@@ -9,10 +9,9 @@ namespace FixedWidthParser.Native.Reading
     /// and publishing has nothing to copy. Every line is taken to be as long as the first, so a partition's first row
     /// is its offset over that length. A partition with fewer rows leaves a gap that publishing closes in place; one
     /// with more copies its column out of the slice, and that column is copied as before. A STRING column is lent
-    /// room for its whole width on every row, for its bytes.
+    /// room for its whole width on every row, for its bytes, and its offsets: a slice's index 0 is the previous slice's
+    /// last offset, so only the first slice writes the column's leading 0.
     /// </summary>
-    // ponytail: STRING offsets are still copied once, rebased; a slice's leading 0 would land on the last offset of
-    // the slice before. Lending one extra offset per partition would cut that copy too.
     internal sealed unsafe class TableArena : IDisposable
     {
         private const int ProbeBytes = 64 * 1024;
@@ -22,6 +21,7 @@ namespace FixedWidthParser.Native.Reading
         private readonly int _rows;
         private readonly int[] _sizes;
         private readonly GrowableNativeBuffer<byte>?[] _blocks;
+        private readonly GrowableNativeBuffer<int>?[] _offsetBlocks;
 
         private TableArena(long dataStart, long stride, int rows, NativeLayout layout, TableLimits limits)
         {
@@ -37,6 +37,16 @@ namespace FixedWidthParser.Native.Reading
                     var block = new GrowableNativeBuffer<byte>();
                     block.Reserve((long)rows * _sizes[i]);
                     _blocks[i] = block;
+                }
+            }
+            _offsetBlocks = new GrowableNativeBuffer<int>?[_sizes.Length];
+            for (int i = 0; i < _offsetBlocks.Length; i++)
+            {
+                if (layout.Columns[i].Type == NativeType.String)
+                {
+                    var offsets = new GrowableNativeBuffer<int>();
+                    offsets.Reserve(rows + 1L);
+                    _offsetBlocks[i] = offsets;
                 }
             }
         }
@@ -93,9 +103,26 @@ namespace FixedWidthParser.Native.Reading
             return _blocks[column];
         }
 
+        /// <summary>Where a STRING column's offset at index <paramref name="row"/> goes, the start of the row's text; null for other columns.</summary>
+        internal int* LendOffsets(int column, int row)
+        {
+            return _offsetBlocks[column] is { } block ? block.Pointer + row : null;
+        }
+
+        internal GrowableNativeBuffer<int>? OffsetsBlock(int column)
+        {
+            return _offsetBlocks[column];
+        }
+
+        /// <summary>Where a STRING column's offset at index <paramref name=
+
         public void Dispose()
         {
             foreach (var block in _blocks)
+            {
+                block?.Dispose();
+            }
+            foreach (var block in _offsetBlocks)
             {
                 block?.Dispose();
             }
