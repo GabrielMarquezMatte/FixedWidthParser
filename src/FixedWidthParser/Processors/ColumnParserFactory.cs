@@ -8,8 +8,8 @@ namespace FixedWidthParser.Processors
     /// Combines a column's setter and a value parser into a single <see cref="ColumnParser{TModel}"/>
     /// closure that calls the same <see cref="FixedWidthRuntime"/> helpers as generated code. Resolution
     /// order: a converter, a date or time with a <c>Format</c>, <c>string</c>, <c>double</c>/<c>float</c>,
-    /// then <see cref="IUtf8SpanParsable{TSelf}"/>, then <see cref="ISpanParsable{TSelf}"/> over the decoded
-    /// text. Attribute layouts reach it by reflection (<see cref="Create{TModel}"/>), fluent layouts through
+    /// an enum, then <see cref="IUtf8SpanParsable{TSelf}"/>, then <see cref="ISpanParsable{TSelf}"/> over the
+    /// decoded text. Attribute layouts reach it by reflection (<see cref="Create{TModel}"/>), fluent layouts through
     /// the typed <c>For*</c> entry points.
     /// </summary>
     internal static class ColumnParserFactory
@@ -56,6 +56,10 @@ namespace FixedWidthParser.Processors
             {
                 return ForString((ColumnSetter<TModel, string>)setter, options);
             }
+            if (valueType.IsEnum)
+            {
+                return (ColumnParser<TModel>)Method(nameof(ForEnum), typeof(TModel), valueType).Invoke(null, [setter, options])!;
+            }
             if (Implements(valueType, typeof(IUtf8SpanParsable<>)))
             {
                 return (ColumnParser<TModel>)Method(nameof(ForUtf8Parsable), typeof(TModel), valueType).Invoke(null, [setter, options])!;
@@ -66,7 +70,14 @@ namespace FixedWidthParser.Processors
             }
 
             throw new InvalidOperationException(
-                $"Column '{memberName}' has type '{valueType}', which is not string, double, float, IUtf8SpanParsable<T> or ISpanParsable<T>; set a Converter for it.");
+                $"Column '{memberName}' has type '{valueType}', which is not string, double, float, an enum, IUtf8SpanParsable<T> or ISpanParsable<T>; set a Converter for it.");
+        }
+
+        internal static ColumnParser<TModel> ForEnum<TModel, TEnum>(ColumnSetter<TModel, TEnum> setter, ColumnParseOptions options)
+            where TModel : allows ref struct
+            where TEnum : struct, Enum
+        {
+            return Bind(setter, options, FixedWidthRuntime.TryEnum);
         }
 
         internal static ColumnParser<TModel> ForString<TModel>(ColumnSetter<TModel, string> setter, ColumnParseOptions options)

@@ -103,6 +103,55 @@ namespace FixedWidthParser
         }
 
         /// <summary>
+        /// Adds an enum column: it reads a member's name in any case or its number, and writes the name, or the
+        /// number with <see cref="FixedWidthColumnOptions.Format"/> <c>"D"</c>. A number no member has does not read.
+        /// </summary>
+        /// <inheritdoc cref="Column(string, int, int, ColumnGetter{TModel, string}?, ColumnSetter{TModel, string}?, FixedWidthColumnOptions?)"/>
+        public FixedWidthLayoutBuilder<TModel> EnumColumn<TEnum>(
+            string name, int start, int length, ColumnGetter<TModel, TEnum>? get, ColumnSetter<TModel, TEnum>? set, FixedWidthColumnOptions? options = null)
+            where TEnum : struct, Enum
+        {
+            var column = Begin(name, start, length, typeof(TEnum), options);
+            ColumnParser<TModel>? parser = null;
+            if (set is not null)
+            {
+                parser = ColumnParserFactory.ForEnum(set, column.Parse);
+            }
+            IColumnFormatter<TModel>? formatter = null;
+            if (get is not null)
+            {
+                formatter = new SpanFormattableColumnFormatter<TModel, TEnum>(start, length, column.FormatOptions, name, get);
+            }
+            return Add(column, parser, formatter);
+        }
+
+        /// <summary>
+        /// Adds a <see cref="Nullable{TValue}"/> enum column: blank reads as <see langword="null"/>, and
+        /// <see langword="null"/> writes the column filled with its trim character.
+        /// </summary>
+        /// <inheritdoc cref="EnumColumn{TEnum}(string, int, int, ColumnGetter{TModel, TEnum}?, ColumnSetter{TModel, TEnum}?, FixedWidthColumnOptions?)"/>
+        public FixedWidthLayoutBuilder<TModel> NullableEnumColumn<TEnum>(
+            string name, int start, int length, ColumnGetter<TModel, TEnum?>? get, ColumnSetter<TModel, TEnum?>? set, FixedWidthColumnOptions? options = null)
+            where TEnum : struct, Enum
+        {
+            var column = Begin(name, start, length, typeof(TEnum?), options);
+            ColumnParser<TModel>? parser = null;
+            if (set is not null)
+            {
+                parser = ColumnParserFactory.ForNullable(set, column.Parse,
+                    adapted => ColumnParserFactory.ForEnum(adapted, column.Parse));
+            }
+            IColumnFormatter<TModel>? formatter = null;
+            if (get is not null)
+            {
+                var inner = new SpanFormattableColumnFormatter<TModel, TEnum>(
+                    start, length, column.FormatOptions, name, (in TModel model) => get(in model).GetValueOrDefault());
+                formatter = new NullableColumnFormatter<TModel, TEnum>(start, length, column.Parse.TrimByte, get, inner);
+            }
+            return Add(column, parser, formatter);
+        }
+
+        /// <summary>
         /// Adds a <see cref="Nullable{TValue}"/> column: a column holding only its trim character reads as
         /// <see langword="null"/>, and <see langword="null"/> writes the column filled with it.
         /// </summary>

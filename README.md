@@ -27,7 +27,7 @@ Upgrading from 1.x? See [the 2.0 entry in the changelog](CHANGELOG.md#200).
 - **Bounded memory on untrusted input**: `MaxLineLength` stops a source without line breaks from growing the buffer.
 - **Writing** of single records and batches, synchronous and asynchronous, batched into one pooled buffer.
 - **Configurable formatting** per column: alignment, padding character, format string and explicit overflow policy.
-- **Culture-aware** numbers and dates, with a fast path for `double`, `float` and `decimal`, and any `IUtf8SpanParsable`/`ISpanParsable` type.
+- **Culture-aware** numbers and dates, with a fast path for `double`, `float` and `decimal`, enums by name or number, and any `IUtf8SpanParsable`/`ISpanParsable` type.
 - **Layout validation** when a layout is built or generated: negative `Start`, non-positive `Length`, overlapping columns and non-ASCII padding fail clearly.
 - **`ref struct` model support** on single-line parsing and formatting, on every reader and on parallel aggregation.
 - **Python and C/C++** through a NativeAOT library with a C ABI: columnar and Arrow reads, parallel reads and writes. See [Python and C/C++](#python-and-cc).

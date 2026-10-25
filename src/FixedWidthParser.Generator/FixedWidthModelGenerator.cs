@@ -36,7 +36,7 @@ namespace FixedWidthParser.Generator
 
         private static readonly DiagnosticDescriptor UnsupportedColumnType = new(
             "FWP003", "Unsupported fixed-width column type",
-            "Column '{0}' has type '{1}', which is not string, double, float, IUtf8SpanParsable<T> or ISpanParsable<T>; set a Converter for it",
+            "Column '{0}' has type '{1}', which is not string, double, float, an enum, IUtf8SpanParsable<T> or ISpanParsable<T>; set a Converter for it",
             "FixedWidthParser", DiagnosticSeverity.Error, isEnabledByDefault: true);
 
         private static readonly DiagnosticDescriptor NegativeStart = new(
@@ -240,7 +240,7 @@ namespace FixedWidthParser.Generator
                 && SymbolEqualityComparer.Default.Equals(i.TypeArguments[0], symbol));
         }
 
-        // Mirrors ColumnParserFactory: converter → date/time with Format → string → double/float →
+        // Mirrors ColumnParserFactory: converter → date/time with Format → string → double/float → enum →
         // IUtf8SpanParsable → ISpanParsable over the decoded text.
         private static ColumnKind Classify(ITypeSymbol type, ITypeSymbol? converterType, string? format, Compilation compilation)
         {
@@ -267,6 +267,10 @@ namespace FixedWidthParser.Generator
                     break;
             }
 
+            if (type.TypeKind == TypeKind.Enum)
+            {
+                return ColumnKind.Enum;
+            }
             if (ImplementsGeneric(type, type, compilation, "System.IUtf8SpanParsable`1"))
             {
                 return ColumnKind.Utf8Parsable;
@@ -610,6 +614,10 @@ namespace FixedWidthParser.Generator
                     sb.Append(stmt).Append("if (!").Append(RuntimeFqn).Append(c.Kind == ColumnKind.Utf8Parsable ? ".TryParse<" : ".TryParseDecoded<")
                       .Append(c.TypeFqn).Append(">(").Append(col).Append(", context").Append(parse).Append(", out ").Append(c.TypeFqn).Append(' ').Append(localName).AppendLine(fail);
                     break;
+                case ColumnKind.Enum:
+                    sb.Append(stmt).Append("if (!").Append(RuntimeFqn).Append(".TryEnum<")
+                      .Append(c.TypeFqn).Append(">(").Append(col).Append(", context").Append(parse).Append(", out ").Append(c.TypeFqn).Append(' ').Append(localName).AppendLine(fail);
+                    break;
                 case ColumnKind.Converter:
                     sb.Append(stmt).Append("if (!").Append(RuntimeFqn).Append(".TryConvert<").Append(c.TypeFqn).Append(", ").Append(c.ConverterFqn)
                       .Append(">(").Append(col).Append(", context, __converter").Append(i).Append(parse).Append(", out ").Append(c.TypeFqn)
@@ -724,7 +732,7 @@ namespace FixedWidthParser.Generator
             };
         }
 
-        private enum ColumnKind { String, Double, Float, Utf8Parsable, DecodedParsable, Exact, Converter, BadConverter, Unsupported }
+        private enum ColumnKind { String, Double, Float, Enum, Utf8Parsable, DecodedParsable, Exact, Converter, BadConverter, Unsupported }
 
         private enum WriteKind { String, Formattable, Utf8Formattable, Converter, Unsupported }
 
