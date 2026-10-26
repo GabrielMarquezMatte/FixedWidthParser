@@ -98,16 +98,28 @@ namespace FixedWidthParser.Native.Writing
                     FixedWidthRuntime.FormatUtf8Value(DateOnly.FromDayNumber(NativeType.EpochDay + ((int*)raw->Values)[row]), slice, in _context, options, column.Name);
                     return;
                 case NativeType.Time:
-                    FixedWidthRuntime.FormatUtf8Value(new TimeOnly(((long*)raw->Values)[row] * TimeSpan.TicksPerMicrosecond), slice, in _context, options, column.Name);
+                    FixedWidthRuntime.FormatUtf8Value(new TimeOnly(Ticks(column, raw, row, 0, TimeSpan.TicksPerDay - 1)), slice, in _context, options, column.Name);
                     return;
                 case NativeType.Timestamp:
-                    var ticks = DateTime.UnixEpoch.Ticks + (((long*)raw->Values)[row] * TimeSpan.TicksPerMicrosecond);
+                    long epoch = DateTime.UnixEpoch.Ticks;
+                    var ticks = epoch + Ticks(column, raw, row, DateTime.MinValue.Ticks - epoch, DateTime.MaxValue.Ticks - epoch);
                     FixedWidthRuntime.FormatUtf8Value(new DateTime(ticks, DateTimeKind.Unspecified), slice, in _context, options, column.Name);
                     return;
                 default:
                     FixedWidthRuntime.FormatUtf8Value(((long*)raw->Values)[row], slice, in _context, options, column.Name);
                     return;
             }
+        }
+
+        /// <summary>The row's microseconds as ticks, checked against <paramref name="min"/>..<paramref name="max"/> before scaling so it cannot wrap.</summary>
+        private static long Ticks(NativeColumn column, NativeColumnRaw* raw, long row, long min, long max)
+        {
+            long micros = ((long*)raw->Values)[row];
+            if (micros < min / TimeSpan.TicksPerMicrosecond || micros > max / TimeSpan.TicksPerMicrosecond)
+            {
+                throw new InvalidOperationException($"Value {micros} of column \"{column.Name}\" is out of range in microseconds.");
+            }
+            return micros * TimeSpan.TicksPerMicrosecond;
         }
 
         private void FormatFloat(NativeColumn column, double value, Span<byte> slice)
