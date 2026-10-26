@@ -5,9 +5,27 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0]
+## [2.0.1]
 
-Not released yet.
+### Fixed
+- `fw_write_file` replaced an existing file before formatting, so a failed write left it truncated. It
+  now writes a sibling file and moves it into place only on success.
+- `fw_write_*` wrapped `TIME` and `TIMESTAMP` microseconds outside the supported range into a valid
+  value; they are now an error.
+- A `DECIMAL` value whose scaling overflowed `decimal` failed the whole read instead of a parse error
+  that `skip_invalid` can skip.
+- C++ wrapper: `write_stream` reported success to a `std::ostream` with only `failbit` set, and
+  `Reader::open_stream` failed at the end of a `std::istream` with exceptions enabled.
+- Python: `DECIMAL` scaling, written and in `Table.to_arrow`, rounded to the caller's `decimal`
+  context precision.
+- An enum alias (a second name for a value) did not parse.
+- A nullable column of spaces and its trim character mixed, such as `" 0 0 "`, was not read as `null`.
+- A layout whose column ends past `int.MaxValue` was accepted and threw while reading; it is now
+  rejected, and the generator reports `FWP014`.
+- Generated models with C# keyword names (`@event`) produced code that did not compile, and a generic
+  model crashed the generator; it now reports `FWP013`.
+
+## [2.0.0]
 
 2.0 reads and writes **bytes only**, where 1.x had a `char` and a UTF-8 version of each reader,
 parser and writer, and goes through **one entry point**: every `FixedWidth` method comes in an
@@ -249,7 +267,8 @@ Initial release.
   reflection-free `TryParse` generated at compile time, with diagnostics (FWP001-FWP007) for invalid
   layouts and unsupported column types.
 
-[2.0.0]: https://github.com/GabrielMarquezMatte/FixedWidthParser/compare/v1.1.1...HEAD
+[2.0.1]: https://github.com/GabrielMarquezMatte/FixedWidthParser/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/GabrielMarquezMatte/FixedWidthParser/compare/v1.1.1...v2.0.0
 [1.1.1]: https://github.com/GabrielMarquezMatte/FixedWidthParser/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/GabrielMarquezMatte/FixedWidthParser/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/GabrielMarquezMatte/FixedWidthParser/releases/tag/v1.0.0
