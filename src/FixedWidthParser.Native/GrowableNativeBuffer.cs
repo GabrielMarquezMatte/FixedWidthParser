@@ -86,6 +86,33 @@ namespace FixedWidthParser.Native
             Count += values.Length;
         }
 
+        /// <summary>Elements the buffer can hold before it grows.</summary>
+        internal int Capacity => _capacity;
+
+        /// <summary>
+        /// Gives back the room past <paramref name="length"/> elements when it is at least half of an owned block, so a
+        /// block reserved for more than it got does not stay that large for as long as its owner keeps it. Memory lent
+        /// by <see cref="Borrow"/> is left alone, and so is the block if the allocator cannot shrink it.
+        /// </summary>
+        internal void TrimExcess(int length)
+        {
+            length = Math.Max(length, 1);
+            if (_block is null || length > _capacity / 2)
+            {
+                return;
+            }
+            try
+            {
+                _data = (T*)_block.Resize(checked((nint)length * sizeof(T)));
+                _capacity = length;
+                Count = Math.Min(Count, length);
+            }
+            catch (OutOfMemoryException)
+            {
+                // ReAllocHGlobal leaves the block as it was.
+            }
+        }
+
         /// <summary>Hands the block to the caller, who frees it with <see cref="Marshal.FreeHGlobal"/>.</summary>
         internal IntPtr Detach()
         {
