@@ -31,7 +31,7 @@
   <PropertyGroup>
     <!-- The bare "FixedWidthParser" id is squatted on nuget.org; assembly/namespace stay FixedWidthParser. -->
     <PackageId>FixedWidthParser.NET</PackageId>
-    <Version>2.0.0-dev</Version>
+    <Version>2.0.1-dev</Version>
     <Authors>Gabriel Matte</Authors>
     <Title>FixedWidthParser</Title>
     <Description>High-performance, low-allocation parsing and writing of fixed-width (flat) files for .NET. Attribute-driven column mapping, sync/async batch reading (IEnumerable/IAsyncEnumerable), configurable formatting, culture awareness and ref struct support.</Description>
