@@ -208,7 +208,24 @@ namespace FixedWidthParser.Infrastructure
                 {
                     return false;
                 }
-                return sign == 0 ? Lookup.TryGetValue(number, out value) : Lookup.TryGetValue(string.Concat("-", number), out value);
+                return sign == 0 ? Lookup.TryGetValue(number, out value) : TryLookupNegative(number, out value);
+            }
+
+            // Its own method, so the stack buffer costs nothing to the lookups that do not need it. No enum value has more
+            // than 20 digits, so a longer number names no member, and the sign fits beside the rest.
+            [SkipLocalsInit]
+            [MethodImpl(MethodImplOptions.NoInlining)]
+            private static bool TryLookupNegative(ReadOnlySpan<char> digits, out TEnum value)
+            {
+                Span<char> negative = stackalloc char[21];
+                if (digits.Length >= negative.Length)
+                {
+                    value = default;
+                    return false;
+                }
+                negative[0] = '-';
+                digits.CopyTo(negative[1..]);
+                return Lookup.TryGetValue(negative[..(digits.Length + 1)], out value);
             }
         }
 
