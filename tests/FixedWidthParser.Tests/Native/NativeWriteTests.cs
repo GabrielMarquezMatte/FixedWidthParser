@@ -208,6 +208,53 @@ namespace FixedWidthParser.Tests.Native
             }
         }
 
+        [Fact]
+        public void Write_FileFailure_KeepsTheExistingFile()
+        {
+            var read = Build(new Col("n", 0, 2, TInt64));
+            var write = Build(new Col("n", 0, 1, TInt64));
+            var table = ReadTable("12\n"u8.ToArray(), read);
+            string directory = Directory.CreateTempSubdirectory().FullName;
+            string path = Path.Combine(directory, "out.txt");
+            try
+            {
+                File.WriteAllText(path, "ORIGINAL");
+
+                Assert.Equal(NativeStatus.Error, WriteApi.WriteFile(Encoding.UTF8.GetBytes(path), &table, write, null));
+
+                Assert.Equal("ORIGINAL", File.ReadAllText(path));
+                Assert.Equal([path], Directory.GetFiles(directory));
+            }
+            finally
+            {
+                NativeTable.Free(&table);
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+
+        [Fact]
+        public void Write_File_ReplacesTheExistingFile()
+        {
+            var layout = EveryTypeLayout();
+            var table = ReadTable(Encoding.UTF8.GetBytes(EveryType), layout);
+            string directory = Directory.CreateTempSubdirectory().FullName;
+            string path = Path.Combine(directory, "out.txt");
+            try
+            {
+                File.WriteAllText(path, new string('x', 1000));
+
+                Assert.Equal(NativeStatus.Ok, WriteApi.WriteFile(Encoding.UTF8.GetBytes(path), &table, layout, null));
+
+                Assert.Equal(WriteMemory(&table, layout).Bytes, File.ReadAllBytes(path));
+                Assert.Equal([path], Directory.GetFiles(directory));
+            }
+            finally
+            {
+                NativeTable.Free(&table);
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+
         [Theory]
         [InlineData(1, 0)]
         [InlineData(4, 1)]
