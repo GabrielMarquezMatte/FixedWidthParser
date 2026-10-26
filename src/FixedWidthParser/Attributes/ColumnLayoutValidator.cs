@@ -21,6 +21,11 @@ namespace FixedWidthParser.Attributes
                     throw new InvalidOperationException(
                         $"Column \"{Name}\" in {modelName} has an invalid Length ({Length}); it must be >= 1.");
                 }
+                if (Start > int.MaxValue - Length)
+                {
+                    throw new InvalidOperationException(
+                        $"Column \"{Name}\" in {modelName} starts at {Start} with Length {Length}, so it ends past int.MaxValue.");
+                }
             }
 
             if (columns.Length < 2)

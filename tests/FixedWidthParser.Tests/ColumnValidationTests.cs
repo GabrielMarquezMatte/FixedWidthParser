@@ -29,6 +29,28 @@ namespace FixedWidthParser.Tests
             Assert.Contains("Start", ex.Message, StringComparison.Ordinal);
         }
 
+        public sealed class FarEndModel
+        {
+            [FixedColumn(2147483646, 3)] public int Value { get; set; }
+        }
+
+        public sealed class FarEdgeModel
+        {
+            [FixedColumn(2147483646, 1)] public int Value { get; set; }
+        }
+
+        [Fact]
+        public void ColumnEndingPastIntMaxValue_Throws()
+        {
+            var attributes = Assert.Throws<InvalidOperationException>(() => FixedWidth.TryParse(ReadOnlySpan<byte>.Empty, FixedWidthLayout.FromAttributes<FarEndModel>(), Ctx, out _));
+            var fluent = Assert.Throws<InvalidOperationException>(() => FixedWidthLayout.Build<FarEndModel>(b => b
+                .Column("Value", 2147483646, 3, (in FarEndModel m) => m.Value, (ref FarEndModel m, int v) => m.Value = v)));
+
+            Assert.Contains("ends past int.MaxValue", attributes.Message, StringComparison.Ordinal);
+            Assert.Contains("ends past int.MaxValue", fluent.Message, StringComparison.Ordinal);
+            Assert.False(FixedWidth.TryParse(ReadOnlySpan<byte>.Empty, FixedWidthLayout.FromAttributes<FarEdgeModel>(), Ctx, out _));
+        }
+
         [Fact]
         public void Writer_ZeroLength_Throws()
         {
