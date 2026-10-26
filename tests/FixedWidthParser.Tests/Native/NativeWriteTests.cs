@@ -427,6 +427,37 @@ namespace FixedWidthParser.Tests.Native
             Assert.Equal("BCD  \n", Encoding.UTF8.GetString(bytes));
         }
 
+        private static (int Status, byte[] Bytes, string Error) WriteDecimal(long unscaled, NativeLayout layout)
+        {
+            var column = new NativeColumnRaw { Type = TDecimal, Length = 1, Values = &unscaled };
+            var table = new NativeTableRaw { ColumnCount = 1, RowCount = 1, Columns = &column };
+            return WriteMemory(&table, layout);
+        }
+
+        [Theory]
+        [InlineData(999_999_999_999_999_999L)]
+        [InlineData(-999_999_999_999_999_999L)]
+        public void Write_Decimal18Digits_ReadsBack(long unscaled)
+        {
+            var layout = Build(new Col("d", 0, 20, TDecimal));
+
+            var (status, bytes, error) = WriteDecimal(unscaled, layout);
+
+            Assert.True(status == NativeStatus.Ok, error);
+            Assert.Equal([unscaled], FromMemory(bytes, layout).Column(0));
+        }
+
+        [Theory]
+        [InlineData(1_000_000_000_000_000_000L)]
+        [InlineData(-1_000_000_000_000_000_000L)]
+        public void Write_DecimalOver18Digits_IsError(long unscaled)
+        {
+            var (status, _, error) = WriteDecimal(unscaled, Build(new Col("d", 0, 20, TDecimal)));
+
+            Assert.Equal(NativeStatus.Error, status);
+            Assert.Contains("\"d\"", error, StringComparison.Ordinal);
+        }
+
         private static (int Status, byte[] Bytes, string Error) WriteMicros(int type, long micros)
         {
             var column = new NativeColumnRaw { Type = type, Length = 1, Values = &micros };
