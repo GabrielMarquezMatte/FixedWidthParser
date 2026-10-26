@@ -12,7 +12,9 @@ namespace FixedWidthParser.Readers
     /// breaks it hands over, so every chunk knows the number of its first line. Workers fold the chunks
     /// from a bounded queue into one accumulator each, merged in chunk order as they complete. Every chunk
     /// holds one of a few slots per worker from the moment it is produced until it is merged, which bounds
-    /// memory, chunks and unmerged accumulators alike, whatever the source's size.
+    /// memory, chunks and unmerged accumulators alike, whatever the source's size. The first failure in source
+    /// order ends the read: no later chunk can change the result, so the producer stops reading and the workers
+    /// stop taking chunks, instead of waiting for the end of a source that may never come.
     /// </summary>
     internal static class ParallelStreamAggregator
     {
@@ -74,20 +76,22 @@ namespace FixedWidthParser.Readers
             int workerCount = options.Workers;
             // Two chunks queued and one folding per worker leave one slot per worker for results waiting on an earlier chunk.
             using var slots = new SemaphoreSlim(workerCount * SlotsPerWorker);
+            // Cancelled by the caller, or by the merge once a failure decides the result.
+            using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var queue = Channel.CreateBounded<Chunk>(new BoundedChannelOptions(workerCount * 2) { SingleWriter = true });
-            var merge = new OrderedMerge<TModel, TAccumulator>(slots);
+            var merge = new OrderedMerge<TModel, TAccumulator>(slots, stop);
             var workers = new Task[workerCount];
             foreach (ref var worker in workers.AsSpan())
             {
 #pragma warning disable IDISP013 // Every worker is awaited below, before the slots are disposed.
-                worker = Task.Run(() => ConsumeAsync<TModel, TParser, TAccumulator>(parser, queue.Reader, merge, options, ct), ct);
+                worker = Task.Run(() => ConsumeAsync<TModel, TParser, TAccumulator>(parser, queue.Reader, merge, options, stop.Token, ct), ct);
 #pragma warning restore IDISP013
             }
 
             ExceptionDispatchInfo? producerFailure = null;
             try
             {
-                await ProduceAsync(source, queue.Writer, slots, options, options.ChunkSize > 0 ? options.ChunkSize : DefaultChunkSize, ct).ConfigureAwait(false);
+                await ProduceAsync(source, queue.Writer, slots, options, options.ChunkSize > 0 ? options.ChunkSize : DefaultChunkSize, stop.Token).ConfigureAwait(false);
             }
             // Cancellation too: the workers must finish before the chunks left in the queue are returned.
 #pragma warning disable CA1031 // Rethrown by merge.Result once the workers have finished.
@@ -103,7 +107,14 @@ namespace FixedWidthParser.Readers
 
             try
             {
-                await Task.WhenAll(workers).ConfigureAwait(false);
+                try
+                {
+                    await Task.WhenAll(workers).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested && merge.Failed)
+                {
+                    // Workers stopped by a failure, not by the caller: the failure is what Result throws.
+                }
                 return merge.Result(producerFailure);
             }
             finally
@@ -189,19 +200,21 @@ namespace FixedWidthParser.Readers
             return bigger;
         }
 
+        // stop is the caller's token, cancelled too once a failure decides the result; ct is the caller's alone.
         private static async Task ConsumeAsync<TModel, TParser, TAccumulator>(
-            TParser parser, ChannelReader<Chunk> queue, OrderedMerge<TModel, TAccumulator> merge, FixedWidthReaderOptions options, CancellationToken ct)
+            TParser parser, ChannelReader<Chunk> queue, OrderedMerge<TModel, TAccumulator> merge, FixedWidthReaderOptions options,
+            CancellationToken stop, CancellationToken ct)
             where TModel : allows ref struct
             where TParser : struct, IRecordLineParser<TModel>
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
             var context = options.Context;
-            await foreach (var chunk in queue.ReadAllAsync(ct).ConfigureAwait(false))
+            await foreach (var chunk in queue.ReadAllAsync(stop).ConfigureAwait(false))
             {
                 Outcome<TAccumulator> outcome;
                 try
                 {
-                    outcome = new(chunk.Index, Fold<TModel, TParser, TAccumulator>(parser, chunk, options, in context, ct), null);
+                    outcome = new(chunk.Index, Fold<TModel, TParser, TAccumulator>(parser, chunk, options, in context, stop), null);
                 }
                 // Anything but the caller's cancellation, which stops everything, becomes this chunk's result: a chunk
                 // that never completes would hold its slot, and the producer would wait for it forever.
@@ -249,7 +262,7 @@ namespace FixedWidthParser.Readers
         /// frees each chunk's slot then: a slow early chunk stalls the producer instead of letting later
         /// results pile up.
         /// </summary>
-        private sealed class OrderedMerge<TModel, TAccumulator>(SemaphoreSlim slots)
+        private sealed class OrderedMerge<TModel, TAccumulator>(SemaphoreSlim slots, CancellationTokenSource stop)
             where TModel : allows ref struct
             where TAccumulator : IRecordAccumulator<TAccumulator, TModel>, new()
         {
@@ -260,11 +273,16 @@ namespace FixedWidthParser.Readers
             private TAccumulator? _merged;
             private ExceptionDispatchInfo? _failure;
 
+            /// <summary>True once a failure in source order decides the result.</summary>
+            public bool Failed => Volatile.Read(ref _failure) is not null;
+
             public void Complete(Outcome<TAccumulator> outcome)
             {
                 int released = 0;
+                bool failedNow;
                 lock (_gate)
                 {
+                    bool failedBefore = _failure is not null;
                     _pending.Add(outcome.Index, outcome);
                     while (_pending.Remove(_next, out var ready))
                     {
@@ -277,6 +295,12 @@ namespace FixedWidthParser.Readers
                             Accept(ready.Accumulator!);
                         }
                     }
+                    failedNow = !failedBefore && _failure is not null;
+                }
+                // Outside the lock: cancelling runs the producer's and workers' callbacks.
+                if (failedNow)
+                {
+                    stop.Cancel();
                 }
                 if (released > 0)
                 {

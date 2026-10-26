@@ -98,6 +98,90 @@ namespace FixedWidthParser.Tests
             }
         }
 
+        public sealed class ThrowsOnAdd : IRecordAccumulator<ThrowsOnAdd, NameAgeModel>
+        {
+            public void Add(in NameAgeModel model)
+            {
+                throw new InvalidOperationException("Add failed");
+            }
+
+            public void Merge(ThrowsOnAdd following)
+            {
+            }
+        }
+
+        public sealed class ThrowsOnMerge : IRecordAccumulator<ThrowsOnMerge, NameAgeModel>
+        {
+            public void Add(in NameAgeModel model)
+            {
+            }
+
+            public void Merge(ThrowsOnMerge following)
+            {
+                throw new InvalidOperationException("Merge failed");
+            }
+        }
+
+        /// <summary>A live, non-seekable source: hands over its prefix, then waits for data until cancelled.</summary>
+        private sealed class OpenEndedStream(byte[] prefix) : Stream
+        {
+            private int _position;
+
+            public override bool CanRead => true;
+
+            public override bool CanSeek => false;
+
+            public override bool CanWrite => false;
+
+            public override long Length => throw new NotSupportedException();
+
+            public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                if (_position < prefix.Length)
+                {
+                    int count = Math.Min(buffer.Length, prefix.Length - _position);
+                    prefix.AsMemory(_position, count).CopyTo(buffer);
+                    _position += count;
+                    return count;
+                }
+                await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+                return 0;
+            }
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                throw new NotSupportedException();
+            }
+
+            public override void Flush()
+            {
+            }
+
+            public override long Seek(long offset, SeekOrigin origin)
+            {
+                throw new NotSupportedException();
+            }
+
+            public override void SetLength(long value)
+            {
+                throw new NotSupportedException();
+            }
+
+            public override void Write(byte[] buffer, int offset, int count)
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        public enum Failure
+        {
+            Parse,
+            Add,
+            Merge,
+        }
+
         public static TheoryData<Source, int> SourcesAndChunkSizes()
         {
             var data = new TheoryData<Source, int>();
@@ -237,6 +321,32 @@ namespace FixedWidthParser.Tests
 
             Assert.Equal(expected.LineNumber, actual.LineNumber);
             Assert.Equal(expected.Message, actual.Message);
+        }
+
+        // Chunks of 16 bytes hold one line each: the source hands over three before it waits. A failure that decides
+        // the result must end the read there, not when the stream ends, which this one never does.
+        [Theory]
+        [InlineData(Failure.Parse)]
+        [InlineData(Failure.Add)]
+        [InlineData(Failure.Merge)]
+        public async Task FatalFailure_StopsReadingAnOpenStream(Failure failure)
+        {
+            byte[] prefix = Encoding.ASCII.GetBytes((failure == Failure.Parse ? "Name1 XX \n" : "Name1 001\n") + "Name2 002\nName3 003\nName4 004\n");
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(10));
+            var layout = FixedWidthLayout.FromAttributes<NameAgeModel>();
+            var options = new FixedWidthReaderOptions { DegreeOfParallelism = 2, ChunkSize = 16 };
+            await using var stream = new OpenEndedStream(prefix);
+
+            var thrown = await Record.ExceptionAsync(() => failure switch
+            {
+                Failure.Add => FixedWidth.AggregateAsync<NameAgeModel, ThrowsOnAdd>(stream, layout, leaveOpen: false, options, timeout.Token),
+                Failure.Merge => FixedWidth.AggregateAsync<NameAgeModel, ThrowsOnMerge>(stream, layout, leaveOpen: false, options, timeout.Token),
+                _ => FixedWidth.AggregateAsync<NameAgeModel, Ages>(stream, layout, leaveOpen: false, options, timeout.Token),
+            });
+
+            Assert.False(timeout.IsCancellationRequested, "The failure waited for the stream to end.");
+            Assert.IsType(failure == Failure.Parse ? typeof(FixedWidthParseException) : typeof(InvalidOperationException), thrown);
         }
 
         [Theory]
