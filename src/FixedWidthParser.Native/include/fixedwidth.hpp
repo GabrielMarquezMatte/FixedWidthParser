@@ -448,7 +448,7 @@ namespace fw
 
     namespace detail
     {
-        // fw_sink.write over a std::ostream: -1 once the stream is bad, or if it throws.
+        // fw_sink.write over a std::ostream: -1 once the stream fails, or if it throws.
         inline int32_t write_ostream(void* user_data, const uint8_t* buffer, int64_t length) noexcept
         {
             constexpr std::string_view failed = "the std::ostream failed";
@@ -456,7 +456,7 @@ namespace fw
             {
                 auto& out = *static_cast<std::ostream*>(user_data);
                 out.write(reinterpret_cast<const char*>(buffer), static_cast<std::streamsize>(length));
-                if (!out.bad())
+                if (!out.fail())
                 {
                     return 0;
                 }
