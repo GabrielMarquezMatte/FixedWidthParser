@@ -395,6 +395,38 @@ namespace FixedWidthParser.Tests.Native
             Assert.Equal("2023-10-24\n", Encoding.UTF8.GetString(RoundTrip("20231024\n", read, write)));
         }
 
+        /// <summary>Writes one string row whose offsets and declared length are given, over five allocated bytes "ABCDE".</summary>
+        private static (int Status, byte[] Bytes, string Error) WriteString(int start, int end, long dataLen)
+        {
+            int* offsets = stackalloc int[] { start, end };
+            byte* data = stackalloc byte[] { (byte)'A', (byte)'B', (byte)'C', (byte)'D', (byte)'E' };
+            var column = new NativeColumnRaw { Type = TString, Length = 1, Values = offsets, Data = data, DataLen = dataLen };
+            var table = new NativeTableRaw { ColumnCount = 1, RowCount = 1, Columns = &column };
+            return WriteMemory(&table, Build(new Col("s", 0, 5, TString)));
+        }
+
+        [Theory]
+        [InlineData(0, 5, 1L)]
+        [InlineData(3, 1, 5L)]
+        [InlineData(-1, 2, 5L)]
+        [InlineData(0, 0, -1L)]
+        public void Write_StringOffsetsOutsideTheData_AreInvalidArgument(int start, int end, long dataLen)
+        {
+            var (status, _, error) = WriteString(start, end, dataLen);
+
+            Assert.Equal(NativeStatus.InvalidArgument, status);
+            Assert.Contains("'s'", error, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Write_StringOffsetsWithinTheData_Write()
+        {
+            var (status, bytes, error) = WriteString(1, 4, 5);
+
+            Assert.True(status == NativeStatus.Ok, error);
+            Assert.Equal("BCD  \n", Encoding.UTF8.GetString(bytes));
+        }
+
         private static (int Status, byte[] Bytes, string Error) WriteMicros(int type, long micros)
         {
             var column = new NativeColumnRaw { Type = type, Length = 1, Values = &micros };

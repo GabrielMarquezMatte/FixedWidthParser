@@ -56,12 +56,38 @@ namespace FixedWidthParser.Native.Writing
                 {
                     return $"Column '{column.Name}' has type {raw.Type} (scale {raw.Scale}) in the table and {column.Type} (scale {column.Scale}) in the layout.";
                 }
-                if (raw.Length != table->RowCount || (raw.Values is null && raw.Length > 0) || (raw.Data is null && raw.DataLen > 0))
+                if (raw.Length != table->RowCount || (raw.Values is null && raw.Length > 0) || (raw.Data is null && raw.DataLen > 0) || raw.DataLen < 0)
                 {
                     return $"Column '{column.Name}' has {raw.Length} values for {table->RowCount} rows, or a buffer that does not match its length.";
                 }
+                if (column.Type == NativeType.String && !OffsetsWithinData(raw))
+                {
+                    return $"Column '{column.Name}' has string offsets that descend or fall outside its {raw.DataLen} data bytes.";
+                }
             }
             return null;
+        }
+
+        /// <summary>True when a string column's offsets ascend within <c>0..DataLen</c>, so no row reads past its data.</summary>
+        private static bool OffsetsWithinData(NativeColumnRaw raw)
+        {
+            if (raw.Length == 0)
+            {
+                return true;
+            }
+            var offsets = (int*)raw.Values;
+            if (offsets[0] < 0)
+            {
+                return false;
+            }
+            for (long row = 0; row < raw.Length; row++)
+            {
+                if (offsets[row + 1] < offsets[row])
+                {
+                    return false;
+                }
+            }
+            return offsets[raw.Length] <= raw.DataLen;
         }
 
         /// <summary>Writes row <paramref name="row"/> into <paramref name="line"/>, whose length is the layout's line length.</summary>
