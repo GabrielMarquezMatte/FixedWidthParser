@@ -191,7 +191,7 @@ Studio can load it. It is an incremental generator: `Extract` turns each candida
 change a model's columns does not regenerate it.
 
 `Emit` validates the model — partial, top-level, a supported type for each column, layout, converter
-type, overflow, ASCII padding — and reports diagnostics `FWP001`–`FWP012` (`FWP007` and `FWP009` are
+type, overflow, ASCII padding — and reports diagnostics `FWP001`–`FWP014` (`FWP007` and `FWP009` are
 retired) instead of generating code
 for an invalid model. Otherwise it writes `TryParse` and `TryFormat` as straight-line code: one
 `FixedWidthRuntime` call per column. Each column's settings become two `static readonly` fields, a

@@ -193,4 +193,11 @@ namespace FixedWidthParser.Tests
         // Hides the base column, so only this narrower one is mapped.
         [FixedColumn(12, 2)] public new string Label { get; set; } = "";
     }
+
+    /// <summary>Generated model whose type and members are C# keywords, declared with '@'.</summary>
+    public sealed partial class @operator : IFixedWidthModel<@operator>
+    {
+        [FixedColumn(0, 3)] public int @event { get; set; }
+        [FixedColumn(3, 3)] public int? @int { get; set; }
+    }
 }

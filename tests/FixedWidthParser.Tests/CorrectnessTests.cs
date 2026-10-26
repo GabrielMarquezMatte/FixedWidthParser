@@ -84,6 +84,17 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
+        public void Generated_KeywordNames_ParseAndFormat()
+        {
+            Assert.True(FixedWidth.TryParse<@operator>(Bytes("42 7  "), Ctx, out var model));
+            Assert.Equal(42, model.@event);
+            Assert.Equal(7, model.@int);
+            Assert.Equal("42 7  ", Format(model));
+            Assert.True(FixedWidth.TryParse<@operator>(Bytes("42    "), Ctx, out var blank));
+            Assert.Null(blank.@int);
+        }
+
+        [Fact]
         public void SignAware_ZeroPadding()
         {
             var layout = FixedWidthLayout.FromAttributes<SignPaddedModel>();
