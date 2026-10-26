@@ -38,6 +38,18 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 2, Format = "D", Padding = '0', Alignment = Alignment.Right)] public Side Side { get; set; }
     }
 
+    public enum Phase { Open = 1, Started = 1, Closed = 2 }
+
+    public sealed class PhaseModel
+    {
+        [FixedColumn(0, 10)] public Phase Phase { get; set; }
+    }
+
+    public partial class GenPhaseModel : IFixedWidthModel<GenPhaseModel>
+    {
+        [FixedColumn(0, 10)] public Phase Phase { get; set; }
+    }
+
     /// <summary>
     /// Enum columns, as ExcelReader reads them: a member's name in any case or its number, nothing the enum does not
     /// define. Attribute, generated and fluent layouts agree.
@@ -73,6 +85,26 @@ namespace FixedWidthParser.Tests
             Assert.Equal(expected, attributes.Side);
             Assert.Equal(expected, generated.Side);
             Assert.Equal(expected, fluent.Side);
+        }
+
+        [Theory]
+        [InlineData("Open")]
+        [InlineData("started")]
+        [InlineData("STARTED")]
+        [InlineData("01")]
+        public void Alias_ParsesLikeTheNameItShares(string text)
+        {
+            var fluent = FixedWidthLayout.Build<PhaseModel>(b => b
+                .Factory(() => new PhaseModel())
+                .EnumColumn("Phase", 0, 10, (in PhaseModel m) => m.Phase, (ref PhaseModel m, Phase v) => m.Phase = v));
+            byte[] line = Bytes(text.PadRight(10));
+
+            Assert.True(FixedWidth.TryParse(line, FixedWidthLayout.FromAttributes<PhaseModel>(), Ctx, out var attributes));
+            Assert.True(FixedWidth.TryParse<GenPhaseModel>(line, Ctx, out var generated));
+            Assert.True(FixedWidth.TryParse(line, fluent, Ctx, out var fromFluent));
+            Assert.Equal(Phase.Open, attributes.Phase);
+            Assert.Equal(Phase.Open, generated.Phase);
+            Assert.Equal(Phase.Open, fromFluent.Phase);
         }
 
         [Theory]

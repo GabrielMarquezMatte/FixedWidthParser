@@ -146,9 +146,11 @@ namespace FixedWidthParser.Infrastructure
             private static FrozenDictionary<string, TEnum>.AlternateLookup<ReadOnlySpan<char>> Build()
             {
                 var map = new Dictionary<string, TEnum>(StringComparer.OrdinalIgnoreCase);
-                foreach (TEnum member in Enum.GetValues<TEnum>())
+                // By name: an alias shares its value, so the value's ToString would name only one of them.
+                foreach (string name in Enum.GetNames<TEnum>())
                 {
-                    map[member.ToString()] = member;
+                    var member = Enum.Parse<TEnum>(name);
+                    map[name] = member;
                     map[member.ToString("D")] = member;
                 }
                 return map.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase).GetAlternateLookup<ReadOnlySpan<char>>();
