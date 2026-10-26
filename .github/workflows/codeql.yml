@@ -1,10 +1,12 @@
 name: CodeQL
 
 on:
+  # develop is covered by its pull request into master; a push trigger there would run everything twice.
   push:
     branches: [ master ]
   pull_request:
     branches: [ master, develop ]
+    types: [ opened, synchronize, reopened, ready_for_review ]
   schedule:
     # Weekly scan (Mondays 06:00 UTC) to catch newly published query updates.
     - cron: '0 6 * * 1'
@@ -18,30 +20,82 @@ permissions:
   security-events: write   # needed to upload results to the Security tab
 
 jobs:
-  analyze:
-    name: Analyze (C#)
+  changes:
+    name: Detect changed languages
+    if: github.event.pull_request.draft != true
     runs-on: ubuntu-latest
-
+    outputs:
+      csharp: ${{ github.event_name != 'pull_request' || steps.filter.outputs.csharp == 'true' }}
+      python: ${{ github.event_name != 'pull_request' || steps.filter.outputs.python == 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Filter
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            csharp:
+              - 'src/**'
+              - 'Directory.Build.props'
+              - 'global.json'
+              - '.github/workflows/codeql.yml'
+            python:
+              - 'python/**'
+              - '.github/workflows/codeql.yml'
+
+  # Every language always gets a job: "Analyze (C#)" is a required check, and a check whose job never starts
+  # stays pending. An unchanged language's job skips its steps instead.
+  analyze:
+    name: Analyze (${{ matrix.name }})
+    needs: changes
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { language: csharp, name: 'C#' }
+          - { language: python, name: Python }
+    env:
+      RUN: ${{ needs.changes.outputs[matrix.language] }}
+
+    steps:
+      - name: Skip (language unchanged)
+        if: env.RUN != 'true'
+        run: echo "No ${{ matrix.name }} changes; skipping the analysis."
+
+      - name: Checkout
+        if: env.RUN == 'true'
+        uses: actions/checkout@v7
+
       - name: Setup .NET
+        if: env.RUN == 'true' && matrix.language == 'csharp'
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/*.csproj'
 
       - name: Initialize CodeQL
+        if: env.RUN == 'true'
         uses: github/codeql-action/init@v4
         with:
-          languages: csharp
+          languages: ${{ matrix.language }}
           queries: security-extended
 
-      # Manual build so CodeQL sees the source generator + analyzers correctly.
+      # Only the shipped projects: tests and benchmarks double the build for code no one runs against untrusted
+      # input. Building them by hand lets CodeQL see the source generator's output.
       - name: Build (Release)
-        run: dotnet build FixedWidthParser.slnx --configuration Release
+        if: env.RUN == 'true' && matrix.language == 'csharp'
+        run: |
+          for project in src/*/*.csproj; do
+            dotnet build "$project" --configuration Release -p:RunAnalyzers=false
+          done
 
       - name: Perform CodeQL Analysis
+        if: env.RUN == 'true'
         uses: github/codeql-action/analyze@v4
         with:
-          category: "/language:csharp"
+          category: "/language:${{ matrix.language }}"

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="Code Coverage">
+        <Configuration>
+          <CodeCoverage>
+            <Sources>
+              <Exclude>
+                <!-- Source generator output: counting it measures the generator's templates, not this
+                     repo's code. The separators matter - a bare `obj` substring would also match any path
+                     segment merely containing "obj". -->
+                <Source>.*[\/]obj[\/].*</Source>
+                <!-- The C ABI entry points. Managed code cannot call an [UnmanagedCallersOnly] method, so
+                     the .NET suite structurally cannot reach them; the Python, C and C++ jobs in
+                     native-bindings.yml exercise them, and their coverage does not land in this report. -->
+                <Source>.*[\/]FixedWidthParser\.Native[\/]Exports(\.\w+)?\.cs</Source>
+              </Exclude>
+            </Sources>
+            <Functions>
+              <Exclude>
+                <Function>*&lt;.*&gt;.*</Function>
+              </Exclude>
+            </Functions>
+          </CodeCoverage>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

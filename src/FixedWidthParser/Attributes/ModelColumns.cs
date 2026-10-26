@@ -28,7 +28,12 @@ namespace FixedWidthParser.Attributes
             {
                 Visit(field);
             }
-            ColumnLayoutValidator.Validate(CollectionsMarshal.AsSpan(columns), modelType);
+            if (columns.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Type {modelType.Name} has no [FixedColumn] members; a fixed-width model must define at least one column.");
+            }
+            ColumnLayoutValidator.Validate(CollectionsMarshal.AsSpan(columns), modelType.Name);
             void Visit(MemberInfo member)
             {
                 var attribute = member.GetCustomAttribute<FixedColumnAttribute>();

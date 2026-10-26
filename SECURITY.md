@@ -1,31 +1,26 @@
 # Security Policy
 
-## Supported versions
+## Supported Versions
 
-Security fixes are applied to the latest released `1.x` version published on NuGet as
-[`FixedWidthParser.NET`](https://www.nuget.org/packages/FixedWidthParser.NET).
+Only the latest published release of [`FixedWidthParser.NET`](https://www.nuget.org/packages/FixedWidthParser.NET)
+receives security fixes. Older releases are not patched retroactively; upgrade to the latest version
+before reporting an issue. The native library (`FixedWidthParser.Native`), the `fixedwidth` Python
+package and the C++ header are built from the same source and reported the same way.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.x     | :white_check_mark: |
-| < 1.0   | :x:                |
+## Reporting a Vulnerability
 
-## Reporting a vulnerability
+Please **do not** open a public GitHub issue for security vulnerabilities.
 
-**Please do not report security vulnerabilities through public GitHub issues.**
+Report vulnerabilities privately via
+[GitHub Private Vulnerability Reporting](https://github.com/GabrielMarquezMatte/FixedWidthParser/security/advisories/new),
+or by email to **gabrielandremarquez.matte@gmail.com**.
 
-Instead, use one of the following private channels:
+Include, where possible:
+- A minimal reproduction: the model and the input that triggers it
+- The reading or writing path involved (file or stream, sync, async or parallel, generated or runtime,
+  or the native library through C, C++ or Python)
+- The impact you observed (crash, excessive memory/CPU, incorrect data, etc.)
+- The affected version(s)
 
-1. **Preferred:** GitHub's private vulnerability reporting —
-   [open a report](https://github.com/GabrielMarquezMatte/FixedWidthParser/security/advisories/new).
-2. Email the maintainer at **gabrielandremarquez.matte@gmail.com** with the details.
-
-Please include:
-
-- a description of the vulnerability and its impact;
-- steps to reproduce (a minimal model + input is ideal);
-- affected version(s).
-
-You can expect an initial acknowledgement within **5 business days**. Once the issue is
-confirmed, a fix and coordinated disclosure timeline will be agreed with you before any
-public announcement.
+You should receive an initial response within 5 business days. If the report is
+confirmed, a fix will be prepared and released before any public disclosure.

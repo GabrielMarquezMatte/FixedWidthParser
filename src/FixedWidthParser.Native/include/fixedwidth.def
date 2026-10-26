@@ -1,0 +1,24 @@
+EXPORTS
+    fw_abi_version
+    fw_free_buffer
+    fw_free_table
+    fw_last_error
+    fw_last_parse_error
+    fw_layout_create
+    fw_layout_free
+    fw_read_arrow_file
+    fw_read_arrow_memory
+    fw_read_arrow_stream_file
+    fw_read_arrow_stream_memory
+    fw_read_arrow_stream_stream
+    fw_read_file
+    fw_read_memory
+    fw_reader_close
+    fw_reader_next
+    fw_reader_open_file
+    fw_reader_open_memory
+    fw_reader_open_stream
+    fw_set_source_error
+    fw_write_file
+    fw_write_memory
+    fw_write_stream

@@ -7,25 +7,19 @@ namespace FixedWidthParser.Attributes
     /// </summary>
     internal static class ColumnLayoutValidator
     {
-        public static void Validate(Span<(int Start, int Length, string Name)> columns, Type modelType)
+        public static void Validate(Span<(int Start, int Length, string Name)> columns, string modelName)
         {
-            if (columns.Length == 0)
-            {
-                throw new InvalidOperationException(
-                    $"Type {modelType.Name} has no [FixedColumn] members; a fixed-width model must define at least one column.");
-            }
-
             foreach (var (Start, Length, Name) in columns)
             {
                 if (Start < 0)
                 {
                     throw new InvalidOperationException(
-                        $"Column \"{Name}\" in {modelType.Name} has a negative Start ({Start}).");
+                        $"Column \"{Name}\" in {modelName} has a negative Start ({Start}).");
                 }
                 if (Length < 1)
                 {
                     throw new InvalidOperationException(
-                        $"Column \"{Name}\" in {modelType.Name} has an invalid Length ({Length}); it must be >= 1.");
+                        $"Column \"{Name}\" in {modelName} has an invalid Length ({Length}); it must be >= 1.");
                 }
             }
 
@@ -43,7 +37,7 @@ namespace FixedWidthParser.Attributes
                 if (current.Start < maxEnd)
                 {
                     throw new InvalidOperationException(
-                        $"Overlapping columns in {modelType.Name}: \"{farthest.Name}\" [{farthest.Start}, {farthest.Start + farthest.Length}) " +
+                        $"Overlapping columns in {modelName}: \"{farthest.Name}\" [{farthest.Start}, {farthest.Start + farthest.Length}) " +
                         $"and \"{current.Name}\" [{current.Start}, {current.Start + current.Length}).");
                 }
                 int end = current.Start + current.Length;

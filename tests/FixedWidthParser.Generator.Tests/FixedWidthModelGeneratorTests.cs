@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using CommunityToolkit.HighPerformance.Buffers;
-using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis;
 
 namespace FixedWidthParser.Generator.Tests
 {
@@ -21,18 +21,16 @@ namespace FixedWidthParser.Generator.Tests
                 """);
 
             Assert.Empty(result.GeneratorDiagnostics);
+            Assert.Empty(result.CompilationErrors);
             var generated = Assert.Single(result.GeneratedSources);
-            Assert.Contains("public static bool TryParse", generated, StringComparison.Ordinal);
-            Assert.Contains("if (line.Length < 18) { model = default!; return false; }", generated, StringComparison.Ordinal);
-            Assert.Contains("FixedWidthRuntime.String(line.Slice(0, 5), stringPool)", generated, StringComparison.Ordinal);
-            Assert.Contains("FixedWidthRuntime.TryParse<int>(line.Slice(5, 3), formatProvider", generated, StringComparison.Ordinal);
-            Assert.Contains("FixedWidthRuntime.TryDouble(line.Slice(8, 5), formatProvider", generated, StringComparison.Ordinal);
-            Assert.Contains("FixedWidthRuntime.TryFloat(line.Slice(13, 5), formatProvider", generated, StringComparison.Ordinal);
-            Assert.DoesNotContain("global::System.Math.Min", generated, StringComparison.Ordinal);
-            Assert.DoesNotContain("FixedWidthRuntime.Column", generated, StringComparison.Ordinal);
+            Assert.Contains("TryParse(global::System.ReadOnlySpan<byte> line, in global::FixedWidthParser.FixedWidthContext context", generated, StringComparison.Ordinal);
+            Assert.Contains("if (line.Length < 18) { context.ReportShortLine(18); model = default!; return false; }", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.String(line.Slice(0, 5), context, in __parse0)", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.TryParse<int>(line.Slice(5, 3), context, in __parse1, out int __v1)) { context.ReportFailedColumn(\"Quantity\", 5, 3); model = default!; return false; }", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.TryDouble(line.Slice(8, 5), context, in __parse2", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.TryFloat(line.Slice(13, 5), context, in __parse3", generated, StringComparison.Ordinal);
+            Assert.DoesNotContain("ReadOnlySpan<char>", generated, StringComparison.Ordinal);
             Assert.Contains("Code = __v0", generated, StringComparison.Ordinal);
-            Assert.Contains("Quantity = __v1", generated, StringComparison.Ordinal);
-            Assert.Contains("Price = __v2", generated, StringComparison.Ordinal);
             Assert.Contains("Discount = __v3", generated, StringComparison.Ordinal);
         }
 
@@ -48,20 +46,78 @@ namespace FixedWidthParser.Generator.Tests
                 """);
 
             Assert.Empty(result.GeneratorDiagnostics);
+            Assert.Empty(result.CompilationErrors);
             var generated = Assert.Single(result.GeneratedSources);
-            Assert.Contains("public static bool TryFormat", generated, StringComparison.Ordinal);
-            Assert.Contains("if (destination.Length < 8) { charsWritten = 0; return false; }", generated, StringComparison.Ordinal);
+            Assert.Contains("global::System.Span<byte> destination, in global::FixedWidthParser.FixedWidthContext context, out int bytesWritten", generated, StringComparison.Ordinal);
+            Assert.Contains("if (destination.Length < 8) { bytesWritten = 0; return false; }", generated, StringComparison.Ordinal);
             Assert.Contains("FixedWidthRuntime.FormatString(model.Code,", generated, StringComparison.Ordinal);
-            Assert.Contains("FixedWidthRuntime.FormatValue(model.Quantity,", generated, StringComparison.Ordinal);
-            Assert.Contains("ColumnFormatOptions __options0", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.FormatUtf8Value(model.Quantity,", generated, StringComparison.Ordinal);
             Assert.Contains("ColumnFormatOptions __options1", generated, StringComparison.Ordinal);
         }
 
         [Fact]
-        public void CharModel_ColumnNotFormattable_EmitsParseOnly_AndReportsFwp010()
+        public void EveryColumnKind_CompilesCleanly()
         {
-            // A column type that is ISpanParsable but NOT ISpanFormattable: the read side is unaffected
-            // (FWP010 only blocks the write method), so TryParse is still emitted but TryFormat is not.
+            var result = Run("""
+                public readonly record struct Cents(long Value);
+
+                public sealed class CentsConverter : FixedWidthParser.IFixedWidthConverter<Cents>
+                {
+                    public bool TryParse(System.ReadOnlySpan<byte> column, in FixedWidthContext context, out Cents value) { value = default; return true; }
+                    public bool TryFormat(Cents value, System.Span<byte> destination, in FixedWidthContext context, out int bytesWritten) { bytesWritten = 0; return true; }
+                }
+
+                public readonly partial record struct AllKinds : IFixedWidthModel<AllKinds>
+                {
+                    [FixedColumn(0, 5)] public string Text { get; init; }
+                    [FixedColumn(5, 5)] public int? Number { get; init; }
+                    [FixedColumn(10, 8, Format = "yyyyMMdd")] public System.DateOnly Day { get; init; }
+                    [FixedColumn(18, 8, Converter = typeof(CentsConverter))] public Cents? Amount { get; init; }
+                    [FixedColumn(26, 5, TrimChar = '0', TrimMode = TrimMode.Leading)] public decimal Rate { get; init; }
+                    [FixedColumn(31, 36)] public System.Guid Id { get; init; }
+                }
+                """);
+
+            Assert.Empty(result.GeneratorDiagnostics);
+            Assert.Empty(result.CompilationErrors);
+            var generated = Assert.Single(result.GeneratedSources);
+            Assert.Contains("FixedWidthRuntime.IsBlank(line.Slice(5, 5), in __parse1)", generated, StringComparison.Ordinal);
+            Assert.Contains("TryDateOnlyExact(line.Slice(10, 8), context, in __parse", generated, StringComparison.Ordinal);
+            Assert.Contains("global::FixedWidthParser.TrimMode.Trailing, \"yyyyMMdd\");", generated, StringComparison.Ordinal);
+            Assert.Contains("= new('0', global::FixedWidthParser.TrimMode.Leading", generated, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void CharOnlyParsableColumn_ParsesThroughDecodedText()
+        {
+            var result = Run("""
+                public readonly struct OnlyCharParsable : System.ISpanParsable<OnlyCharParsable>, System.ISpanFormattable
+                {
+                    public static OnlyCharParsable Parse(System.ReadOnlySpan<char> s, System.IFormatProvider? p) => default;
+                    public static bool TryParse(System.ReadOnlySpan<char> s, System.IFormatProvider? p, out OnlyCharParsable r) { r = default; return true; }
+                    public static OnlyCharParsable Parse(string s, System.IFormatProvider? p) => default;
+                    public static bool TryParse(string? s, System.IFormatProvider? p, out OnlyCharParsable r) { r = default; return true; }
+                    public bool TryFormat(System.Span<char> d, out int w, System.ReadOnlySpan<char> f, System.IFormatProvider? p) { w = 0; return true; }
+                    public string ToString(string? f, System.IFormatProvider? p) => "";
+                }
+
+                public readonly partial record struct DecodedModel : IFixedWidthModel<DecodedModel>
+                {
+                    [FixedColumn(0, 5)] public OnlyCharParsable Value { get; init; }
+                }
+                """);
+
+            Assert.Empty(result.GeneratorDiagnostics);
+            Assert.Empty(result.CompilationErrors);
+            var generated = Assert.Single(result.GeneratedSources);
+            Assert.Contains("FixedWidthRuntime.TryParseDecoded<global::GeneratorSmoke.OnlyCharParsable>", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.FormatValue(model.Value,", generated, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void ColumnNotFormattable_ReportsFwp010_AndEmitsNothing()
+        {
+            // The interface needs TryFormat too, so a column the writer can't handle blocks the whole emission.
             var result = Run("""
                 public readonly struct ParsableNotFormattable : System.ISpanParsable<ParsableNotFormattable>
                 {
@@ -78,104 +134,39 @@ namespace FixedWidthParser.Generator.Tests
                 """);
 
             Assert.Contains(result.GeneratorDiagnostics, d => string.Equals(d.Id, "FWP010", StringComparison.Ordinal));
-            var generated = Assert.Single(result.GeneratedSources);
-            Assert.Contains("public static bool TryParse", generated, StringComparison.Ordinal);
-            Assert.DoesNotContain("public static bool TryFormat", generated, StringComparison.Ordinal);
-        }
-
-        [Fact]
-        public void DualMarkerModel_GeneratesBothCharAndByteTryParse()
-        {
-            var result = Run("""
-                public readonly partial record struct DualModel : IFixedWidthModel<DualModel>, IUtf8FixedWidthModel<DualModel>
-                {
-                    [FixedColumn(0, 5)] public string Code { get; init; }
-                    [FixedColumn(5, 3)] public int Quantity { get; init; }
-                    [FixedColumn(8, 5)] public double Price { get; init; }
-                    [FixedColumn(13, 5)] public float Discount { get; init; }
-                }
-                """);
-
-            Assert.Empty(result.GeneratorDiagnostics);
-            // Both overloads live in one generated file.
-            var generated = Assert.Single(result.GeneratedSources);
-            Assert.Contains("global::System.ReadOnlySpan<char> line", generated, StringComparison.Ordinal);
-            Assert.Contains("global::System.ReadOnlySpan<byte> line", generated, StringComparison.Ordinal);
-            // Char method still routes through FixedWidthRuntime.
-            Assert.Contains("FixedWidthParser.FixedWidthRuntime.String(line.Slice(0, 5), stringPool)", generated, StringComparison.Ordinal);
-            // Byte method routes through Utf8FixedWidthRuntime.
-            Assert.Contains("Utf8FixedWidthRuntime.String(line.Slice(0, 5), stringPool)", generated, StringComparison.Ordinal);
-            Assert.Contains("Utf8FixedWidthRuntime.TryParse<int>(line.Slice(5, 3), formatProvider", generated, StringComparison.Ordinal);
-            Assert.Contains("Utf8FixedWidthRuntime.TryDouble(line.Slice(8, 5), formatProvider", generated, StringComparison.Ordinal);
-            Assert.Contains("Utf8FixedWidthRuntime.TryFloat(line.Slice(13, 5), formatProvider", generated, StringComparison.Ordinal);
-        }
-
-        [Fact]
-        public void Utf8OnlyMarkerModel_GeneratesByteTryParseOnly()
-        {
-            var result = Run("""
-                public readonly partial record struct Utf8OnlyModel : IUtf8FixedWidthModel<Utf8OnlyModel>
-                {
-                    [FixedColumn(0, 5)] public string Code { get; init; }
-                    [FixedColumn(5, 3)] public int Quantity { get; init; }
-                }
-                """);
-
-            Assert.Empty(result.GeneratorDiagnostics);
-            var generated = Assert.Single(result.GeneratedSources);
-            Assert.Contains("global::System.ReadOnlySpan<byte> line", generated, StringComparison.Ordinal);
-            Assert.DoesNotContain("global::System.ReadOnlySpan<char> line", generated, StringComparison.Ordinal);
-            Assert.Contains("Utf8FixedWidthRuntime.String(line.Slice(0, 5), stringPool)", generated, StringComparison.Ordinal);
-        }
-
-        [Fact]
-        public void Utf8Model_ColumnOnlyCharParsable_ReportsFwp007()
-        {
-            // A column type that is ISpanParsable but NOT IUtf8SpanParsable cannot be handled by the
-            // generated byte parser, so a UTF-8-marked model must report FWP007 and emit no source.
-            var result = Run("""
-                public readonly struct OnlyCharParsable : System.ISpanParsable<OnlyCharParsable>
-                {
-                    public static OnlyCharParsable Parse(System.ReadOnlySpan<char> s, System.IFormatProvider? p) => default;
-                    public static bool TryParse(System.ReadOnlySpan<char> s, System.IFormatProvider? p, out OnlyCharParsable r) { r = default; return true; }
-                    public static OnlyCharParsable Parse(string s, System.IFormatProvider? p) => default;
-                    public static bool TryParse(string? s, System.IFormatProvider? p, out OnlyCharParsable r) { r = default; return true; }
-                }
-
-                public readonly partial record struct Utf8BadModel : IUtf8FixedWidthModel<Utf8BadModel>
-                {
-                    [FixedColumn(0, 5)] public OnlyCharParsable Value { get; init; }
-                }
-                """);
-
-            Assert.Contains(result.GeneratorDiagnostics, d => string.Equals(d.Id, "FWP007", StringComparison.Ordinal));
             Assert.Empty(result.GeneratedSources);
         }
 
         [Fact]
-        public void DualMarker_ColumnOnlyCharParsable_EmitsCharMethodOnly_AndReportsFwp007()
+        public void ConverterForAnotherType_ReportsFwp008()
         {
-            // A dual-marked model whose column is ISpanParsable but not IUtf8SpanParsable: FWP007 blocks
-            // ONLY the byte path, so the char TryParse is still emitted (partial emit).
             var result = Run("""
-                public readonly struct OnlyCharParsable : System.ISpanParsable<OnlyCharParsable>
+                public sealed class IntConverter : FixedWidthParser.IFixedWidthConverter<int>
                 {
-                    public static OnlyCharParsable Parse(System.ReadOnlySpan<char> s, System.IFormatProvider? p) => default;
-                    public static bool TryParse(System.ReadOnlySpan<char> s, System.IFormatProvider? p, out OnlyCharParsable r) { r = default; return true; }
-                    public static OnlyCharParsable Parse(string s, System.IFormatProvider? p) => default;
-                    public static bool TryParse(string? s, System.IFormatProvider? p, out OnlyCharParsable r) { r = default; return true; }
+                    public bool TryParse(System.ReadOnlySpan<byte> column, in FixedWidthContext context, out int value) { value = 0; return true; }
+                    public bool TryFormat(int value, System.Span<byte> destination, in FixedWidthContext context, out int bytesWritten) { bytesWritten = 0; return true; }
                 }
 
-                public readonly partial record struct DualPartialModel : IFixedWidthModel<DualPartialModel>, IUtf8FixedWidthModel<DualPartialModel>
+                public readonly partial record struct MismatchModel : IFixedWidthModel<MismatchModel>
                 {
-                    [FixedColumn(0, 5)] public OnlyCharParsable Value { get; init; }
+                    [FixedColumn(0, 5, Converter = typeof(IntConverter))] public string Value { get; init; }
                 }
                 """);
 
-            Assert.Contains(result.GeneratorDiagnostics, d => string.Equals(d.Id, "FWP007", StringComparison.Ordinal));
-            var generated = Assert.Single(result.GeneratedSources);
-            Assert.Contains("global::System.ReadOnlySpan<char> line", generated, StringComparison.Ordinal);
-            Assert.DoesNotContain("global::System.ReadOnlySpan<byte> line", generated, StringComparison.Ordinal);
+            Assert.Contains(result.GeneratorDiagnostics, d => string.Equals(d.Id, "FWP008", StringComparison.Ordinal));
+            Assert.Empty(result.GeneratedSources);
+        }
+
+        [Theory]
+        [InlineData("[FixedColumn(0, 5, Alignment = Alignment.Right, Padding = '\u00e9')] public int Value { get; init; }", "Padding")]
+        [InlineData("[FixedColumn(0, 5, TrimChar = '\u00a0')] public int Value { get; init; }", "TrimChar")]
+        public void NonAsciiPaddingOrTrimChar_ReportsFwp012(string column, string setting)
+        {
+            var result = Run("public readonly partial record struct NonAsciiModel : IFixedWidthModel<NonAsciiModel> { " + column + " }");
+
+            var diagnostic = Assert.Single(result.GeneratorDiagnostics, d => string.Equals(d.Id, "FWP012", StringComparison.Ordinal));
+            Assert.Contains(setting, diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+            Assert.Empty(result.GeneratedSources);
         }
 
         [Fact]
@@ -197,6 +188,30 @@ namespace FixedWidthParser.Generator.Tests
             Assert.Contains("Code = __v0", generated, StringComparison.Ordinal);
             Assert.DoesNotContain("Ignored1", generated, StringComparison.Ordinal);
             Assert.DoesNotContain("Ignored2", generated, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Model_IncludesInheritedColumns()
+        {
+            var result = Run("""
+                public class BaseModel
+                {
+                    [FixedColumn(0, 5)] public int Id { get; set; }
+                    [FixedColumn(5, 5)] public string Code;
+                }
+
+                public partial class DerivedModel : BaseModel, IFixedWidthModel<DerivedModel>
+                {
+                    [FixedColumn(10, 5)] public string Name { get; set; }
+                }
+                """);
+
+            Assert.Empty(result.GeneratorDiagnostics);
+            Assert.Empty(result.CompilationErrors);
+            var generated = Assert.Single(result.GeneratedSources);
+            Assert.Contains("Id = __v", generated, StringComparison.Ordinal);
+            Assert.Contains("Code = __v", generated, StringComparison.Ordinal);
+            Assert.Contains("FixedWidthRuntime.FormatString(model.Code,", generated, StringComparison.Ordinal);
         }
 
         [Theory]
@@ -238,6 +253,17 @@ namespace FixedWidthParser.Generator.Tests
             {
                 [FixedColumn(0, 5)] public string Left { get; init; }
                 [FixedColumn(2, 5)] public string Right { get; init; }
+            }
+            """, "FWP006")]
+        [InlineData("""
+            public class BadBase
+            {
+                [FixedColumn(0, 5)] public string Left { get; set; }
+            }
+
+            public partial class BadModel : BadBase, IFixedWidthModel<BadModel>
+            {
+                [FixedColumn(2, 5)] public string Right { get; set; }
             }
             """, "FWP006")]
         public void InvalidModel_ReportsExpectedDiagnostic(string modelSource, string diagnosticId)
@@ -420,15 +446,14 @@ namespace FixedWidthParser.Generator.Tests
             var second = driver.GetRunResult().Results[0].GeneratedSources.Single().SourceText.ToString();
 
             Assert.NotEqual(first, second);
-            Assert.Contains("line.Length < 8", second, StringComparison.Ordinal);
+            Assert.Contains("line.Length < 8)", second, StringComparison.Ordinal);
         }
 
         private static CSharpCompilation CreateCompilation(string modelSource, CSharpParseOptions parseOptions)
         {
             string source = """
                 using FixedWidthParser;
-                using FixedWidthParser.Attributes;
-
+                
                 namespace GeneratorSmoke;
 
                 """ + modelSource;
@@ -445,8 +470,7 @@ namespace FixedWidthParser.Generator.Tests
         {
             string source = """
                 using FixedWidthParser;
-                using FixedWidthParser.Attributes;
-
+                
                 namespace GeneratorSmoke;
 
                 """ + modelSource;
@@ -464,7 +488,7 @@ namespace FixedWidthParser.Generator.Tests
             GeneratorDriver driver = CSharpGeneratorDriver.Create([generator], parseOptions: parseOptions);
             driver = driver.RunGeneratorsAndUpdateCompilation(
                 compilation,
-                out _,
+                out var updated,
                 out var generatorDiagnostics,
                 TestContext.Current.CancellationToken);
 
@@ -472,8 +496,11 @@ namespace FixedWidthParser.Generator.Tests
             var generatedSources = runResult.GeneratedTrees
                 .Select(t => t.GetText(TestContext.Current.CancellationToken).ToString())
                 .ToImmutableArray();
+            var compilationErrors = updated.GetDiagnostics(TestContext.Current.CancellationToken)
+                .Where(d => d.Severity == DiagnosticSeverity.Error)
+                .ToImmutableArray();
 
-            return new GeneratorRunResult(generatorDiagnostics, generatedSources);
+            return new GeneratorRunResult(generatorDiagnostics, generatedSources, compilationErrors);
         }
 
         private static readonly Lazy<ImmutableArray<MetadataReference>> References = new(CreateReferences);
@@ -508,10 +535,12 @@ namespace FixedWidthParser.Generator.Tests
 
         private sealed class GeneratorRunResult(
             ImmutableArray<Diagnostic> generatorDiagnostics,
-            ImmutableArray<string> generatedSources)
+            ImmutableArray<string> generatedSources,
+            ImmutableArray<Diagnostic> compilationErrors)
         {
             public ImmutableArray<Diagnostic> GeneratorDiagnostics { get; } = generatorDiagnostics;
             public ImmutableArray<string> GeneratedSources { get; } = generatedSources;
+            public ImmutableArray<Diagnostic> CompilationErrors { get; } = compilationErrors;
         }
     }
 }

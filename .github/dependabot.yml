@@ -21,8 +21,15 @@ updates:
       test:
         patterns:
           - "xunit*"
-          - "Microsoft.NET.Test.Sdk"
-          - "coverlet.*"
+          - "Microsoft.Testing.*"
+          - "CsCheck"
+      # The libraries the comparison benchmarks measure against.
+      benchmarks:
+        patterns:
+          - "BenchmarkDotNet"
+          - "FileHelpers"
+          - "FlatFiles"
+          - "RecordParser"
     labels:
       - dependencies
 
