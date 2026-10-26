@@ -50,6 +50,18 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 10)] public Phase Phase { get; set; }
     }
 
+    public enum Level { Low = -1, High = 1 }
+
+    public sealed class LevelCodeModel
+    {
+        [FixedColumn(0, 5, Format = "D", Padding = '0', Alignment = Alignment.Right)] public Level Level { get; set; }
+    }
+
+    public partial class GenLevelCodeModel : IFixedWidthModel<GenLevelCodeModel>
+    {
+        [FixedColumn(0, 5, Format = "D", Padding = '0', Alignment = Alignment.Right)] public Level Level { get; set; }
+    }
+
     /// <summary>
     /// Enum columns, as ExcelReader reads them: a member's name in any case or its number, nothing the enum does not
     /// define. Attribute, generated and fluent layouts agree.
@@ -105,6 +117,22 @@ namespace FixedWidthParser.Tests
             Assert.Equal(Phase.Open, attributes.Phase);
             Assert.Equal(Phase.Open, generated.Phase);
             Assert.Equal(Phase.Open, fromFluent.Phase);
+        }
+
+        [Fact]
+        public void NegativeCode_ZeroPadded_RoundTrips()
+        {
+            var layout = FixedWidthLayout.FromAttributes<LevelCodeModel>();
+
+            Assert.Equal("-0001", WriteOne(layout, new LevelCodeModel { Level = Level.Low }));
+            Assert.Equal("-0001", Format(new GenLevelCodeModel { Level = Level.Low }));
+            Assert.True(FixedWidth.TryParse("-0001"u8, layout, Ctx, out var attributes));
+            Assert.True(FixedWidth.TryParse<GenLevelCodeModel>("-0001"u8, Ctx, out var generated));
+            Assert.Equal(Level.Low, attributes.Level);
+            Assert.Equal(Level.Low, generated.Level);
+            Assert.False(FixedWidth.TryParse("-0002"u8, layout, Ctx, out _));
+            Assert.False(FixedWidth.TryParse("-0000"u8, layout, Ctx, out _));
+            Assert.False(FixedWidth.TryParse("--001"u8, layout, Ctx, out _));
         }
 
         [Theory]

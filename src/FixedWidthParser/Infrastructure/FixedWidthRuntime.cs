@@ -163,14 +163,21 @@ namespace FixedWidthParser.Infrastructure
                 {
                     return true;
                 }
-                // A zero-padded code is its number: 02 is 2, and 00 is 0.
-                int digits = text.IndexOfAnyExcept('0');
-                if (digits == 0 || text.IsEmpty)
+                // A zero-padded code is its number: 02 is 2, 00 is 0, and -0001 (a negative value right-aligned
+                // with zero padding, as the writer makes it) is -1.
+                int sign = text.StartsWith('-') ? 1 : 0;
+                var unsigned = text[sign..];
+                int digits = unsigned.IndexOfAnyExcept('0');
+                if (digits == 0 || unsigned.IsEmpty)
                 {
                     return false;
                 }
-                var number = digits < 0 ? "0" : text[digits..];
-                return !number.ContainsAnyExceptInRange('0', '9') && Lookup.TryGetValue(number, out value);
+                var number = digits < 0 ? "0" : unsigned[digits..];
+                if (number.ContainsAnyExceptInRange('0', '9'))
+                {
+                    return false;
+                }
+                return sign == 0 ? Lookup.TryGetValue(number, out value) : Lookup.TryGetValue(string.Concat("-", number), out value);
             }
         }
 
