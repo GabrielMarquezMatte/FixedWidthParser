@@ -19,8 +19,7 @@ namespace FixedWidthParser.Writers
         {
             var context = options.Context;
             Span<byte> record = stackalloc byte[StackRecordSize];
-            int written = TryFormatRecord(in model, formatter, record, in context, options.NewLineBytes);
-            if (written > 0)
+            if (TryFormatRecord(in model, formatter, record, in context, options.NewLineBytes, out int written))
             {
                 stream.Write(record[..written]);
                 return;
@@ -104,8 +103,7 @@ namespace FixedWidthParser.Writers
                 int used = 0;
                 foreach (var model in models)
                 {
-                    int written = TryFormatRecord(in model, formatter, buffer.AsSpan(used), in context, options.NewLineBytes);
-                    if (written == 0)
+                    if (!TryFormatRecord(in model, formatter, buffer.AsSpan(used), in context, options.NewLineBytes, out int written))
                     {
                         await stream.WriteAsync(buffer.AsMemory(0, used), cancellationToken).ConfigureAwait(false);
                         used = 0;
@@ -125,8 +123,7 @@ namespace FixedWidthParser.Writers
             Stream stream, in TModel model, TFormatter formatter, ref byte[] buffer, int used, in FixedWidthContext context, byte[] newLine)
             where TFormatter : struct, IRecordFormatter<TModel>
         {
-            int written = TryFormatRecord(in model, formatter, buffer.AsSpan(used), in context, newLine);
-            if (written > 0)
+            if (TryFormatRecord(in model, formatter, buffer.AsSpan(used), in context, newLine, out int written))
             {
                 return used + written;
             }
@@ -141,8 +138,7 @@ namespace FixedWidthParser.Writers
         {
             while (true)
             {
-                int written = TryFormatRecord(in model, formatter, buffer, in context, newLine);
-                if (written > 0)
+                if (TryFormatRecord(in model, formatter, buffer, in context, newLine, out int written))
                 {
                     return written;
                 }
@@ -152,16 +148,22 @@ namespace FixedWidthParser.Writers
             }
         }
 
-        /// <summary>Formats a record and its line break into <paramref name="destination"/>; returns 0 when they do not fit.</summary>
-        private static int TryFormatRecord<TModel, TFormatter>(in TModel model, TFormatter formatter, Span<byte> destination, in FixedWidthContext context, byte[] newLine)
+        /// <summary>
+        /// Formats a record and its line break into <paramref name="destination"/>; false when they do not fit. A record
+        /// with no columns and an empty line break fits in zero bytes, so the count alone cannot tell.
+        /// </summary>
+        private static bool TryFormatRecord<TModel, TFormatter>(
+            in TModel model, TFormatter formatter, Span<byte> destination, in FixedWidthContext context, byte[] newLine, out int written)
             where TFormatter : struct, IRecordFormatter<TModel>
         {
-            if (!formatter.TryFormat(in model, destination, in context, out int written) || destination.Length - written < newLine.Length)
+            if (!formatter.TryFormat(in model, destination, in context, out int record) || destination.Length - record < newLine.Length)
             {
-                return 0;
+                written = 0;
+                return false;
             }
-            newLine.CopyTo(destination[written..]);
-            return written + newLine.Length;
+            newLine.CopyTo(destination[record..]);
+            written = record + newLine.Length;
+            return true;
         }
     }
 }

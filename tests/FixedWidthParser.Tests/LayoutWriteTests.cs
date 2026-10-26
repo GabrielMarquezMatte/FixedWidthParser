@@ -141,6 +141,22 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
+        public async Task EmptyRecord_WithoutNewLine_WritesNothing()
+        {
+            var none = new FixedWidthWriterOptions { NewLine = "" };
+            EmptyGenModel[] models = [new(), new()];
+            await using var stream = new MemoryStream();
+
+            FixedWidth.Write(stream, models[0], none);
+            FixedWidth.WriteMany(stream, models, none);
+            FixedWidth.WriteMany(stream, (ReadOnlySpan<EmptyGenModel>)models, none);
+            await FixedWidth.WriteAsync(stream, models[0], none, TestContext.Current.CancellationToken);
+            await FixedWidth.WriteManyAsync(stream, models, none, TestContext.Current.CancellationToken);
+
+            Assert.Equal(0, stream.Length);
+        }
+
+        [Fact]
         public void Write_NullNewLine_ThrowsArgumentException()
         {
             using var stream = new MemoryStream();
