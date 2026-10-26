@@ -218,6 +218,31 @@ namespace FixedWidthParser.Tests.Native
             }
         }
 
+        /// <summary>A valid row, one whose value overflows <see cref="decimal"/> once scaled, another valid row.</summary>
+        internal const string DecimalOverflow = "              0.000000000000001\n79228162514264337593543950335.0\n              0.000000000000002\n";
+
+        internal static NativeLayout DecimalOverflowLayout()
+        {
+            return Build(new Col("d", 0, 31, TDecimal) { Scale = 18 });
+        }
+
+        [Fact]
+        public void Read_DecimalOverflowingTheScale_IsSkippedOrParseError()
+        {
+            var layout = DecimalOverflowLayout();
+
+            foreach (var outcome in Ok(DecimalOverflow, layout, Options(skipInvalid: true)))
+            {
+                Assert.Equal([1000L, 2000L], outcome.Column(0));
+                Assert.Equal(1, outcome.LinesSkipped);
+            }
+            foreach (var outcome in Both(DecimalOverflow, layout))
+            {
+                Assert.Equal(NativeStatus.ParseError, outcome.Status);
+                Assert.Contains("column 'd'", outcome.Error, StringComparison.Ordinal);
+            }
+        }
+
         [Fact]
         public void Read_ParseError_ReportsLineAndColumn()
         {

@@ -371,8 +371,14 @@ namespace FixedWidthParser.Native.Reading
             {
                 return false;
             }
-            decimal scaled = value * (decimal)NativeType.Pow10[scale];
-            if (scaled != decimal.Truncate(scaled) || scaled <= -DecimalLimit || scaled >= DecimalLimit)
+            // Bounded before scaling: a value near decimal's range would overflow the product and throw, not fail the parse.
+            decimal factor = (decimal)NativeType.Pow10[scale];
+            if (Math.Abs(value) >= DecimalLimit / factor)
+            {
+                return false;
+            }
+            decimal scaled = value * factor;
+            if (scaled != decimal.Truncate(scaled))
             {
                 return false;
             }
