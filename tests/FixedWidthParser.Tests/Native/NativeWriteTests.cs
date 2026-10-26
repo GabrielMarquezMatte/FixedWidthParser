@@ -395,6 +395,45 @@ namespace FixedWidthParser.Tests.Native
             Assert.Equal("2023-10-24\n", Encoding.UTF8.GetString(RoundTrip("20231024\n", read, write)));
         }
 
+        private static (int Status, byte[] Bytes, string Error) WriteMicros(int type, long micros)
+        {
+            var column = new NativeColumnRaw { Type = type, Length = 1, Values = &micros };
+            var table = new NativeTableRaw { ColumnCount = 1, RowCount = 1, Columns = &column };
+            string format = type == TTime ? "HHmmss" : "yyyyMMddHHmmss";
+            return WriteMemory(&table, Build(new Col("t", 0, format.Length, type) { Format = format }));
+        }
+
+        [Theory]
+        [InlineData(TTime, -1L)]
+        [InlineData(TTime, 86_400_000_000L)]
+        [InlineData(TTime, 1844674407370955162L)]
+        [InlineData(TTimestamp, 1844674407370955162L)]
+        [InlineData(TTimestamp, 253402300800000000L)]
+        [InlineData(TTimestamp, -62135596800000001L)]
+        [InlineData(TTimestamp, long.MaxValue)]
+        [InlineData(TTimestamp, long.MinValue)]
+        public void Write_TemporalOutOfRange_IsError(int type, long micros)
+        {
+            var (status, _, error) = WriteMicros(type, micros);
+
+            Assert.Equal(NativeStatus.Error, status);
+            Assert.Contains("\"t\"", error, StringComparison.Ordinal);
+        }
+
+        [Theory]
+        [InlineData(TTime, 0L, "000000\n")]
+        [InlineData(TTime, 86_399_999_999L, "235959\n")]
+        [InlineData(TTimestamp, 1698154200000000L, "20231024133000\n")]
+        [InlineData(TTimestamp, 253402300799999999L, "99991231235959\n")]
+        [InlineData(TTimestamp, -62135596800000000L, "00010101000000\n")]
+        public void Write_TemporalEndpoints_Format(int type, long micros, string expected)
+        {
+            var (status, bytes, error) = WriteMicros(type, micros);
+
+            Assert.True(status == NativeStatus.Ok, error);
+            Assert.Equal(expected, Encoding.UTF8.GetString(bytes));
+        }
+
         [Fact]
         public void Write_EmptyTable_IsEmpty()
         {
