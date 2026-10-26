@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rejected, and the generator reports `FWP014`.
 - Generated models with C# keyword names (`@event`) produced code that did not compile, and a generic
   model crashed the generator; it now reports `FWP013`.
+- `fw_write_*` trusted a `STRING` column's offsets: offsets past its `data_len`, descending or negative,
+  and a negative `data_len`, are now `FW_INVALID_ARGUMENT` instead of reading past the declared data.
+- `fw_write_*` wrote `DECIMAL` values of 19 digits, which reading the output rejects; they are now an
+  error, as on reading.
+- Writing a record that formats as zero bytes with an empty `NewLine`, such as a generated model with
+  no columns, grew its buffer without end.
+- A negative enum value written as a zero-padded number (`-0001`) did not parse back.
+- A format provider whose positive sign is not `"+"` was ignored by the fast `double`, `float` and
+  `decimal` parsers, which accepted `"+1"`.
+- A non-UTF-8 encoding was ignored by `decimal` and other UTF-8-parsed columns holding non-ASCII text,
+  such as a Latin-1 no-break space grouping digits.
 
 ## [2.0.0]
 
