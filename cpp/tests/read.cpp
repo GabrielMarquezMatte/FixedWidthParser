@@ -19,6 +19,24 @@ static void check_table(const fw::Table& table)
     CHECK(table.is_valid(2, 1));
 }
 
+// The codes of every batch read from `in`, checking each read succeeds.
+static std::vector<std::string> streamed_codes(std::istream& in, const fw::Layout& layout)
+{
+    auto streamed = fw::Reader::open_stream(in, layout, {.read = skip_header_and_invalid(), .batch_rows = 2});
+    CHECK(streamed.has_value());
+    std::vector<std::string> codes;
+    while (true) {
+        auto batch = streamed->next();
+        CHECK(batch.has_value());
+        if (!batch->has_value()) {
+            return codes;
+        }
+        for (int64_t row = 0; row < (*batch)->row_count(); ++row) {
+            codes.emplace_back((*batch)->string(1, row));
+        }
+    }
+}
+
 int main()
 {
     auto layout = cotahist_layout();
@@ -63,20 +81,18 @@ int main()
 
     // The same batches from a std::istream, read forward without seeking.
     std::istringstream in{std::string(content)};
-    auto streamed = fw::Reader::open_stream(in, layout, {.read = skip_header_and_invalid(), .batch_rows = 2});
-    CHECK(streamed.has_value());
-    std::vector<std::string> codes;
-    while (true) {
-        auto batch = streamed->next();
-        CHECK(batch.has_value());
-        if (!batch->has_value()) {
-            break;
-        }
-        for (int64_t row = 0; row < (*batch)->row_count(); ++row) {
-            codes.emplace_back((*batch)->string(1, row));
-        }
-    }
-    CHECK((codes == std::vector<std::string>{"PETR4", "VALE3", "ITUB4"}));
+    CHECK((streamed_codes(in, layout) == std::vector<std::string>{"PETR4", "VALE3", "ITUB4"}));
+
+    // A stream with exceptions enabled throws at its end too; the bytes before it still count.
+    std::istringstream throwing{std::string(content)};
+    throwing.exceptions(std::ios::failbit | std::ios::badbit);
+    CHECK((streamed_codes(throwing, layout) == std::vector<std::string>{"PETR4", "VALE3", "ITUB4"}));
+
+    // A stream that fails before its end is an error, not an empty file.
+    std::istringstream failing{std::string(content)};
+    failing.setstate(std::ios::failbit);
+    auto refused = fw::Reader::open_stream(failing, layout, {.read = skip_header_and_invalid()});
+    CHECK(!refused.has_value() || !refused->next().has_value());
 
     std::vector<fw::ColumnSpec> overlap{
         {.name = "a", .start = 0, .length = 4, .type = fw::Type::String},
