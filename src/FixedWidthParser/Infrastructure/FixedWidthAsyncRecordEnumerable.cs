@@ -34,9 +34,9 @@ namespace FixedWidthParser.Infrastructure
             _options = options;
         }
 
-#pragma warning disable HLQ006 // GetEnumerator() or GetAsyncEnumerator() should return a value type
+#pragma warning disable HLQ006, VSTHRD200 // GetEnumerator() or GetAsyncEnumerator() should return a value type
         public AsyncRecordEnumerator<TModel, TParser> GetAsyncEnumerator(CancellationToken cancellationToken = default)
-#pragma warning restore HLQ006
+#pragma warning restore HLQ006, VSTHRD200
         {
 #pragma warning disable CA2000, IDISP001 // The enumerator owns and disposes the file stream.
             var stream = _stream ?? new FileStream(_path!, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1, FileOptions.Asynchronous | FileOptions.SequentialScan);
