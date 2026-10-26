@@ -35,6 +35,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `decimal` parsers, which accepted `"+1"`.
 - A non-UTF-8 encoding was ignored by `decimal` and other UTF-8-parsed columns holding non-ASCII text,
   such as a Latin-1 no-break space grouping digits.
+- A parallel `AggregateAsync` over a stream kept reading to the end after a failure that decided the
+  result, such as a line that fails to parse, so a stream that stays open delayed the error until the
+  caller cancelled. It now stops at the chunk holding the failure.
+
+### Changed
+- A whole-source native read gives back the unused part of a `STRING` column's block before handing it
+  over: the block was sized for the column's full width on every row, and a table of short text in a wide
+  column kept all of it (126 MiB instead of 5 MiB for 1,000,000 rows of 2 bytes in 128).
+- Parsing a negative enum code written with zero padding (`-0001`) no longer allocates a string.
+- Merging the null bitmaps of a parallel native read copies whole bytes where a partition starts on a byte
+  boundary.
 
 ## [2.0.0]
 
