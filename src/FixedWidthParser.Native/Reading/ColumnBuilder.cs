@@ -16,7 +16,6 @@ namespace FixedWidthParser.Native.Reading
     internal sealed unsafe class ColumnBuilder : IDisposable
     {
         private const int StackChars = 256;
-        private const long DecimalLimit = 1_000_000_000_000_000_000;
         private const DateTimeStyles Utc = DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal;
 
         private readonly NativeColumn _column;
@@ -365,7 +364,7 @@ namespace FixedWidthParser.Native.Reading
         {
             if (TryInteger(text, out unscaled))
             {
-                return unscaled is > -DecimalLimit and < DecimalLimit;
+                return unscaled is > -NativeType.DecimalLimit and < NativeType.DecimalLimit;
             }
             if (!decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal value))
             {
@@ -373,7 +372,7 @@ namespace FixedWidthParser.Native.Reading
             }
             // Bounded before scaling: a value near decimal's range would overflow the product and throw, not fail the parse.
             decimal factor = (decimal)NativeType.Pow10[scale];
-            if (Math.Abs(value) >= DecimalLimit / factor)
+            if (Math.Abs(value) >= NativeType.DecimalLimit / factor)
             {
                 return false;
             }

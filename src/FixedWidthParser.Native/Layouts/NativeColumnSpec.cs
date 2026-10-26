@@ -15,6 +15,9 @@ namespace FixedWidthParser.Native.Layouts
 
         internal const int MaxScale = 18;
 
+        /// <summary>A DECIMAL's unscaled value has at most 18 digits, so it stays below this in magnitude.</summary>
+        internal const long DecimalLimit = 1_000_000_000_000_000_000;
+
         /// <summary>The day DATE values count from, as Arrow's <c>date32</c> does.</summary>
         internal static readonly int EpochDay = new DateOnly(1970, 1, 1).DayNumber;
 

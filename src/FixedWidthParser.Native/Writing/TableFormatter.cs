@@ -131,6 +131,15 @@ namespace FixedWidthParser.Native.Writing
                     var ticks = epoch + Ticks(column, raw, row, DateTime.MinValue.Ticks - epoch, DateTime.MaxValue.Ticks - epoch);
                     FixedWidthRuntime.FormatUtf8Value(new DateTime(ticks, DateTimeKind.Unspecified), slice, in _context, options, column.Name);
                     return;
+                case NativeType.Decimal:
+                    long unscaled = ((long*)raw->Values)[row];
+                    // The reader takes at most 18 digits; writing more would make a line it cannot read back.
+                    if (unscaled is <= -NativeType.DecimalLimit or >= NativeType.DecimalLimit)
+                    {
+                        throw new InvalidOperationException($"Value {unscaled} of column \"{column.Name}\" has more than 18 digits, which a DECIMAL cannot read back.");
+                    }
+                    FixedWidthRuntime.FormatUtf8Value(unscaled, slice, in _context, options, column.Name);
+                    return;
                 default:
                     FixedWidthRuntime.FormatUtf8Value(((long*)raw->Values)[row], slice, in _context, options, column.Name);
                     return;
