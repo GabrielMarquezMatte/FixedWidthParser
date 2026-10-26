@@ -232,13 +232,16 @@ namespace FixedWidthParser.Tests.Native
             }
         }
 
-        [Fact]
-        public void Write_File_ReplacesTheExistingFile()
+        [Theory]
+        [InlineData("out.txt")]
+        [InlineData(null)]
+        public void Write_File_ReplacesTheExistingFile(string? name)
         {
             var layout = EveryTypeLayout();
             var table = ReadTable(Encoding.UTF8.GetBytes(EveryType), layout);
             string directory = Directory.CreateTempSubdirectory().FullName;
-            string path = Path.Combine(directory, "out.txt");
+            // null stands for the longest name a file may have: 255 characters on every supported platform.
+            string path = Path.Combine(directory, name ?? new string('a', 251) + ".txt");
             try
             {
                 File.WriteAllText(path, new string('x', 1000));
