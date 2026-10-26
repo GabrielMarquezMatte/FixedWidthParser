@@ -37,7 +37,7 @@ namespace FixedWidthParser.Infrastructure
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsBlank(ReadOnlySpan<byte> column, in ColumnParseOptions options)
         {
-            return column.Trim(options.TrimByte).Trim((byte)' ').IsEmpty;
+            return column.IndexOfAnyExcept(options.TrimByte, (byte)' ') < 0;
         }
 
         /// <summary>Decodes a string column with the context's encoding, interning it through the context's pool when there is one.</summary>
