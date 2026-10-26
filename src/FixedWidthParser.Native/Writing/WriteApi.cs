@@ -45,8 +45,9 @@ namespace FixedWidthParser.Native.Writing
                 return status;
             }
             string target = Encoding.UTF8.GetString(path);
-            // Writes a sibling, then moves it over the target: a failed write leaves an existing file as it was.
-            string temp = $"{target}.{Path.GetRandomFileName()}.tmp";
+            // Writes a sibling, then moves it over the target: a failed write leaves an existing file as it was. Its
+            // name is short and independent of the target's, which may already be as long as a name can be.
+            string temp = Path.Combine(Path.GetDirectoryName(target) ?? string.Empty, Path.GetRandomFileName() + ".tmp");
             try
             {
                 long total = formatter!.Rows * lineBytes;
