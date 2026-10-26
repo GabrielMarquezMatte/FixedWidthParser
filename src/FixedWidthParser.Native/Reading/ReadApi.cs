@@ -75,8 +75,7 @@ namespace FixedWidthParser.Native.Reading
         {
             if (result is not null && result->StructSize != sizeof(NativeReadResultRaw))
             {
-                NativeApi.SetLastError($"fw_read_result struct_size is {result->StructSize}; expected {sizeof(NativeReadResultRaw)}.");
-                return NativeStatus.InvalidArgument;
+                return NativeApi.InvalidArgument($"fw_read_result struct_size is {result->StructSize}; expected {sizeof(NativeReadResultRaw)}.");
             }
             return NativeStatus.Ok;
         }

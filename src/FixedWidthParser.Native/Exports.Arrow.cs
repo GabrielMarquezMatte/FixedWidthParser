@@ -11,7 +11,7 @@ namespace FixedWidthParser.Native
         {
             if (path is null || pathLength <= 0 || outArray is null || outSchema is null)
             {
-                return InvalidArgument("fw_read_arrow_file needs a path, out_array and out_schema.");
+                return NativeApi.InvalidArgument("fw_read_arrow_file needs a path, out_array and out_schema.");
             }
             *outArray = default;
             *outSchema = default;
@@ -23,7 +23,7 @@ namespace FixedWidthParser.Native
         {
             if ((data is null && dataLength != 0) || dataLength < 0 || outArray is null || outSchema is null)
             {
-                return InvalidArgument("fw_read_arrow_memory needs data for a non-zero data_len, out_array and out_schema.");
+                return NativeApi.InvalidArgument("fw_read_arrow_memory needs data for a non-zero data_len, out_array and out_schema.");
             }
             *outArray = default;
             *outSchema = default;
@@ -35,7 +35,7 @@ namespace FixedWidthParser.Native
         {
             if (path is null || pathLength <= 0 || outStream is null)
             {
-                return InvalidArgument("fw_read_arrow_stream_file needs a path and out_stream.");
+                return NativeApi.InvalidArgument("fw_read_arrow_stream_file needs a path and out_stream.");
             }
             *outStream = default;
             return WithLayout(layout, l => ArrowApi.OpenStreamFile(new ReadOnlySpan<byte>(path, pathLength), l, options, outStream));
@@ -46,7 +46,7 @@ namespace FixedWidthParser.Native
         {
             if ((data is null && dataLength != 0) || dataLength < 0 || outStream is null)
             {
-                return InvalidArgument("fw_read_arrow_stream_memory needs data for a non-zero data_len, and out_stream.");
+                return NativeApi.InvalidArgument("fw_read_arrow_stream_memory needs data for a non-zero data_len, and out_stream.");
             }
             *outStream = default;
             return WithLayout(layout, l => ArrowApi.OpenStreamMemory(data, dataLength, l, options, outStream));
@@ -57,7 +57,7 @@ namespace FixedWidthParser.Native
         {
             if (outStream is null)
             {
-                return InvalidArgument("fw_read_arrow_stream_stream needs out_stream.");
+                return NativeApi.InvalidArgument("fw_read_arrow_stream_stream needs out_stream.");
             }
             *outStream = default;
 #pragma warning disable CA2000 // The reader takes the stream over, or it is disposed below.

@@ -16,8 +16,7 @@ namespace FixedWidthParser.Native
             int size = *(int*)options;
             if (size != sizeof(T))
             {
-                NativeApi.SetLastError($"{name} struct_size is {size}; expected {sizeof(T)}.");
-                return NativeStatus.InvalidArgument;
+                return NativeApi.InvalidArgument($"{name} struct_size is {size}; expected {sizeof(T)}.");
             }
             value = *options;
             return NativeStatus.Ok;
