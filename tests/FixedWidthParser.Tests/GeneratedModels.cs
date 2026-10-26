@@ -200,4 +200,9 @@ namespace FixedWidthParser.Tests
         [FixedColumn(0, 3)] public int @event { get; set; }
         [FixedColumn(3, 3)] public int? @int { get; set; }
     }
+
+    /// <summary>Generated model with no columns: it formats as zero bytes.</summary>
+    public sealed partial class EmptyGenModel : IFixedWidthModel<EmptyGenModel>
+    {
+    }
 }
