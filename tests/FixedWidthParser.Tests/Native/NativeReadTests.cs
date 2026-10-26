@@ -208,6 +208,17 @@ namespace FixedWidthParser.Tests.Native
         }
 
         [Fact]
+        public void Read_NullableMixedSpacesAndTrimChar_IsNull()
+        {
+            var layout = Build(new Col("n", 0, 5, TInt64) { Nullable = true, TrimChar = '0' });
+
+            foreach (var outcome in Ok(" 0 0 \n0 0 0\n00 12\n", layout))
+            {
+                Assert.Equal([null, null, 12L], outcome.Column(0));
+            }
+        }
+
+        [Fact]
         public void Read_ParseError_ReportsLineAndColumn()
         {
             var layout = Build(new Col("name", 0, 3, TString), new Col("age", 3, 2, TInt64));
