@@ -58,6 +58,42 @@ namespace FixedWidthParser.Tests
             Assert.True(perLine <= 1, $"Generated pooled reader regressed to {perLine} B/line (expected ~0).");
         }
 
+        // Generated, attribute and fluent layouts all parse enums through TryEnum.
+        [Theory]
+        [InlineData("-0001")]
+        [InlineData("-1")]
+        [InlineData("00001")]
+        public void ZeroPaddedEnumCode_AllocatesNothing(string text)
+        {
+            byte[] column = Encoding.ASCII.GetBytes(text);
+            var options = new Infrastructure.ColumnParseOptions(' ', TrimMode.Trailing, format: null);
+
+            Assert.True(SettlesToZeroAllocation(() => Infrastructure.FixedWidthRuntime.TryEnum(column, default, in options, out Level _)),
+                $"Parsing enum code '{text}' still allocates once optimized.");
+        }
+
+        /// <summary>
+        /// True once a round of calls allocates nothing. Unoptimized (tier-0) generic BCL code boxes where the
+        /// optimized code does not, so allocation is measured in rounds while the JIT tiers up, for about 3 s.
+        /// </summary>
+        private static bool SettlesToZeroAllocation(Action call)
+        {
+            for (int round = 0; round < 30; round++)
+            {
+                long before = GC.GetAllocatedBytesForCurrentThread();
+                for (int i = 0; i < 1_000; i++)
+                {
+                    call();
+                }
+                if (GC.GetAllocatedBytesForCurrentThread() == before)
+                {
+                    return true;
+                }
+                Thread.Sleep(100);
+            }
+            return false;
+        }
+
         private static double PerCall(Func<object> read)
         {
             const int n = 10_000;
