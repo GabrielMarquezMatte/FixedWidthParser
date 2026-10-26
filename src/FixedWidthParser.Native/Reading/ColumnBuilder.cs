@@ -313,7 +313,15 @@ namespace FixedWidthParser.Native.Reading
             foreach (ref readonly var part in parts)
             {
                 var partBits = part._validity is null ? default : part._validity.Span;
-                for (int r = 0; r < part.Rows && !partBits.IsEmpty; r++)
+                int r = 0;
+                // A partition starting on a byte boundary copies its whole bytes; its last few rows, and a partition
+                // starting mid-byte, go bit by bit, so no padding bit lands on another partition's rows.
+                if (!partBits.IsEmpty && (row & 7) == 0)
+                {
+                    r = part.Rows & ~7;
+                    partBits[..(r >> 3)].CopyTo(new Span<byte>(bits + (row >> 3), r >> 3));
+                }
+                for (; r < part.Rows && !partBits.IsEmpty; r++)
                 {
                     if ((partBits[r >> 3] & (1 << (r & 7))) == 0)
                     {
