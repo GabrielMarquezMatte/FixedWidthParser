@@ -11,7 +11,7 @@ namespace FixedWidthParser.Native
         {
             if (path is null || pathLength <= 0 || outTable is null)
             {
-                return InvalidArgument("fw_read_file needs a path and out_table.");
+                return NativeApi.InvalidArgument("fw_read_file needs a path and out_table.");
             }
             *outTable = default;
             return WithLayout(layout, l => ReadApi.ReadFile(new ReadOnlySpan<byte>(path, pathLength), l, options, outTable, outResult));
@@ -22,7 +22,7 @@ namespace FixedWidthParser.Native
         {
             if ((data is null && dataLength != 0) || dataLength < 0 || outTable is null)
             {
-                return InvalidArgument("fw_read_memory needs data for a non-zero data_len, and out_table.");
+                return NativeApi.InvalidArgument("fw_read_memory needs data for a non-zero data_len, and out_table.");
             }
             *outTable = default;
             return WithLayout(layout, l => ReadApi.ReadMemory(data, dataLength, l, options, outTable, outResult));

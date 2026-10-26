@@ -37,13 +37,11 @@ namespace FixedWidthParser.Native.Reading
             }
             if (raw.HeaderLines < 0 || raw.DegreeOfParallelism < 0 || raw.MaxLineLength < 0 || raw.SkipByteOrderMark is < 0 or > OptTrue)
             {
-                NativeApi.SetLastError("fw_read_options: header_lines, degree_of_parallelism and max_line_length must not be negative, and skip_byte_order_mark must be an FW_OPT_* value.");
-                return NativeStatus.InvalidArgument;
+                return NativeApi.InvalidArgument("fw_read_options: header_lines, degree_of_parallelism and max_line_length must not be negative, and skip_byte_order_mark must be an FW_OPT_* value.");
             }
             if (!TryEncoding(raw.Encoding, out var encoding))
             {
-                NativeApi.SetLastError($"fw_read_options: encoding {raw.Encoding} is not a code page this library knows.");
-                return NativeStatus.InvalidArgument;
+                return NativeApi.InvalidArgument($"fw_read_options: encoding {raw.Encoding} is not a code page this library knows.");
             }
             settings = new ReadSettings(raw, encoding);
             return NativeStatus.Ok;

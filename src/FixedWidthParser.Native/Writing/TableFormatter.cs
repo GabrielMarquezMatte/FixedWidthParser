@@ -34,8 +34,7 @@ namespace FixedWidthParser.Native.Writing
             string? error = Check(table, layout);
             if (error is not null)
             {
-                NativeApi.SetLastError(error);
-                return NativeStatus.InvalidArgument;
+                return NativeApi.InvalidArgument(error);
             }
             formatter = new TableFormatter(layout, table, encoding);
             return NativeStatus.Ok;
