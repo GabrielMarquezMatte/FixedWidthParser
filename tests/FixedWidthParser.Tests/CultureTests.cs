@@ -89,6 +89,29 @@ namespace FixedWidthParser.Tests
             }
         }
 
+        // The fast paths read '+' as the positive sign, so a provider with another one must go to the BCL.
+        [Fact]
+        public void Parse_Numbers_CustomPositiveSign_MatchTheBcl()
+        {
+            var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+            culture.NumberFormat.PositiveSign = "p";
+            var context = CtxWith(culture);
+            var options = new Infrastructure.ColumnParseOptions(' ', TrimMode.Both, format: null);
+
+            foreach (string text in new[] { "+1", "p1", "-1", "1.5", "+1.5", "p1.5" })
+            {
+                bool doubleOk = Infrastructure.FixedWidthRuntime.TryDouble(Bytes(text), in context, in options, out double d);
+                bool floatOk = Infrastructure.FixedWidthRuntime.TryFloat(Bytes(text), in context, in options, out float f);
+                bool decimalOk = Infrastructure.FixedWidthRuntime.TryParse(Bytes(text), in context, in options, out decimal m);
+
+                Assert.Equal(double.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, culture, out double bclDouble), doubleOk);
+                Assert.Equal(float.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, culture, out float bclFloat), floatOk);
+                Assert.Equal(decimal.TryParse(text, NumberStyles.Number, culture, out decimal bclDecimal), decimalOk);
+                Assert.Equal((bclDouble, bclFloat, bclDecimal), (d, f, m));
+            }
+            Assert.False(Infrastructure.FixedWidthRuntime.TryDouble(Bytes("+1"), in context, in options, out _));
+        }
+
         // The digit-only fast path for exact formats must agree with TryParseExact, including where it must
         // step aside: a Buddhist calendar (th-TH) and "/" or ":" standing for other separators (de-DE).
         [Theory]

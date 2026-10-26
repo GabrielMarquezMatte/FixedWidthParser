@@ -44,8 +44,8 @@ namespace FixedWidthParser
         internal bool StandardDateSeparators { get => _formatProvider is null || field; private init; }
 
         /// <summary>
-        /// The provider's decimal separator as one ASCII byte when its negative sign is "-", so a plain
-        /// number can be written without going through the provider; 0 otherwise.
+        /// The provider's decimal separator as one ASCII byte when its signs are "-" and "+", so a plain
+        /// number can be read and written without going through the provider; 0 otherwise.
         /// </summary>
         // ponytail: read once, so a NumberFormatInfo mutated after this context was built is not seen.
         internal byte DecimalSeparator { get => _formatProvider is null ? (byte)'.' : field; private init; }
@@ -57,7 +57,8 @@ namespace FixedWidthParser
                 return (byte)'.';
             }
             var info = NumberFormatInfo.GetInstance(provider);
-            if (!string.Equals(info.NegativeSign, "-", StringComparison.Ordinal) || info.NumberDecimalSeparator is not [var separator] || !char.IsAscii(separator))
+            if (!string.Equals(info.NegativeSign, "-", StringComparison.Ordinal) || !string.Equals(info.PositiveSign, "+", StringComparison.Ordinal)
+                || info.NumberDecimalSeparator is not [var separator] || !char.IsAscii(separator))
             {
                 return 0;
             }
