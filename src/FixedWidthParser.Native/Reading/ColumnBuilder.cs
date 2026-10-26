@@ -269,7 +269,14 @@ namespace FixedWidthParser.Native.Reading
                 offsets = (int*)lentOffsets.Detach();
             }
             target->Values = offsets is null ? (void*)parts[0]._ints.Detach() : offsets;
-            target->Data = lent is null ? data : (byte*)lent.Detach();
+            if (lent is not null)
+            {
+                // The arena lent every row the column's full width; trimmed text is often far shorter, and the table
+                // would keep the difference for its lifetime. Every partition has moved in by now.
+                lent.TrimExcess((int)total);
+                data = (byte*)lent.Detach();
+            }
+            target->Data = data;
             target->DataLen = total;
         }
 
