@@ -107,7 +107,38 @@ namespace FixedWidthParser.Infrastructure
                 value = Unsafe.As<decimal, TValue>(ref fast);
                 return true;
             }
+            // The UTF-8 parser reads ASCII the same in every supported encoding, but not other bytes, such as
+            // a Latin-1 no-break space grouping digits.
+            if (!context.IsUtf8 && !Ascii.IsValid(trimmed))
+            {
+                return ParseTranscoded(trimmed, in context, out value);
+            }
             return TValue.TryParse(trimmed, context.FormatProvider, out value);
+        }
+
+        // Decodes with the context's encoding and parses the text's UTF-8, on the stack when it fits.
+        [SkipLocalsInit]
+        private static bool ParseTranscoded<TValue>(ReadOnlySpan<byte> bytes, in FixedWidthContext context, [MaybeNullWhen(false)] out TValue value)
+            where TValue : IUtf8SpanParsable<TValue>
+        {
+            Span<char> chars = stackalloc char[StackBufferSize];
+            var text = Decode(bytes, context.Encoding, chars, out char[]? rentedChars);
+            int maxBytes = Encoding.UTF8.GetMaxByteCount(text.Length);
+            byte[]? rentedBytes = maxBytes <= StackBufferSize ? null : ArrayPool<byte>.Shared.Rent(maxBytes);
+            Span<byte> utf8 = rentedBytes is null ? stackalloc byte[StackBufferSize] : rentedBytes;
+            try
+            {
+                int written = Encoding.UTF8.GetBytes(text, utf8);
+                return TValue.TryParse(utf8[..written], context.FormatProvider, out value);
+            }
+            finally
+            {
+                Return(rentedChars);
+                if (rentedBytes is not null)
+                {
+                    ArrayPool<byte>.Shared.Return(rentedBytes);
+                }
+            }
         }
 
         /// <summary>Parses an <see cref="ISpanParsable{TSelf}"/> column that has no UTF-8 parser, decoding it with the context's encoding first.</summary>

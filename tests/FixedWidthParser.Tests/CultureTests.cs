@@ -112,6 +112,20 @@ namespace FixedWidthParser.Tests
             Assert.False(Infrastructure.FixedWidthRuntime.TryDouble(Bytes("+1"), in context, in options, out _));
         }
 
+        // A Latin-1 no-break space (0xA0) groups digits here; read as UTF-8 it is not a character at all.
+        [Fact]
+        public void Parse_Decimal_Latin1NoBreakSpaceGroups_IsDecoded()
+        {
+            var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+            culture.NumberFormat.NumberGroupSeparator = " ";
+            var context = new FixedWidthContext { FormatProvider = culture, Encoding = System.Text.Encoding.Latin1 };
+            var options = new Infrastructure.ColumnParseOptions(' ', TrimMode.Both, format: null);
+
+            Assert.True(Infrastructure.FixedWidthRuntime.TryParse(System.Text.Encoding.Latin1.GetBytes("1 234.50"), in context, in options, out decimal value));
+            Assert.Equal(1234.50m, value);
+            Assert.False(Infrastructure.FixedWidthRuntime.TryParse(System.Text.Encoding.Latin1.GetBytes("1 234.5x"), in context, in options, out decimal _));
+        }
+
         // The digit-only fast path for exact formats must agree with TryParseExact, including where it must
         // step aside: a Buddhist calendar (th-TH) and "/" or ":" standing for other separators (de-DE).
         [Theory]
