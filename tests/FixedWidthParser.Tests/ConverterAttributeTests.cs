@@ -41,13 +41,26 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void MismatchedConverter_ParserConstruction_Throws()
         {
-            Assert.Throws<InvalidOperationException>(() => FixedWidth.TryParse(ReadOnlySpan<byte>.Empty, FixedWidthLayout.FromAttributes<MismatchedConverterModel>(), Ctx, out _));
+            var ex = Assert.Throws<InvalidOperationException>(() => FixedWidth.TryParse(ReadOnlySpan<byte>.Empty, FixedWidthLayout.FromAttributes<MismatchedConverterModel>(), Ctx, out _));
+            Assert.Contains("for column 'Value' must implement", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]
         public void MismatchedConverter_WriterConstruction_Throws()
         {
-            Assert.Throws<InvalidOperationException>(() => FixedWidth.WriteMany(Stream.Null, Array.Empty<MismatchedConverterModel>(), FixedWidthLayout.FromAttributes<MismatchedConverterModel>()));
+            var ex = Assert.Throws<InvalidOperationException>(() => FixedWidth.WriteMany(Stream.Null, Array.Empty<MismatchedConverterModel>(), FixedWidthLayout.FromAttributes<MismatchedConverterModel>()));
+            Assert.Contains("for column 'Value' must implement", ex.Message, StringComparison.Ordinal);
+        }
+
+        // A converter may carry state, so the reader and the writer each get their own.
+        [Fact]
+        public void Converter_ReaderAndWriter_EachGetTheirOwnInstance()
+        {
+            var layout = FixedWidthLayout.FromAttributes<CountedConverterModel>();
+
+            Assert.True(FixedWidth.TryParse("42   "u8, layout, Ctx, out var parsed));
+            Assert.Equal("42   ", WriteOne(layout, parsed));
+            Assert.Equal(2, CountedConverter.Created);
         }
     }
 }

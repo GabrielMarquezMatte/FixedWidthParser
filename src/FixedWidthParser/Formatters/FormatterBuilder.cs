@@ -70,14 +70,7 @@ namespace FixedWidthParser.Formatters
         {
             if (attribute.Converter is { } converterType)
             {
-                var requiredInterface = typeof(IFixedWidthConverter<>).MakeGenericType(valueType);
-                if (!requiredInterface.IsAssignableFrom(converterType))
-                {
-                    throw new InvalidOperationException(
-                        $"Converter '{converterType}' for column '{member.Name}' must implement '{requiredInterface}'.");
-                }
-                var converter = Activator.CreateInstance(converterType)
-                    ?? throw new InvalidOperationException($"Could not instantiate converter '{converterType}' for column '{member.Name}'.");
+                var converter = ModelColumns.CreateConverter(converterType, valueType, member.Name);
                 return (IColumnFormatter<TModel>)Activator.CreateInstance(
                     typeof(ConverterColumnFormatter<,,>).MakeGenericType(typeof(TModel), valueType, converterType),
                     attribute.Start, attribute.Length, options, member.Name, getter, converter)!;
