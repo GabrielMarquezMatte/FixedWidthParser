@@ -1,5 +1,4 @@
-using FixedWidthParser.Parsers;
-using FixedWidthParser.Writers;
+using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
 {
@@ -12,49 +11,63 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Parser_OverlappingColumns_ThrowsOnConstruction()
         {
-            var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthParser<OverlapReadModel>());
+            var ex = Assert.Throws<InvalidOperationException>(() => FixedWidth.TryParse(ReadOnlySpan<byte>.Empty, FixedWidthLayout.FromAttributes<OverlapReadModel>(), Ctx, out _));
             Assert.Contains("Overlapping", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]
         public void Writer_OverlappingColumns_ThrowsOnConstruction()
         {
-            var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthWriter<OverlapWriteModel>());
+            var ex = Assert.Throws<InvalidOperationException>(() => FixedWidth.WriteMany(Stream.Null, Array.Empty<OverlapWriteModel>(), FixedWidthLayout.FromAttributes<OverlapWriteModel>()));
             Assert.Contains("Overlapping", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]
         public void Parser_NegativeStart_Throws()
         {
-            var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthParser<NegativeStartModel>());
+            var ex = Assert.Throws<InvalidOperationException>(() => FixedWidth.TryParse(ReadOnlySpan<byte>.Empty, FixedWidthLayout.FromAttributes<NegativeStartModel>(), Ctx, out _));
             Assert.Contains("Start", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]
         public void Writer_ZeroLength_Throws()
         {
-            var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthWriter<ZeroLengthModel>());
+            var ex = Assert.Throws<InvalidOperationException>(() => FixedWidth.WriteMany(Stream.Null, Array.Empty<ZeroLengthModel>(), FixedWidthLayout.FromAttributes<ZeroLengthModel>()));
             Assert.Contains("Length", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]
         public void Parser_NoColumns_ThrowsOnConstruction()
         {
-            var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthParser<NoColumnsModel>());
+            var ex = Assert.Throws<InvalidOperationException>(() => FixedWidth.TryParse(ReadOnlySpan<byte>.Empty, FixedWidthLayout.FromAttributes<NoColumnsModel>(), Ctx, out _));
             Assert.Contains("no [FixedColumn]", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]
-        public void Utf8Parser_NoColumns_ThrowsOnConstruction()
+        public void Parser_NonAsciiTrimChar_ThrowsOnConstruction()
         {
-            var ex = Assert.Throws<InvalidOperationException>(() => new Utf8FixedWidthParser<NoColumnsModel>());
-            Assert.Contains("no [FixedColumn]", ex.Message, StringComparison.Ordinal);
+            var ex = Assert.Throws<InvalidOperationException>(() => FixedWidth.TryParse(ReadOnlySpan<byte>.Empty, FixedWidthLayout.FromAttributes<NonAsciiTrimModel>(), Ctx, out _));
+            Assert.Contains("TrimChar", ex.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Writer_NonAsciiPadding_ThrowsOnConstruction()
+        {
+            var ex = Assert.Throws<InvalidOperationException>(() => FixedWidth.WriteMany(Stream.Null, Array.Empty<NonAsciiPaddingModel>(), FixedWidthLayout.FromAttributes<NonAsciiPaddingModel>()));
+            Assert.Contains("Padding", ex.Message, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Parser_UnsupportedColumnType_ThrowsOnConstruction()
+        {
+            var ex = Assert.Throws<InvalidOperationException>(() => FixedWidth.TryParse(ReadOnlySpan<byte>.Empty, FixedWidthLayout.FromAttributes<UnsupportedTypeModel>(), Ctx, out _));
+            Assert.Contains("Converter", ex.Message, StringComparison.Ordinal);
         }
 
         [Fact]
         public void Writer_NoColumns_ThrowsOnConstruction()
         {
-            var ex = Assert.Throws<InvalidOperationException>(() => new FixedWidthWriter<NoColumnsModel>());
+            var ex = Assert.Throws<InvalidOperationException>(() => FixedWidth.WriteMany(Stream.Null, Array.Empty<NoColumnsModel>(), FixedWidthLayout.FromAttributes<NoColumnsModel>()));
             Assert.Contains("no [FixedColumn]", ex.Message, StringComparison.Ordinal);
         }
 
@@ -62,8 +75,8 @@ namespace FixedWidthParser.Tests
         public void AdjacentColumns_AreValid()
         {
             // Touching columns (end of one == start of the next) do not overlap.
-            var parser = new FixedWidthParser<AdjacentColumnsModel>();
-            var writer = new FixedWidthWriter<AdjacentColumnsModel>();
+            var parser = FixedWidthLayout.FromAttributes<AdjacentColumnsModel>();
+            var writer = FixedWidthLayout.FromAttributes<AdjacentColumnsModel>();
 
             Assert.NotNull(parser);
             Assert.NotNull(writer);

@@ -1,41 +1,38 @@
 name: Release
 
-# Publica no NuGet ao empurrar uma tag de versão (ex.: v1.0.0 -> versão 1.0.0).
-# Usa Trusted Publishing (OIDC): nenhuma API key fica armazenada como secret — o GitHub
-# troca um token OIDC de curta duração por uma chave temporária via NuGet/login.
-# Pré-requisitos no nuget.org: uma policy de Trusted Publishing apontando para este repo +
-# workflow, e a variável de repositório NUGET_USER com o usuário do nuget.org.
+# Pushing a version tag (v2.0.0, v2.0.0-rc.1) publishes that version everywhere:
+# - FixedWidthParser.NET to NuGet, through Trusted Publishing (OIDC): nuget.org needs a policy for this
+#   repository and workflow, and the repository variable NUGET_USER its user name.
+# - fixedwidthparser wheels to PyPI, through Trusted Publishing: PyPI needs a trusted publisher for
+#   this repository, workflow release.yml.
+# - The native library for each platform, attached to the GitHub Release.
+# A tag with a "-" is published as a prerelease.
 on:
   push:
     tags: [ 'v*' ]
 
 permissions:
   contents: read
-  id-token: write  # necessário para o OIDC do Trusted Publishing
 
 jobs:
-  publish:
-    name: Pack & Publish to NuGet
+  build:
+    name: Build, test & pack (.NET)
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0  # histórico completo para o SourceLink
+          fetch-depth: 0  # full history for SourceLink
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
-
-      - name: Cache NuGet packages
-        uses: actions/cache@v6
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/*.csproj'
 
       - name: Derive version from tag
         id: version
@@ -60,6 +57,189 @@ jobs:
           -p:Version=${{ steps.version.outputs.value }}
           --output ./artifacts
 
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: ./artifacts
+          format: spdx-json
+          output-file: ./artifacts/fixedwidthparser.spdx.json
+          upload-release-assets: false
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-packages
+          path: ./artifacts/*
+          if-no-files-found: error
+
+  native:
+    name: Build native library (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest, macos-15-intel]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/*.csproj'
+
+      - name: Build the native library
+        shell: bash
+        env:
+          RunAnalyzers: 'false'
+        run: python python/scripts/build_native.py
+
+      - name: Rename asset for this platform
+        shell: bash
+        run: |
+          case "${{ runner.os }}" in
+            Windows) src=FixedWidthParser.Native.dll;   os=win;   ext=dll ;;
+            macOS)   src=FixedWidthParser.Native.dylib; os=osx;   ext=dylib ;;
+            *)       src=FixedWidthParser.Native.so;    os=linux; ext=so ;;
+          esac
+          case "$(uname -m)" in arm64|aarch64) arch=arm64 ;; *) arch=x64 ;; esac
+          mkdir -p release-assets
+          cp "python/src/fixedwidth/_lib/${src}" "release-assets/fixedwidth-native-${os}-${arch}.${ext}"
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-native-${{ matrix.os }}
+          path: release-assets/*
+          if-no-files-found: error
+
+      - name: Upload library for the Python wheel
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-lib-${{ matrix.os }}
+          path: python/src/fixedwidth/_lib/*
+          if-no-files-found: error
+
+  python:
+    name: Build Python wheel (${{ matrix.os }})
+    needs: [build, native]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest, macos-15-intel]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Download the native library
+        uses: actions/download-artifact@v8
+        with:
+          name: python-lib-${{ matrix.os }}
+          path: python/src/fixedwidth/_lib
+
+      - name: Restore executable bit (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: chmod +x python/src/fixedwidth/_lib/*
+
+      - name: Set package version
+        shell: bash
+        run: |
+          sed -i.bak "s/^version = \".*\"/version = \"${{ needs.build.outputs.version }}\"/" python/pyproject.toml
+          rm -f python/pyproject.toml.bak
+
+      - name: Install test dependencies
+        run: pip install -e "python[dev,pandas,polars]"
+
+      - name: Test (Python)
+        run: pytest python/tests
+
+      - name: Build the wheel
+        run: |
+          pip install build
+          python -m build --wheel python/ --outdir dist/
+
+      - name: Check the wheel installs here
+        run: python python/scripts/check_wheel_tag.py dist
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheel-${{ matrix.os }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  musl:
+    name: Build musl library and wheel (${{ matrix.arch }})
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - { arch: x64, runner: ubuntu-latest }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set package version
+        run: sed -i "s/^version = \".*\"/version = \"${{ needs.build.outputs.version }}\"/" python/pyproject.toml
+
+      - name: Build, test and wheel in Alpine
+        env:
+          RunAnalyzers: 'false'
+        run: sh python/scripts/build_musl_wheel.sh
+
+      - name: Rename asset for this platform
+        run: |
+          mkdir -p release-assets
+          cp python/src/fixedwidth/_lib/FixedWidthParser.Native.so "release-assets/fixedwidth-native-linux-musl-${{ matrix.arch }}.so"
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-native-musl-${{ matrix.arch }}
+          path: release-assets/*
+          if-no-files-found: error
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheel-musl-${{ matrix.arch }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  publish:
+    name: Publish to NuGet & GitHub Release
+    needs: [build, native, python, musl]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Download NuGet packages
+        uses: actions/download-artifact@v8
+        with:
+          name: nuget-packages
+          path: artifacts
+
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
       - name: NuGet login (Trusted Publishing / OIDC)
         uses: NuGet/login@v1
         id: nuget-login
@@ -73,10 +253,86 @@ jobs:
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate
 
-      - name: Upload package artifacts
-        if: always()
-        uses: actions/upload-artifact@v7
+      - name: Upload to the GitHub Release
+        uses: softprops/action-gh-release@v3
         with:
-          name: nuget-packages
-          path: ./artifacts/*
-          if-no-files-found: warn
+          files: |
+            release-assets/*
+            artifacts/*.spdx.json
+          fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Download wheel artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: wheel-*
+          path: dist/
+          merge-multiple: true
+
+      - name: Publish to PyPI (Trusted Publishing)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true
+
+  promote-public-api:
+    name: Promote PublicAPI.Unshipped -> Shipped
+    needs: publish
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v7
+        with:
+          ref: develop
+
+      - name: Test the promotion script
+        working-directory: .github/scripts
+        run: python3 test_promote_public_api.py -v
+
+      - name: Promote unshipped API entries
+        id: promote
+        run: |
+          set +e
+          python3 .github/scripts/promote_public_api.py
+          code=$?
+          set -e
+          # 2 means nothing to promote, a real no-op. Any other nonzero code is a crash (a missing file, a
+          # permission error) and must fail the job rather than pass as changed=false.
+          if [ "$code" -eq 0 ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif [ "$code" -eq 2 ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            exit "$code"
+          fi
+
+      - name: Open PR
+        if: steps.promote.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v8
+        with:
+          commit-message: "chore: promote public API for ${{ github.ref_name }}"
+          title: "chore: promote public API for ${{ github.ref_name }}"
+          body: >-
+            Everything that was in `PublicAPI.Unshipped.txt` when `${{ github.ref_name }}` was
+            published is now part of the shipped contract. Moves it into `PublicAPI.Shipped.txt`
+            so future removals and signature changes get flagged as breaking.
+          branch: chore/promote-public-api-${{ github.ref_name }}
+          base: develop
+          delete-branch: true
+          add-paths: |
+            src/*/PublicAPI.Shipped.txt
+            src/*/PublicAPI.Unshipped.txt

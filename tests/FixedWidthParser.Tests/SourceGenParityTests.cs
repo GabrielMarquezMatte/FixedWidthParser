@@ -1,28 +1,26 @@
-using System.Globalization;
+using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
-using FixedWidthParser.Parsers;
+using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
 {
     /// <summary>
-    /// Verifies the source-generated <c>TryParse</c> (via <see cref="FixedWidth.TryParse{TModel}"/>)
-    /// produces identical results to the runtime, reflection-based <see cref="FixedWidthParser{TModel}"/>.
+    /// The source-generated <c>TryParse</c> (via <see cref="FixedWidth.TryParse{TModel}"/>) produces the
+    /// same results as the type's <see cref="FixedWidthLayout.FromAttributes{TModel}"/> layout, including what each reports
+    /// about a rejected line.
     /// </summary>
     public class SourceGenParityTests
     {
-        private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
-
         [Theory]
-        [InlineData("John Doe  30   6000000.00")] // clean, full width
-        [InlineData("Jane      28   55000.00  ")] // trailing spaces in the numeric column
-        [InlineData("John")]                       // short line: numeric columns out of bounds
-        [InlineData("")]                           // empty line
-        [InlineData("Ann       abc  10.5      ")]  // non-numeric age: must be rejected by both
+        [InlineData("John Doe  30   6000000.00")]
+        [InlineData("Jane      28   55000.00  ")]
+        [InlineData("John")]
+        [InlineData("")]
+        [InlineData("Ann       abc  10.5      ")]
         public void Person_GeneratedMatchesReflection(string line)
         {
-            var reflection = new FixedWidthParser<PersonModel>();
-            bool okR = reflection.TryParse(line, Inv, null, out var r);
-            bool okG = FixedWidth.TryParse<GenPersonModel>(line, Inv, null, out var g);
+            bool okR = FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<PersonModel>(), Ctx, out var r);
+            bool okG = FixedWidth.TryParse<GenPersonModel>(Bytes(line), Ctx, out var g);
 
             Assert.Equal(okR, okG);
             if (okR)
@@ -36,8 +34,7 @@ namespace FixedWidthParser.Tests
         [Fact]
         public void Person_ParsesExpectedValues()
         {
-            bool ok = FixedWidth.TryParse<GenPersonModel>("John Doe  30   6000000.00", Inv, null, out var g);
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse<GenPersonModel>("John Doe  30   6000000.00"u8, Ctx, out var g));
             Assert.Equal("John Doe", g.Name);
             Assert.Equal(30, g.Age);
             Assert.Equal(6000000.00, g.Salary);
@@ -46,19 +43,15 @@ namespace FixedWidthParser.Tests
         [Theory]
         [InlineData("ABCDE0042")]
         [InlineData("X    7   ")]
-        [InlineData("AB")] // short: Quantity out of bounds -> rejected by both
+        [InlineData("AB")]
         public void Product_GeneratedMatchesReflection(string line)
         {
-            var reflection = new FixedWidthParser<ProductModel>();
-            bool okR = reflection.TryParse(line, Inv, null, out var r);
-            bool okG = FixedWidth.TryParse<GenProductModel>(line, Inv, null, out var g);
+            bool okR = FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<ProductModel>(), Ctx, out var r);
+            bool okG = FixedWidth.TryParse<GenProductModel>(Bytes(line), Ctx, out var g);
 
             Assert.Equal(okR, okG);
-            if (okR)
-            {
-                Assert.Equal(r.Code, g.Code);
-                Assert.Equal(r.Quantity, g.Quantity);
-            }
+            Assert.Equal(r.Code, g.Code);
+            Assert.Equal(r.Quantity, g.Quantity);
         }
 
         [Theory]
@@ -67,37 +60,21 @@ namespace FixedWidthParser.Tests
         [InlineData("notanum ")]
         public void Measurement_GeneratedMatchesReflection(string line)
         {
-            var reflection = new FixedWidthParser<MeasurementModel>();
-            bool okR = reflection.TryParse(line, Inv, null, out var r);
-            bool okG = FixedWidth.TryParse<GenMeasurementModel>(line, Inv, null, out var g);
+            bool okR = FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<MeasurementModel>(), Ctx, out var r);
+            bool okG = FixedWidth.TryParse<GenMeasurementModel>(Bytes(line), Ctx, out var g);
 
             Assert.Equal(okR, okG);
-            if (okR)
-            {
-                Assert.Equal(r.Value, g.Value);
-            }
+            Assert.Equal(r.Value, g.Value);
         }
 
-        [Fact]
-        public void TrailingString_ShortLineGeneratedMatchesReflection()
+        [Theory]
+        [InlineData("42")]
+        [InlineData("42   short     ")]
+        public void TrailingString_GeneratedMatchesReflection(string line)
         {
-            var reflection = new FixedWidthParser<TrailingStringModel>();
-            bool okR = reflection.TryParse("42", Inv, null, out _);
-            bool okG = FixedWidth.TryParse<GenTrailingStringModel>("42", Inv, null, out _);
+            bool okR = FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<TrailingStringModel>(), Ctx, out var r);
+            bool okG = FixedWidth.TryParse<GenTrailingStringModel>(Bytes(line), Ctx, out var g);
 
-            Assert.False(okR);
-            Assert.False(okG);
-        }
-
-        [Fact]
-        public void TrailingString_FullLineGeneratedMatchesReflection()
-        {
-            const string line = "42   short     ";
-            var reflection = new FixedWidthParser<TrailingStringModel>();
-            bool okR = reflection.TryParse(line, Inv, null, out var r);
-            bool okG = FixedWidth.TryParse<GenTrailingStringModel>(line, Inv, null, out var g);
-
-            Assert.True(okR);
             Assert.Equal(okR, okG);
             Assert.Equal(r.Id, g.Id);
             Assert.Equal(r.Note, g.Note);
@@ -109,49 +86,90 @@ namespace FixedWidthParser.Tests
         [InlineData("bad         ")]
         public void Decimal_GeneratedMatchesReflection(string line)
         {
-            var reflection = new FixedWidthParser<DecimalModel>();
-            bool okR = reflection.TryParse(line, Inv, null, out var r);
-            bool okG = FixedWidth.TryParse<GenDecimalModel>(line, Inv, null, out var g);
+            bool okR = FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<DecimalModel>(), Ctx, out var r);
+            bool okG = FixedWidth.TryParse<GenDecimalModel>(Bytes(line), Ctx, out var g);
 
             Assert.Equal(okR, okG);
-            if (okR)
-            {
-                Assert.Equal(r.Amount, g.Amount);
-            }
+            Assert.Equal(r.Amount, g.Amount);
         }
 
-#if NET9_0_OR_GREATER
+        [Fact]
+        public void DecodedParsable_GeneratedMatchesReflection()
+        {
+            bool okR = FixedWidth.TryParse("hey   "u8, FixedWidthLayout.FromAttributes<ShoutModel>(), Ctx, out var r);
+            bool okG = FixedWidth.TryParse<GenShoutModel>("hey   "u8, Ctx, out var g);
+
+            Assert.True(okR);
+            Assert.True(okG);
+            Assert.Equal("HEY", r.Word.Text);
+            Assert.Equal(r.Word, g.Word);
+        }
+
+        [Fact]
+        public void Latin1_GeneratedMatchesReflection()
+        {
+            // "Antônio" doesn't fit; "Joséé" is 5 characters and 5 bytes in Latin-1, 7 bytes in UTF-8.
+            var context = CtxWith(encoding: Encoding.Latin1);
+            byte[] line = Encoding.Latin1.GetBytes("Joséé 42 ");
+
+            Assert.True(FixedWidth.TryParse(line, FixedWidthLayout.FromAttributes<NameAgeModel>(), context, out var r));
+            Assert.True(FixedWidth.TryParse<GenNameAgeModel>(line, context, out var g));
+
+            Assert.Equal("Joséé", r.Name);
+            Assert.Equal(42, r.Age);
+            Assert.Equal(r.Name, g.Name);
+            Assert.Equal(r.Age, g.Age);
+        }
+
         [Fact]
         public void RefStruct_GeneratedMatchesReflection()
         {
-            const string line = "John Doe  30   6000000.00";
-            var reflection = new FixedWidthParser<RefPersonModel>();
-            bool okR = reflection.TryParse(line, Inv, null, out var r);
-            bool okG = FixedWidth.TryParse<GenRefPersonModel>(line, Inv, null, out var g);
+            Assert.True(FixedWidth.TryParse("John Doe  30   6000000.00"u8, FixedWidthLayout.FromAttributes<RefPersonModel>(), Ctx, out var r));
+            Assert.True(FixedWidth.TryParse<GenRefPersonModel>("John Doe  30   6000000.00"u8, Ctx, out var g));
 
-            Assert.True(okR);
-            Assert.Equal(okR, okG);
             Assert.Equal(r.Name, g.Name);
             Assert.Equal(r.Age, g.Age);
             Assert.Equal(r.Salary, g.Salary);
         }
-#endif
 
         [Fact]
         public void StringPool_InternsAndMatchesReflection()
         {
-            const string line = "John Doe  30   6000000.00";
             var pool = new StringPool();
-            var reflection = new FixedWidthParser<PersonModel>();
+            var context = CtxWith(pool: pool);
 
-            bool okR = reflection.TryParse(line, Inv, pool, out var r);
-            bool okG = FixedWidth.TryParse<GenPersonModel>(line, Inv, pool, out var g);
+            Assert.True(FixedWidth.TryParse("John Doe  30   6000000.00"u8, FixedWidthLayout.FromAttributes<PersonModel>(), context, out var r));
+            Assert.True(FixedWidth.TryParse<GenPersonModel>("John Doe  30   6000000.00"u8, context, out var g));
 
-            Assert.True(okR);
-            Assert.Equal(okR, okG);
-            Assert.Equal(r.Name, g.Name);
-            // Same pooled instance is returned for the same content.
+            Assert.Same(r.Name, g.Name);
             Assert.Same(pool.GetOrAdd("John Doe".AsSpan()), g.Name);
+        }
+
+        [Theory]
+        [InlineData("0042ABCtag01XYzzzJohn  ")]
+        [InlineData("   7  Z     Q      Ann   ")]
+        [InlineData("xxxxABCtag01XYzzzJohn  ")]
+        public void InheritedColumns_GeneratedMatchesReflection(string line)
+        {
+            bool okR = FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<GenDerivedModel>(), Ctx, out var r);
+            bool okG = FixedWidth.TryParse<GenDerivedModel>(Bytes(line), Ctx, out var g);
+
+            Assert.Equal(okR, okG);
+            if (okR)
+            {
+                Assert.Equal((r.Id, r.Code, r.Tag, r.Label, r.Name), (g.Id, g.Code, g.Tag, g.Label, g.Name));
+            }
+        }
+
+        [Fact]
+        public void InheritedColumns_ParseAndFormatThroughGeneratedModel()
+        {
+            Assert.True(FixedWidth.TryParse<GenDerivedModel>("0042ABCtag01XYzzzJohn  "u8, Ctx, out var g));
+            Assert.Equal((42, "ABC", "tag01", "XY", "John"), (g.Id, g.Code, g.Tag, g.Label, g.Name));
+
+            var model = new GenDerivedModel { Id = 42, Code = "ABC", Tag = "tag01", Label = "XY", Name = "John" };
+            Assert.Equal(WriteOne(FixedWidthLayout.FromAttributes<GenDerivedModel>(), model), Format(model));
+            Assert.Equal("42  ABCtag01XY   John  ", Format(model));
         }
     }
 }

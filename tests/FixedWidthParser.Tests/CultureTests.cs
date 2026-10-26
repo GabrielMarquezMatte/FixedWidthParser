@@ -1,279 +1,366 @@
 using System.Globalization;
-using FixedWidthParser.Parsers;
-using FixedWidthParser.Writers;
+using System.Text;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
 {
     /// <summary>
-    /// Covers culture handling. The generic path (ISpanParsable, e.g. decimal) and writing via
-    /// ISpanFormattable honor the IFormatProvider. The double/float processors derive the decimal
-    /// separator from the culture and pass it to csFastFloat, so they also honor the
-    /// IFormatProvider (with '.' as the default when null).
+    /// Culture handling. The format provider comes from <see cref="FixedWidthContext"/>; the default
+    /// context means the invariant culture for every column type, on parse and on write.
     /// </summary>
     public class CultureTests
     {
         private static readonly CultureInfo DeDe = CultureInfo.GetCultureInfo("de-DE");
-
-        // ----- Generic path (decimal): honors the culture -----
+        private static readonly FixedWidthContext German = CtxWith(DeDe);
 
         [Fact]
         public void Parse_DecimalColumn_HonorsCommaCulture()
         {
-            var parser = new FixedWidthParser<DecimalModel>();
-
-            bool ok = parser.TryParse("1234,56     ", DeDe, null, out var model);
-
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse("1234,56     "u8, FixedWidthLayout.FromAttributes<DecimalModel>(), German, out var model));
             Assert.Equal(1234.56m, model.Amount);
         }
 
         [Fact]
-        public void Parse_DecimalColumn_HonorsDotCulture()
+        public void Parse_DecimalColumn_DefaultContext_IsInvariant()
         {
-            var parser = new FixedWidthParser<DecimalModel>();
-
-            bool ok = parser.TryParse("1234.56     ", CultureInfo.InvariantCulture, null, out var model);
-
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse("1234.56     "u8, FixedWidthLayout.FromAttributes<DecimalModel>(), Ctx, out var model));
             Assert.Equal(1234.56m, model.Amount);
         }
-
-        // ----- Double path: decimal separator derived from the culture -----
 
         [Fact]
         public void Parse_DoubleColumn_HonorsCommaCulture()
         {
-            var parser = new FixedWidthParser<PersonModel>();
-
-            bool ok = parser.TryParse("Bob       30   1234,50   ", DeDe, null, out var model);
-
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse("Bob       30   1234,50   "u8, FixedWidthLayout.FromAttributes<PersonModel>(), German, out var model));
             Assert.Equal(1234.50, model.Salary, 2);
         }
 
         [Fact]
-        public void Parse_DoubleColumn_HonorsDotCulture()
+        public void Parse_DoubleColumn_DefaultContext_UsesDot()
         {
-            var parser = new FixedWidthParser<PersonModel>();
-
-            bool ok = parser.TryParse("Bob       30   1234.50   ", CultureInfo.InvariantCulture, null, out var model);
-
-            Assert.True(ok);
-            Assert.Equal(1234.50, model.Salary, 2);
-        }
-
-        [Fact]
-        public void Parse_DoubleColumn_NullProvider_DefaultsToDot()
-        {
-            var parser = new FixedWidthParser<PersonModel>();
-
-            bool ok = parser.TryParse("Bob       30   1234.50   ", null, null, out var model);
-
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse("Bob       30   1234.50   "u8, FixedWidthLayout.FromAttributes<PersonModel>(), Ctx, out var model));
             Assert.Equal(1234.50, model.Salary, 2);
         }
 
         [Fact]
         public void Parse_FloatColumn_HonorsCommaCulture()
         {
-            var parser = new FixedWidthParser<MeasurementModel>();
-
-            bool ok = parser.TryParse("3,14    ", DeDe, null, out var model);
-
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse("3,14    "u8, FixedWidthLayout.FromAttributes<MeasurementModel>(), German, out var model));
             Assert.Equal(3.14f, model.Value, 2);
         }
 
-        // ----- Null provider means invariant for EVERY column type, not just double/float: before this
-        // fix, ISpanParsable columns (decimal, int, DateTime, …) fell through to the BCL's own default
-        // of CurrentCulture on a null provider, while double/float were hard-coded to invariant — so the
-        // same line could parse two different ways for two different column types under one null-provider
-        // call. Pinning both to invariant also makes this test's outcome independent of whatever culture
-        // happens to be ambient when the suite runs. -----
-
-        [Fact]
-        public void Parse_DecimalColumn_NullProvider_DefaultsToInvariant()
-        {
-            var parser = new FixedWidthParser<DecimalModel>();
-
-            bool ok = parser.TryParse("1234.56     ", null, null, out var model);
-
-            Assert.True(ok);
-            Assert.Equal(1234.56m, model.Amount);
-        }
-
-        // ----- Round-trip under the default (null) provider must preserve the value regardless of the
-        // machine's ambient culture — before this fix, write (CurrentCulture via ISpanFormattable.TryFormat)
-        // and parse (invariant via CultureHelpers) disagreed on what null means, so a comma-decimal machine
-        // would write "1234,5" and then fail to parse its own output back with the same null provider. -----
-
-        [Fact]
-        public void RoundTrip_DoubleColumn_NullProvider_PreservesValue()
-        {
-            var writer = new FixedWidthWriter<PersonModel>();
-            var parser = new FixedWidthParser<PersonModel>();
-            var original = new PersonModel { Name = "Bob", Age = 30, Salary = 1234.5 };
-
-            string line = WriteOne(writer, original);
-            bool ok = parser.TryParse(line, null, null, out var parsed);
-
-            Assert.True(ok);
-            Assert.Equal(original.Salary, parsed.Salary, 2);
-        }
-
-        // ----- Thousands separators under the invariant '.' fast path: csFastFloat's single
-        // decimal_separator override can't express a thousands separator, so it used to fail the
-        // full-consumption check and reject the whole line even though the value is valid; the BCL
-        // fallback now retried on that failure accepts it (and still rejects real garbage, see
-        // Parse_DoubleColumn_TrailingGarbageAfterNumber_Fails above). -----
-
+        // The fast path refuses a thousands separator; the BCL fallback accepts the value and still
+        // rejects real garbage.
         [Fact]
         public void Parse_DoubleColumn_DotCultureThousandsSeparator_ParsesFullValue()
         {
-            var parser = new FixedWidthParser<PersonModel>();
-
-            bool ok = parser.TryParse("Bob       30    1,234.50 ", Inv, null, out var model);
-
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse("Bob       30    1,234.50 "u8, FixedWidthLayout.FromAttributes<PersonModel>(), Ctx, out var model));
             Assert.Equal(1234.50, model.Salary, 2);
         }
 
-        // ----- Thousands separators: csFastFloat's decimal_separator override silently truncates at
-        // the first character it doesn't recognize (e.g. a thousands separator) instead of failing
-        // only real NumberFormatInfo-aware parsing (used whenever the separator isn't '.') gets this
-        // right. Regression coverage for a bug where "1.234,50" under de-DE silently became 1.0. -----
-
+        // Regression: "1.234,50" under de-DE used to come back as 1.0 from a prefix-only fast parse.
         [Fact]
         public void Parse_DoubleColumn_DeDeThousandsSeparator_ParsesFullValue()
         {
-            var parser = new FixedWidthParser<PersonModel>();
-
-            // de-DE: '.' groups thousands, ',' is the decimal separator — "1.234,50" means 1234.50.
-            bool ok = parser.TryParse("Bob       30   1.234,50  ", DeDe, null, out var model);
-
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse("Bob       30   1.234,50  "u8, FixedWidthLayout.FromAttributes<PersonModel>(), German, out var model));
             Assert.Equal(1234.50, model.Salary, 2);
         }
 
-        // ----- Trailing garbage after a dot-separated number: the fast path must reject it instead of
-        // silently truncating to the leading digits and reporting success. -----
+        // The fast path takes any one-ASCII-character separator, so every accepted value must match the BCL's.
+        [Theory]
+        [InlineData("de-DE")]
+        [InlineData("pt-BR")]
+        [InlineData("fr-FR")]
+        public void Parse_Double_CommaCulture_MatchesTheBcl(string cultureName)
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+            var context = CtxWith(culture);
+            var options = new Infrastructure.ColumnParseOptions(' ', TrimMode.Both, format: null);
+            string[] edges = ["-0,5", "+1,5", "1,5e3", "1,5E-3", "1.234,5", "0,1", ",5", "5,", "007,10", "1,7976931348623157E+308", "4,9E-324", "1,2,3", "--1", "1e", "1,5x", "1 000,5"];
+            var random = new Random(42);
+            var values = edges.Concat(Enumerable.Range(0, 2000).Select(_ => (random.NextDouble() * Math.Pow(10, random.Next(-8, 12)) * (random.Next(2) * 2 - 1)).ToString("R", culture)));
+
+            foreach (string text in values)
+            {
+                bool expected = double.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, culture, out double bcl);
+                bool actual = Infrastructure.FixedWidthRuntime.TryDouble(Bytes(text), in context, in options, out double parsed);
+
+                Assert.True(expected == actual, $"'{text}': BCL {expected}, parser {actual}");
+                Assert.True(!expected || bcl.Equals(parsed), $"'{text}': BCL {bcl:R}, parser {parsed:R}");
+            }
+        }
+
+        // The digit-only fast path for exact formats must agree with TryParseExact, including where it must
+        // step aside: a Buddhist calendar (th-TH) and "/" or ":" standing for other separators (de-DE).
+        [Theory]
+        [InlineData("")]
+        [InlineData("pt-BR")]
+        [InlineData("de-DE")]
+        [InlineData("th-TH")]
+        public void Parse_ExactDates_MatchTheBcl(string cultureName)
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+            var context = CtxWith(culture);
+            string[] formats = ["yyyyMMdd", "yyyy-MM-dd", "dd/MM/yyyy", "yyyyMMddHHmmss", "yyyy-MM-ddTHH:mm:ss", "HHmmss", "HH:mm:ss", "HH", "MMdd", "yyyyMM", "yyyy.MM.dd"];
+            string[] edges = ["00000101", "20230230", "20240229", "20230229", "20231301", "99991231", "2023010", "2023o105", "-0230105", "24:00:00", "23:59:60", "235959", "000000", "2023-01-05", "05/01/2023", "05.01.2023"];
+            var random = new Random(42);
+
+            foreach (string format in formats)
+            {
+                var options = new Infrastructure.ColumnParseOptions(' ', TrimMode.Both, format);
+                var samples = Enumerable.Range(0, 300)
+                    .Select(_ => new DateTime(1, 1, 1).AddSeconds(random.NextInt64(0, (long)(DateTime.MaxValue - DateTime.MinValue).TotalSeconds)))
+                    .SelectMany(d => new[] { d.ToString(format, CultureInfo.InvariantCulture), d.ToString(format, culture) });
+                foreach (string text in edges.Concat(samples))
+                {
+                    byte[] bytes = Bytes(text);
+                    bool expected = DateTime.TryParseExact(text, format, culture, DateTimeStyles.None, out var bclDateTime);
+                    Assert.True(expected == Infrastructure.FixedWidthRuntime.TryDateTimeExact(bytes, in context, in options, out var dateTime) && (!expected || bclDateTime == dateTime && bclDateTime.Kind == dateTime.Kind),
+                        $"DateTime '{text}' as {format}: BCL {expected} {bclDateTime:O}, parser {dateTime:O}");
+                    expected = DateOnly.TryParseExact(text, format, culture, DateTimeStyles.None, out var bclDate);
+                    Assert.True(expected == Infrastructure.FixedWidthRuntime.TryDateOnlyExact(bytes, in context, in options, out var date) && (!expected || bclDate == date),
+                        $"DateOnly '{text}' as {format}: BCL {expected} {bclDate:O}, parser {date:O}");
+                    expected = TimeOnly.TryParseExact(text, format, culture, DateTimeStyles.None, out var bclTime);
+                    Assert.True(expected == Infrastructure.FixedWidthRuntime.TryTimeOnlyExact(bytes, in context, in options, out var time) && (!expected || bclTime == time),
+                        $"TimeOnly '{text}' as {format}: BCL {expected} {bclTime:O}, parser {time:O}");
+                }
+            }
+        }
+
+        // sv-SE's negative sign is U+2212, so a leading "-" must not take the integer fast path there.
+        [Theory]
+        [InlineData("")]
+        [InlineData("de-DE")]
+        [InlineData("sv-SE")]
+        public void Parse_Integers_MatchTheBcl(string cultureName)
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+            var context = CtxWith(culture);
+            var options = new Infrastructure.ColumnParseOptions(' ', TrimMode.Trailing, format: null);
+            string[] edges = ["-5", "+5", "  12", "12  ", "0007", "-0", "-", "", "1,000", "1.000", "999999999", "2147483647", "2147483648", "-2147483648", "-2147483649",
+                "999999999999999999", "9223372036854775807", "9223372036854775808", "-9223372036854775808", "−5", "1e3", "12x"];
+            var random = new Random(42);
+            var values = Enumerable.Range(0, 2000).Select(_ => random.NextInt64(long.MinValue, long.MaxValue) >> random.Next(0, 63)).Select(v => v.ToString(CultureInfo.InvariantCulture));
+
+            foreach (string text in edges.Concat(values))
+            {
+                byte[] bytes = Bytes(text);
+                bool expected = long.TryParse(bytes, culture, out long bclLong);
+                bool actual = Infrastructure.FixedWidthRuntime.TryParse(bytes, in context, in options, out long parsedLong);
+                Assert.True(expected == actual && (!expected || bclLong == parsedLong), $"long '{text}': BCL {expected} {bclLong}, parser {actual} {parsedLong}");
+                expected = int.TryParse(bytes, culture, out int bclInt);
+                actual = Infrastructure.FixedWidthRuntime.TryParse(bytes, in context, in options, out int parsedInt);
+                Assert.True(expected == actual && (!expected || bclInt == parsedInt), $"int '{text}': BCL {expected} {bclInt}, parser {actual} {parsedInt}");
+            }
+        }
+
+        // The integer and date fast paths for writing must lay out the same bytes as the BCL's char path.
+        [Theory]
+        [InlineData("")]
+        [InlineData("de-DE")]
+        [InlineData("th-TH")]
+        [InlineData("sv-SE")]
+        public void Format_IntegersAndDates_MatchTheBcl(string cultureName)
+        {
+            var context = CtxWith(CultureInfo.GetCultureInfo(cultureName));
+            var random = new Random(42);
+            long[] edges = [0, 1, -1, 9, -9, 10, 123, -171, int.MaxValue, int.MinValue, long.MaxValue, long.MinValue];
+            var longs = edges.Concat(Enumerable.Range(0, 1000).Select(_ => random.NextInt64(long.MinValue, long.MaxValue) >> random.Next(0, 63)));
+            var dates = Enumerable.Range(0, 300).Select(_ => new DateTime(1, 1, 1).AddSeconds(random.NextInt64(0, (long)(DateTime.MaxValue - DateTime.MinValue).TotalSeconds)));
+            string[] formats = ["yyyyMMdd", "yyyy-MM-dd", "dd/MM/yyyy", "yyyy-MM-ddTHH:mm:ss", "HHmmss", "HH:mm:ss"];
+
+            foreach (var alignment in new[] { Alignment.Left, Alignment.Right })
+            {
+                foreach (char padding in new[] { ' ', '0' })
+                {
+                    var plain = new Infrastructure.ColumnFormatOptions(alignment, padding, null, OverflowBehavior.Throw);
+                    foreach (long value in longs)
+                    {
+                        // Room for sv-SE's three-byte minus sign too.
+                        Same(value, plain, 23);
+                        Same((int)value, plain, 14);
+                    }
+                    foreach (string format in formats)
+                    {
+                        var options = new Infrastructure.ColumnFormatOptions(alignment, padding, format, OverflowBehavior.Throw);
+                        foreach (var date in dates)
+                        {
+                            Same(date, options, 24);
+                            if (!format.Contains('H', StringComparison.Ordinal))
+                            {
+                                Same(DateOnly.FromDateTime(date), options, 24);
+                            }
+                            if (!format.Contains('y', StringComparison.Ordinal))
+                            {
+                                Same(TimeOnly.FromDateTime(date), options, 24);
+                            }
+                        }
+                    }
+                }
+            }
+
+            void Same<T>(T value, Infrastructure.ColumnFormatOptions options, int width)
+                where T : IUtf8SpanFormattable, ISpanFormattable
+            {
+                byte[] fast = new byte[width];
+                byte[] bcl = new byte[width];
+                Infrastructure.FixedWidthRuntime.FormatUtf8Value(value, fast, in context, options, "c");
+                Infrastructure.FixedWidthRuntime.FormatValue(value, bcl, in context, options, "c");
+                Assert.True(fast.AsSpan().SequenceEqual(bcl), $"{typeof(T).Name} {value} ({options.Format}, {options.Alignment}, '{options.Padding}'): fast \"{Encoding.UTF8.GetString(fast)}\", BCL \"{Encoding.UTF8.GetString(bcl)}\"");
+            }
+        }
+
+        // The float fast path rounds once in binary32; going through a double could land one ulp off.
+        [Theory]
+        [InlineData("")]
+        [InlineData("de-DE")]
+        [InlineData("fr-FR")]
+        public void Parse_Float_MatchesTheBcl(string cultureName)
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+            var context = CtxWith(culture);
+            var options = new Infrastructure.ColumnParseOptions(' ', TrimMode.Both, format: null);
+            string separator = culture.NumberFormat.NumberDecimalSeparator;
+            string[] edges = ["-0", "16777216", "16777217", $"1{separator}5e3", $"0{separator}1", $"3{separator}4028235E+38", "1e", "--1"];
+            var random = new Random(42);
+            var shortDecimals = Enumerable.Range(0, 2000).Select(_ => (random.Next(-20_000_000, 20_000_000) / Math.Pow(10, random.Next(0, 11))).ToString("0.##########", culture));
+            var roundTrips = Enumerable.Range(0, 2000).Select(_ => ((float)(random.NextDouble() * Math.Pow(10, random.Next(-8, 12)))).ToString("R", culture));
+
+            foreach (string text in edges.Concat(shortDecimals).Concat(roundTrips))
+            {
+                bool expected = float.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, culture, out float bcl);
+                bool actual = Infrastructure.FixedWidthRuntime.TryFloat(Bytes(text), in context, in options, out float parsed);
+
+                Assert.True(expected == actual, $"'{text}': BCL {expected}, parser {actual}");
+                Assert.True(!expected || bcl.Equals(parsed), $"'{text}': BCL {bcl:R}, parser {parsed:R}");
+            }
+        }
+
+        // The decimal fast path keeps the scale as written, as the BCL does: 1,50 stays 1,50.
+        [Theory]
+        [InlineData("")]
+        [InlineData("de-DE")]
+        [InlineData("fr-FR")]
+        public void Parse_Decimal_MatchesTheBcl(string cultureName)
+        {
+            var culture = CultureInfo.GetCultureInfo(cultureName);
+            var context = CtxWith(culture);
+            var options = new Infrastructure.ColumnParseOptions(' ', TrimMode.Both, format: null);
+            string separator = culture.NumberFormat.NumberDecimalSeparator;
+            string[] edges = ["-0", $"1{separator}50", $"{separator}5", $"5{separator}", "9999999999999999999", "99999999999999999999", $"0{separator}0000000000000000001", "1e3", "--1", "+7"];
+            var random = new Random(42);
+            var values = Enumerable.Range(0, 2000).Select(_ => (random.NextInt64(-1_000_000_000_000, 1_000_000_000_000) / (decimal)Math.Pow(10, random.Next(0, 13))).ToString(culture));
+
+            foreach (string text in edges.Concat(values))
+            {
+                bool expected = decimal.TryParse(text, NumberStyles.Number, culture, out decimal bcl);
+                bool actual = Infrastructure.FixedWidthRuntime.TryParse(Bytes(text), in context, in options, out decimal parsed);
+
+                Assert.True(expected == actual, $"'{text}': BCL {expected}, parser {actual}");
+                Assert.True(!expected || bcl.ToString(CultureInfo.InvariantCulture) == parsed.ToString(CultureInfo.InvariantCulture), $"'{text}': BCL {bcl}, parser {parsed}");
+            }
+        }
 
         [Fact]
         public void Parse_DoubleColumn_TrailingGarbageAfterNumber_Fails()
         {
-            var parser = new FixedWidthParser<PersonModel>();
-
-            bool ok = parser.TryParse("Bob       30   12x       ", Inv, null, out _);
-
-            Assert.False(ok);
+            Assert.False(FixedWidth.TryParse("Bob       30   12x       "u8, FixedWidthLayout.FromAttributes<PersonModel>(), Ctx, out _));
         }
 
         [Fact]
         public void Parse_FloatColumn_TrailingGarbageAfterNumber_Fails()
         {
-            var parser = new FixedWidthParser<MeasurementModel>();
-
-            bool ok = parser.TryParse("12x     ", Inv, null, out _);
-
-            Assert.False(ok);
+            Assert.False(FixedWidth.TryParse("12x     "u8, FixedWidthLayout.FromAttributes<MeasurementModel>(), Ctx, out _));
         }
 
-        // ----- Right-aligned (leading-space-padded) numeric columns: csFastFloat's characters_consumed
-        // does not consistently include skipped leading whitespace across its double/float overloads
-        // (FastDoubleParser counted it, FastFloatParser didn't, and vice versa on the UTF-8 overloads),
-        // so a right-aligned column could fail the full-consumption check even under the invariant '.'
-        // fast path — the exact opposite of a version that should always accept it. -----
-
+        // The fast path takes no whitespace, so right-aligned columns must be trimmed before it.
         [Fact]
         public void Parse_DoubleColumn_RightAligned_DotCulture_Parses()
         {
-            var parser = new FixedWidthParser<PersonModel>();
-
-            bool ok = parser.TryParse("Bob       30       123.45", Inv, null, out var model);
-
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse("Bob       30       123.45"u8, FixedWidthLayout.FromAttributes<PersonModel>(), Ctx, out var model));
             Assert.Equal(123.45, model.Salary, 2);
         }
 
         [Fact]
         public void Parse_FloatColumn_RightAligned_DotCulture_Parses()
         {
-            var parser = new FixedWidthParser<MeasurementModel>();
-
-            bool ok = parser.TryParse("    3.14", Inv, null, out var model);
-
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse("    3.14"u8, FixedWidthLayout.FromAttributes<MeasurementModel>(), Ctx, out var model));
             Assert.Equal(3.14f, model.Value, 2);
         }
 
         [Fact]
         public void Parse_DoubleColumn_RightAligned_CommaCulture_Parses()
         {
-            var parser = new FixedWidthParser<PersonModel>();
-
-            bool ok = parser.TryParse("Bob       30       123,45", DeDe, null, out var model);
-
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse("Bob       30       123,45"u8, FixedWidthLayout.FromAttributes<PersonModel>(), German, out var model));
             Assert.Equal(123.45, model.Salary, 2);
         }
 
         [Fact]
         public void Parse_FloatColumn_RightAligned_CommaCulture_Parses()
         {
-            var parser = new FixedWidthParser<MeasurementModel>();
-
-            bool ok = parser.TryParse("    3,14", DeDe, null, out var model);
-
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse("    3,14"u8, FixedWidthLayout.FromAttributes<MeasurementModel>(), German, out var model));
             Assert.Equal(3.14f, model.Value, 2);
         }
 
-        // ----- Regression guard for the old single-entry decimal-separator memo: alternating between
-        // two providers must not thrash into wrong results for either one. -----
+        // A separator that is not one byte (U+066B in UTF-8) used to be refused; the value is now
+        // decoded and parsed by the BCL with the real culture.
+        [Fact]
+        public void Parse_DoubleColumn_NonAsciiSeparatorCulture_Parses()
+        {
+            var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+            culture.NumberFormat.NumberDecimalSeparator = "٫";
 
+            Assert.True(FixedWidth.TryParse(Bytes("Bob       30   1234٫50  "), FixedWidthLayout.FromAttributes<PersonModel>(), CtxWith(culture), out var model));
+            Assert.Equal(1234.50, model.Salary, 2);
+        }
+
+        // Regression guard for the old single-entry decimal-separator memo.
         [Fact]
         public void Parse_DoubleColumn_AlternatingProviders_BothStayCorrect()
         {
-            var parser = new FixedWidthParser<PersonModel>();
+            var layout = FixedWidthLayout.FromAttributes<PersonModel>();
 
             for (int i = 0; i < 5; i++)
             {
-                Assert.True(parser.TryParse("Bob       30   1234.50   ", Inv, null, out var invModel));
-                Assert.Equal(1234.50, invModel.Salary, 2);
+                Assert.True(FixedWidth.TryParse("Bob       30   1234.50   "u8, layout, Ctx, out var invariant));
+                Assert.Equal(1234.50, invariant.Salary, 2);
 
-                Assert.True(parser.TryParse("Bob       30   1234,50   ", DeDe, null, out var deModel));
-                Assert.Equal(1234.50, deModel.Salary, 2);
+                Assert.True(FixedWidth.TryParse("Bob       30   1234,50   "u8, layout, German, out var german));
+                Assert.Equal(1234.50, german.Salary, 2);
             }
         }
-
-        // ----- Writing: honors the culture (ISpanFormattable) -----
 
         [Fact]
         public void Write_DoubleColumn_UsesCultureDecimalSeparator()
         {
-            var writer = new FixedWidthWriter<PersonModel>();
+            var writerOptions = new FixedWidthWriterOptions { FormatProvider = DeDe };
+            var layout = FixedWidthLayout.FromAttributes<PersonModel>();
 
-            string line = WriteOne(writer, new PersonModel { Name = "Bob", Age = 30, Salary = 1234.5 }, DeDe);
+            string line = WriteOne(layout, new PersonModel { Name = "Bob", Age = 30, Salary = 1234.5 }, writerOptions);
 
-            // Salary column at [15,25): formatted with a comma under de-DE.
             Assert.Equal("1234,5", line[15..21]);
         }
 
-        // ----- Round-trip under a comma culture now preserves the value -----
+        [Fact]
+        public void RoundTrip_DoubleColumn_DefaultOptions_PreservesValue()
+        {
+            var original = new PersonModel { Name = "Bob", Age = 30, Salary = 1234.5 };
+
+            string line = WriteOne(FixedWidthLayout.FromAttributes<PersonModel>(), original);
+
+            Assert.True(FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<PersonModel>(), Ctx, out var parsed));
+            Assert.Equal(original.Salary, parsed.Salary, 2);
+        }
 
         [Fact]
         public void RoundTrip_DoubleColumn_UnderCommaCulture_PreservesValue()
         {
-            var writer = new FixedWidthWriter<PersonModel>();
-            var parser = new FixedWidthParser<PersonModel>();
+            var writerOptions = new FixedWidthWriterOptions { FormatProvider = DeDe };
+            var layout = FixedWidthLayout.FromAttributes<PersonModel>();
             var original = new PersonModel { Name = "Bob", Age = 30, Salary = 1234.5 };
 
-            // Writing produces "1234,5"; reading uses the same culture separator → same value.
-            string line = WriteOne(writer, original, DeDe);
-            bool ok = parser.TryParse(line, DeDe, null, out var parsed);
+            string line = WriteOne(layout, original, writerOptions);
 
-            Assert.True(ok);
+            Assert.True(FixedWidth.TryParse(Bytes(line), FixedWidthLayout.FromAttributes<PersonModel>(), German, out var parsed));
             Assert.Equal(original.Salary, parsed.Salary, 2);
         }
     }

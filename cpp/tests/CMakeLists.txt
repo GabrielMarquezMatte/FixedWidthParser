@@ -1,0 +1,15 @@
+foreach(test read write arrow mapped)
+    add_executable(fw_cpp_${test} ${test}.cpp)
+    target_link_libraries(fw_cpp_${test} PRIVATE fw::fixedwidth)
+    if(MSVC)
+        target_compile_options(fw_cpp_${test} PRIVATE /W4 /WX)
+        # The tests use standard std::fopen, which the CRT deprecates (C4996) in favour of fopen_s.
+        target_compile_definitions(fw_cpp_${test} PRIVATE _CRT_SECURE_NO_WARNINGS)
+    else()
+        # Designated initializers that leave defaulted options out are the intended use.
+        target_compile_options(fw_cpp_${test} PRIVATE -Wall -Wextra -Werror -Wno-missing-field-initializers)
+    endif()
+    add_test(NAME fw_cpp_${test} COMMAND fw_cpp_${test} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(fw_cpp_${test} PROPERTIES PASS_REGULAR_EXPRESSION "${test} ok")
+    fixedwidth_copy_native_library(fw_cpp_${test})
+endforeach()

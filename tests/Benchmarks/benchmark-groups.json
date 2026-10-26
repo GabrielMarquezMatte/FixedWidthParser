@@ -1,0 +1,32 @@
+[
+  {
+    "name": "parser",
+    "filter": "Benchmarks.Perf.ParserBenchmarks.* Benchmarks.Perf.SourceGenParserBenchmarks.*",
+    "pagesArgs": "--warmupCount 3 --iterationCount 10",
+    "prArgs": "--warmupCount 1 --iterationCount 5"
+  },
+  {
+    "name": "reader",
+    "filter": "Benchmarks.Perf.ReaderBenchmarks.* Benchmarks.Perf.ReaderStartupBenchmarks.* Benchmarks.Perf.AsyncReaderBenchmarks.*",
+    "pagesArgs": "--warmupCount 3 --iterationCount 10",
+    "prArgs": "--warmupCount 1 --iterationCount 5"
+  },
+  {
+    "name": "byte",
+    "filter": "Benchmarks.Perf.ReaderPoolingBenchmarks.*",
+    "pagesArgs": "--warmupCount 3 --iterationCount 10",
+    "prArgs": "--warmupCount 1 --iterationCount 5"
+  },
+  {
+    "name": "writer",
+    "filter": "Benchmarks.Perf.WriterBenchmarks.*",
+    "pagesArgs": "--warmupCount 3 --iterationCount 10",
+    "prArgs": "--warmupCount 1 --iterationCount 5"
+  },
+  {
+    "name": "comparison",
+    "filter": "Benchmarks.Perf.ComparisonWriterBenchmarks.* Benchmarks.Perf.ComparisonBenchmarks.*",
+    "pagesArgs": "--warmupCount 3 --iterationCount 10",
+    "prArgs": "--warmupCount 1 --iterationCount 5"
+  }
+]

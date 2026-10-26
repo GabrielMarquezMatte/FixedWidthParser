@@ -1,14 +1,9 @@
 using System.Text;
-using FixedWidthParser.Readers;
-using FixedWidthParser.Writers;
 using static FixedWidthParser.Tests.TestHelpers;
 
 namespace FixedWidthParser.Tests
 {
-    /// <summary>
-    /// Covers the asynchronous batch write path (<c>WriteManyAsync</c>) for both the Stream and
-    /// StreamWriter overloads, checking output parity with the synchronous path.
-    /// </summary>
+    /// <summary><c>WriteManyAsync</c>: output parity with the synchronous path.</summary>
     public class WriterAsyncTests
     {
         private static PersonModel[] SampleModels()
@@ -21,52 +16,28 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
-        public async Task WriteManyAsync_Stream_MatchesSyncOutput()
+        public async Task WriteManyAsync_MatchesSyncOutput()
         {
-            var writer = new FixedWidthWriter<PersonModel>();
+            var layout = FixedWidthLayout.FromAttributes<PersonModel>();
             var models = SampleModels();
 
-            string sync = WriteMany(writer, (IEnumerable<PersonModel>)models);
+            string sync = WriteMany(layout, (IEnumerable<PersonModel>)models);
 
             await using var ms = new MemoryStream();
-            await writer.WriteManyAsync(ms, models, Inv).ConfigureAwait(true);
-            string asyncResult = Encoding.UTF8.GetString(ms.ToArray());
+            await FixedWidth.WriteManyAsync(ms, models, layout, null, TestContext.Current.CancellationToken);
 
-            Assert.Equal(sync, asyncResult);
+            Assert.Equal(sync, Encoding.UTF8.GetString(ms.ToArray()));
         }
 
         [Fact]
-        public async Task WriteManyAsync_StreamWriter_MatchesSyncOutput()
+        public async Task WriteManyAsync_LeavesStreamOpen_AndRoundTripsThroughReader()
         {
-            var writer = new FixedWidthWriter<PersonModel>();
-            var models = SampleModels();
-
-            string sync = WriteMany(writer, (IEnumerable<PersonModel>)models);
-
             await using var ms = new MemoryStream();
-            await using (var sw = new StreamWriter(ms, leaveOpen: true))
-            {
-                await writer.WriteManyAsync(sw, models, Inv).ConfigureAwait(true);
-            }
-            string asyncResult = Encoding.UTF8.GetString(ms.ToArray());
+            await FixedWidth.WriteManyAsync(ms, SampleModels(), FixedWidthLayout.FromAttributes<PersonModel>(), null, TestContext.Current.CancellationToken);
 
-            Assert.Equal(sync, asyncResult);
-        }
-
-        [Fact]
-        public async Task WriteManyAsync_Stream_LeavesStreamOpen_AndRoundTripsThroughReader()
-        {
-            var writer = new FixedWidthWriter<PersonModel>();
-            var reader = new FixedWidthReader<PersonModel>(Inv);
-            var models = SampleModels();
-
-            await using var ms = new MemoryStream();
-            await writer.WriteManyAsync(ms, models, Inv).ConfigureAwait(true);
-
-            // The Stream overload uses leaveOpen: true, so the stream stays usable.
             Assert.True(ms.CanRead);
             ms.Position = 0;
-            var parsed = reader.Read(ms, leaveOpen: true).ToList();
+            var parsed = FixedWidth.Read(ms, FixedWidthLayout.FromAttributes<PersonModel>(), leaveOpen: true).ToList();
 
             Assert.Equal(3, parsed.Count);
             Assert.Equal("John Doe", parsed[0].Name);
@@ -75,26 +46,25 @@ namespace FixedWidthParser.Tests
         }
 
         [Fact]
-        public async Task WriteManyAsync_Stream_EmptyCollection_WritesNothing()
+        public async Task WriteManyAsync_ManyRecords_SpansSeveralBatches()
         {
-            var writer = new FixedWidthWriter<PersonModel>();
+            // 5,000 records of 27 bytes exceed the 64 KB batch, so the buffer is flushed mid-way.
+            var models = Enumerable.Range(0, 5000).Select(i => new PersonModel { Name = "P" + i, Age = i % 100, Salary = i }).ToList();
+            var writerOptions = new FixedWidthWriterOptions { NewLine = "\r\n" };
+            var layout = FixedWidthLayout.FromAttributes<PersonModel>();
 
             await using var ms = new MemoryStream();
-            await writer.WriteManyAsync(ms, [], Inv).ConfigureAwait(true);
+            await FixedWidth.WriteManyAsync(ms, models, layout, writerOptions, TestContext.Current.CancellationToken);
 
-            Assert.Equal(0, ms.Length);
+            Assert.Equal(5000 * 27, ms.Length);
+            Assert.Equal(WriteMany(layout, models, writerOptions), Encoding.UTF8.GetString(ms.ToArray()));
         }
 
         [Fact]
-        public async Task WriteManyAsync_StreamWriter_EmptyCollection_WritesNothing()
+        public async Task WriteManyAsync_EmptyCollection_WritesNothing()
         {
-            var writer = new FixedWidthWriter<PersonModel>();
-
             await using var ms = new MemoryStream();
-            await using (var sw = new StreamWriter(ms, leaveOpen: true))
-            {
-                await writer.WriteManyAsync(sw, [], Inv).ConfigureAwait(true);
-            }
+            await FixedWidth.WriteManyAsync(ms, [], FixedWidthLayout.FromAttributes<PersonModel>(), null, TestContext.Current.CancellationToken);
 
             Assert.Equal(0, ms.Length);
         }
