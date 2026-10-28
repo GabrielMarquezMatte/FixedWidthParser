@@ -10,6 +10,9 @@
     <IsPackable>false</IsPackable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OutputType>Exe</OutputType>
+    <!-- The allocation guards measure optimized code; tier-0 generic BCL code boxes, and on a slow runner tier-up can
+         outlast a guard's wait. Jitting optimized from the start removes that race. -->
+    <TieredCompilationQuickJit>false</TieredCompilationQuickJit>
     <!-- Persist generated sources under obj/ for inspection/debugging. -->
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <NoWarn>$(NoWarn);HLQ005;CA1707;CA1815;S3241;CA1051;S6640</NoWarn>
