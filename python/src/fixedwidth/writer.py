@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ctypes
+import decimal
 import io
 import operator
 import os
@@ -192,11 +193,15 @@ def _decimals(spec: Column, array: Any, pa: Any, np: Any) -> Any:
     return scaled.astype(np.int64)
 
 
+# Scales without rounding, whatever the caller's decimal context.
+_EXACT = decimal.Context(prec=decimal.MAX_PREC)
+
+
 def _unscaled(value: Any, spec: Column) -> int:
     """A decimal as the integer the column stores; more decimals than its scale would be lost, so they fail."""
     if value is None:
         return 0
-    scaled = value.scaleb(spec.scale)
+    scaled = value.scaleb(spec.scale, _EXACT)
     if scaled != scaled.to_integral_value():
         raise FixedWidthError(f"value {value} of column '{spec.name}' has more decimals than its scale {spec.scale}")
     return _check_int64(int(scaled), value, spec)

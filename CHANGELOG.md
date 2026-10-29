@@ -5,9 +5,49 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0]
+## [2.0.1]
 
-Not released yet.
+### Fixed
+- `fw_write_file` replaced an existing file before formatting, so a failed write left it truncated. It
+  now writes a sibling file and moves it into place only on success.
+- `fw_write_*` wrapped `TIME` and `TIMESTAMP` microseconds outside the supported range into a valid
+  value; they are now an error.
+- A `DECIMAL` value whose scaling overflowed `decimal` failed the whole read instead of a parse error
+  that `skip_invalid` can skip.
+- C++ wrapper: `write_stream` reported success to a `std::ostream` with only `failbit` set, and
+  `Reader::open_stream` failed at the end of a `std::istream` with exceptions enabled.
+- Python: `DECIMAL` scaling, written and in `Table.to_arrow`, rounded to the caller's `decimal`
+  context precision.
+- An enum alias (a second name for a value) did not parse.
+- A nullable column of spaces and its trim character mixed, such as `" 0 0 "`, was not read as `null`.
+- A layout whose column ends past `int.MaxValue` was accepted and threw while reading; it is now
+  rejected, and the generator reports `FWP014`.
+- Generated models with C# keyword names (`@event`) produced code that did not compile, and a generic
+  model crashed the generator; it now reports `FWP013`.
+- `fw_write_*` trusted a `STRING` column's offsets: offsets past its `data_len`, descending or negative,
+  and a negative `data_len`, are now `FW_INVALID_ARGUMENT` instead of reading past the declared data.
+- `fw_write_*` wrote `DECIMAL` values of 19 digits, which reading the output rejects; they are now an
+  error, as on reading.
+- Writing a record that formats as zero bytes with an empty `NewLine`, such as a generated model with
+  no columns, grew its buffer without end.
+- A negative enum value written as a zero-padded number (`-0001`) did not parse back.
+- A format provider whose positive sign is not `"+"` was ignored by the fast `double`, `float` and
+  `decimal` parsers, which accepted `"+1"`.
+- A non-UTF-8 encoding was ignored by `decimal` and other UTF-8-parsed columns holding non-ASCII text,
+  such as a Latin-1 no-break space grouping digits.
+- A parallel `AggregateAsync` over a stream kept reading to the end after a failure that decided the
+  result, such as a line that fails to parse, so a stream that stays open delayed the error until the
+  caller cancelled. It now stops at the chunk holding the failure.
+
+### Changed
+- A whole-source native read gives back the unused part of a `STRING` column's block before handing it
+  over: the block was sized for the column's full width on every row, and a table of short text in a wide
+  column kept all of it (126 MiB instead of 5 MiB for 1,000,000 rows of 2 bytes in 128).
+- Parsing a negative enum code written with zero padding (`-0001`) no longer allocates a string.
+- Merging the null bitmaps of a parallel native read copies whole bytes where a partition starts on a byte
+  boundary.
+
+## [2.0.0]
 
 2.0 reads and writes **bytes only**, where 1.x had a `char` and a UTF-8 version of each reader,
 parser and writer, and goes through **one entry point**: every `FixedWidth` method comes in an
@@ -249,7 +289,8 @@ Initial release.
   reflection-free `TryParse` generated at compile time, with diagnostics (FWP001-FWP007) for invalid
   layouts and unsupported column types.
 
-[2.0.0]: https://github.com/GabrielMarquezMatte/FixedWidthParser/compare/v1.1.1...HEAD
+[2.0.1]: https://github.com/GabrielMarquezMatte/FixedWidthParser/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/GabrielMarquezMatte/FixedWidthParser/compare/v1.1.1...v2.0.0
 [1.1.1]: https://github.com/GabrielMarquezMatte/FixedWidthParser/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/GabrielMarquezMatte/FixedWidthParser/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/GabrielMarquezMatte/FixedWidthParser/releases/tag/v1.0.0

@@ -16,7 +16,6 @@ namespace FixedWidthParser.Native.Reading
     internal sealed unsafe class ColumnBuilder : IDisposable
     {
         private const int StackChars = 256;
-        private const long DecimalLimit = 1_000_000_000_000_000_000;
         private const DateTimeStyles Utc = DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal;
 
         private readonly NativeColumn _column;
@@ -270,7 +269,14 @@ namespace FixedWidthParser.Native.Reading
                 offsets = (int*)lentOffsets.Detach();
             }
             target->Values = offsets is null ? (void*)parts[0]._ints.Detach() : offsets;
-            target->Data = lent is null ? data : (byte*)lent.Detach();
+            if (lent is not null)
+            {
+                // The arena lent every row the column's full width; trimmed text is often far shorter, and the table
+                // would keep the difference for its lifetime. Every partition has moved in by now.
+                lent.TrimExcess((int)total);
+                data = (byte*)lent.Detach();
+            }
+            target->Data = data;
             target->DataLen = total;
         }
 
@@ -307,7 +313,15 @@ namespace FixedWidthParser.Native.Reading
             foreach (ref readonly var part in parts)
             {
                 var partBits = part._validity is null ? default : part._validity.Span;
-                for (int r = 0; r < part.Rows && !partBits.IsEmpty; r++)
+                int r = 0;
+                // A partition starting on a byte boundary copies its whole bytes; its last few rows, and a partition
+                // starting mid-byte, go bit by bit, so no padding bit lands on another partition's rows.
+                if (!partBits.IsEmpty && (row & 7) == 0)
+                {
+                    r = part.Rows & ~7;
+                    partBits[..(r >> 3)].CopyTo(new Span<byte>(bits + (row >> 3), r >> 3));
+                }
+                for (; r < part.Rows && !partBits.IsEmpty; r++)
                 {
                     if ((partBits[r >> 3] & (1 << (r & 7))) == 0)
                     {
@@ -365,14 +379,20 @@ namespace FixedWidthParser.Native.Reading
         {
             if (TryInteger(text, out unscaled))
             {
-                return unscaled is > -DecimalLimit and < DecimalLimit;
+                return unscaled is > -NativeType.DecimalLimit and < NativeType.DecimalLimit;
             }
             if (!decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal value))
             {
                 return false;
             }
-            decimal scaled = value * (decimal)NativeType.Pow10[scale];
-            if (scaled != decimal.Truncate(scaled) || scaled <= -DecimalLimit || scaled >= DecimalLimit)
+            // Bounded before scaling: a value near decimal's range would overflow the product and throw, not fail the parse.
+            decimal factor = (decimal)NativeType.Pow10[scale];
+            if (Math.Abs(value) >= NativeType.DecimalLimit / factor)
+            {
+                return false;
+            }
+            decimal scaled = value * factor;
+            if (scaled != decimal.Truncate(scaled))
             {
                 return false;
             }

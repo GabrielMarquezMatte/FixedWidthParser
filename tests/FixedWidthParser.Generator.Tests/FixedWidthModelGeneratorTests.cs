@@ -275,6 +275,70 @@ namespace FixedWidthParser.Generator.Tests
         }
 
         [Fact]
+        public void KeywordNames_AreEscaped()
+        {
+            var result = Run("""
+                public partial class @class : IFixedWidthModel<@class>
+                {
+                    [FixedColumn(0, 3)] public int @event { get; set; }
+                    [FixedColumn(3, 3)] public int? @int { get; set; }
+                }
+                """, ns: "Smoke.@namespace");
+
+            Assert.Empty(result.GeneratorDiagnostics);
+            Assert.Empty(result.CompilationErrors);
+            var generated = Assert.Single(result.GeneratedSources);
+            Assert.Contains("namespace Smoke.@namespace", generated, StringComparison.Ordinal);
+            Assert.Contains("ReportFailedColumn(\"event\"", generated, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void GenericModel_ReportsFwp013_AndOthersStillGenerate()
+        {
+            var result = Run("""
+                public partial class Generic<T> : IFixedWidthModel<Generic<T>>
+                {
+                    [FixedColumn(0, 3)] public int Value { get; set; }
+                }
+
+                public partial class Plain : IFixedWidthModel<Plain>
+                {
+                    [FixedColumn(0, 3)] public int Value { get; set; }
+                }
+                """);
+
+            var diagnostic = Assert.Single(result.GeneratorDiagnostics);
+            Assert.Equal("FWP013", diagnostic.Id);
+            Assert.Contains("Generic", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+            Assert.Contains("partial class Plain", Assert.Single(result.GeneratedSources), StringComparison.Ordinal);
+        }
+
+        [Theory]
+        [InlineData(2147483646, 3, "FWP014")]
+        [InlineData(int.MaxValue, 1, "FWP014")]
+        [InlineData(2147483646, 1, null)]
+        public void ColumnEndingPastIntMaxValue_ReportsFwp014(int start, int length, string? diagnosticId)
+        {
+            var result = Run($$"""
+                public partial class FarModel : IFixedWidthModel<FarModel>
+                {
+                    [FixedColumn({{start}}, {{length}})] public string Value { get; set; } = "";
+                }
+                """);
+
+            if (diagnosticId is null)
+            {
+                Assert.Empty(result.GeneratorDiagnostics);
+                Assert.Single(result.GeneratedSources);
+            }
+            else
+            {
+                Assert.Equal(diagnosticId, Assert.Single(result.GeneratorDiagnostics).Id);
+                Assert.Empty(result.GeneratedSources);
+            }
+        }
+
+        [Fact]
         public void AdjacentColumns_AreValid()
         {
             var result = Run("""
@@ -466,12 +530,12 @@ namespace FixedWidthParser.Generator.Tests
                     .WithNullableContextOptions(NullableContextOptions.Enable));
         }
 
-        private static GeneratorRunResult Run(string modelSource)
+        private static GeneratorRunResult Run(string modelSource, string ns = "GeneratorSmoke")
         {
-            string source = """
+            string source = $"""
                 using FixedWidthParser;
                 
-                namespace GeneratorSmoke;
+                namespace {ns};
 
                 """ + modelSource;
 

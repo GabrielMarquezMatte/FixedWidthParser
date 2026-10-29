@@ -94,22 +94,23 @@ namespace fw
             return reinterpret_cast<const uint8_t*>(text.data());
         }
 
-        // fw_stream.read over a std::istream: a short count at the end, -1 once the stream is bad. An exception
-        // must not unwind into the library, so it fails the read too.
+        // fw_stream.read over a std::istream: a short count at the end, -1 once the stream is bad or fails before
+        // its end. An exception must not unwind into the library; one that the end itself throws, from a stream
+        // with exceptions enabled, still keeps the bytes read before it.
         inline int64_t read_istream(void* user_data, uint8_t* buffer, int64_t length) noexcept
         {
             constexpr std::string_view failed = "the std::istream failed";
+            auto& in = *static_cast<std::istream*>(user_data);
             try
             {
-                auto& in = *static_cast<std::istream*>(user_data);
                 in.read(reinterpret_cast<char*>(buffer), static_cast<std::streamsize>(length));
-                if (!in.bad())
-                {
-                    return static_cast<int64_t>(in.gcount());
-                }
             }
             catch (...)
             {
+            }
+            if (!in.bad() && (in.eof() || !in.fail()))
+            {
+                return static_cast<int64_t>(in.gcount());
             }
             fw_set_source_error(bytes(failed), static_cast<int32_t>(failed.size()));
             return -1;
@@ -448,7 +449,7 @@ namespace fw
 
     namespace detail
     {
-        // fw_sink.write over a std::ostream: -1 once the stream is bad, or if it throws.
+        // fw_sink.write over a std::ostream: -1 once the stream fails, or if it throws.
         inline int32_t write_ostream(void* user_data, const uint8_t* buffer, int64_t length) noexcept
         {
             constexpr std::string_view failed = "the std::ostream failed";
@@ -456,7 +457,7 @@ namespace fw
             {
                 auto& out = *static_cast<std::ostream*>(user_data);
                 out.write(reinterpret_cast<const char*>(buffer), static_cast<std::streamsize>(length));
-                if (!out.bad())
+                if (!out.fail())
                 {
                     return 0;
                 }

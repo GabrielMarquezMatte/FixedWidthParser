@@ -58,6 +58,12 @@ namespace FixedWidthParser.Tests.Native
         }
 
         [Fact]
+        public void Create_EndPastIntMaxValue_Fails()
+        {
+            AssertInvalid("ends past int.MaxValue", new Col("a", 2147483646, 3, TString));
+        }
+
+        [Fact]
         public void Create_ZeroLength_Fails()
         {
             AssertInvalid("invalid Length (0)", new Col("a", 0, 0, TString));

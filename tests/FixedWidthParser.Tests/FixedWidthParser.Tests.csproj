@@ -10,6 +10,9 @@
     <IsPackable>false</IsPackable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OutputType>Exe</OutputType>
+    <!-- The allocation guards measure optimized code; tier-0 generic BCL code boxes, and on a slow runner tier-up can
+         outlast a guard's wait. Jitting optimized from the start removes that race. -->
+    <TieredCompilationQuickJit>false</TieredCompilationQuickJit>
     <!-- Persist generated sources under obj/ for inspection/debugging. -->
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <NoWarn>$(NoWarn);HLQ005;CA1707;CA1815;S3241;CA1051;S6640</NoWarn>
@@ -21,9 +24,9 @@
 
   <ItemGroup>
     <PackageReference Include="Apache.Arrow" Version="23.0.0" />
-    <PackageReference Include="CsCheck" Version="4.7.0" />
+    <PackageReference Include="CsCheck" Version="5.0.0" />
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.12.0" />
-    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.1" />
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

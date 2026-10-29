@@ -37,7 +37,7 @@ namespace FixedWidthParser.Infrastructure
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsBlank(ReadOnlySpan<byte> column, in ColumnParseOptions options)
         {
-            return column.Trim(options.TrimByte).Trim((byte)' ').IsEmpty;
+            return column.IndexOfAnyExcept(options.TrimByte, (byte)' ') < 0;
         }
 
         /// <summary>Decodes a string column with the context's encoding, interning it through the context's pool when there is one.</summary>
@@ -107,7 +107,38 @@ namespace FixedWidthParser.Infrastructure
                 value = Unsafe.As<decimal, TValue>(ref fast);
                 return true;
             }
+            // The UTF-8 parser reads ASCII the same in every supported encoding, but not other bytes, such as
+            // a Latin-1 no-break space grouping digits.
+            if (!context.IsUtf8 && !Ascii.IsValid(trimmed))
+            {
+                return ParseTranscoded(trimmed, in context, out value);
+            }
             return TValue.TryParse(trimmed, context.FormatProvider, out value);
+        }
+
+        // Decodes with the context's encoding and parses the text's UTF-8, on the stack when it fits.
+        [SkipLocalsInit]
+        private static bool ParseTranscoded<TValue>(ReadOnlySpan<byte> bytes, in FixedWidthContext context, [MaybeNullWhen(false)] out TValue value)
+            where TValue : IUtf8SpanParsable<TValue>
+        {
+            Span<char> chars = stackalloc char[StackBufferSize];
+            var text = Decode(bytes, context.Encoding, chars, out char[]? rentedChars);
+            int maxBytes = Encoding.UTF8.GetMaxByteCount(text.Length);
+            byte[]? rentedBytes = maxBytes <= StackBufferSize ? null : ArrayPool<byte>.Shared.Rent(maxBytes);
+            Span<byte> utf8 = rentedBytes is null ? stackalloc byte[StackBufferSize] : rentedBytes;
+            try
+            {
+                int written = Encoding.UTF8.GetBytes(text, utf8);
+                return TValue.TryParse(utf8[..written], context.FormatProvider, out value);
+            }
+            finally
+            {
+                Return(rentedChars);
+                if (rentedBytes is not null)
+                {
+                    ArrayPool<byte>.Shared.Return(rentedBytes);
+                }
+            }
         }
 
         /// <summary>Parses an <see cref="ISpanParsable{TSelf}"/> column that has no UTF-8 parser, decoding it with the context's encoding first.</summary>
@@ -146,9 +177,11 @@ namespace FixedWidthParser.Infrastructure
             private static FrozenDictionary<string, TEnum>.AlternateLookup<ReadOnlySpan<char>> Build()
             {
                 var map = new Dictionary<string, TEnum>(StringComparer.OrdinalIgnoreCase);
-                foreach (TEnum member in Enum.GetValues<TEnum>())
+                // By name: an alias shares its value, so the value's ToString would name only one of them.
+                foreach (string name in Enum.GetNames<TEnum>())
                 {
-                    map[member.ToString()] = member;
+                    var member = Enum.Parse<TEnum>(name);
+                    map[name] = member;
                     map[member.ToString("D")] = member;
                 }
                 return map.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase).GetAlternateLookup<ReadOnlySpan<char>>();
@@ -161,14 +194,38 @@ namespace FixedWidthParser.Infrastructure
                 {
                     return true;
                 }
-                // A zero-padded code is its number: 02 is 2, and 00 is 0.
-                int digits = text.IndexOfAnyExcept('0');
-                if (digits == 0 || text.IsEmpty)
+                // A zero-padded code is its number: 02 is 2, 00 is 0, and -0001 (a negative value right-aligned
+                // with zero padding, as the writer makes it) is -1.
+                int sign = text.StartsWith('-') ? 1 : 0;
+                var unsigned = text[sign..];
+                int digits = unsigned.IndexOfAnyExcept('0');
+                if (digits == 0 || unsigned.IsEmpty)
                 {
                     return false;
                 }
-                var number = digits < 0 ? "0" : text[digits..];
-                return !number.ContainsAnyExceptInRange('0', '9') && Lookup.TryGetValue(number, out value);
+                var number = digits < 0 ? "0" : unsigned[digits..];
+                if (number.ContainsAnyExceptInRange('0', '9'))
+                {
+                    return false;
+                }
+                return sign == 0 ? Lookup.TryGetValue(number, out value) : TryLookupNegative(number, out value);
+            }
+
+            // Its own method, so the stack buffer costs nothing to the lookups that do not need it. No enum value has more
+            // than 20 digits, so a longer number names no member, and the sign fits beside the rest.
+            [SkipLocalsInit]
+            [MethodImpl(MethodImplOptions.NoInlining)]
+            private static bool TryLookupNegative(ReadOnlySpan<char> digits, out TEnum value)
+            {
+                Span<char> negative = stackalloc char[21];
+                if (digits.Length >= negative.Length)
+                {
+                    value = default;
+                    return false;
+                }
+                negative[0] = '-';
+                digits.CopyTo(negative[1..]);
+                return Lookup.TryGetValue(negative[..(digits.Length + 1)], out value);
             }
         }
 

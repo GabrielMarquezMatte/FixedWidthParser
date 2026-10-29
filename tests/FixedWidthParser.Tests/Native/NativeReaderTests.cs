@@ -94,6 +94,21 @@ namespace FixedWidthParser.Tests.Native
         }
 
         [Fact]
+        public void Reader_DecimalOverflowingTheScale_IsSkipped()
+        {
+            byte[] content = Encoding.UTF8.GetBytes(NativeReadTests.DecimalOverflow);
+            var options = ReaderOptions(1) with { Read = Options(skipInvalid: true) };
+            fixed (byte* data = content)
+            {
+                Assert.Equal(NativeStatus.Ok, ReaderApi.OpenMemory(data, content.Length, NativeReadTests.DecimalOverflowLayout(), &options, out nint reader));
+                var batches = Drain(reader);
+                ReaderApi.Close(reader);
+
+                Assert.Equal([1000L, 2000L], batches.SelectMany(b => b.Column(0)));
+            }
+        }
+
+        [Fact]
         public void Reader_AfterEof_ReturnsEof()
         {
             fixed (byte* data = Content)

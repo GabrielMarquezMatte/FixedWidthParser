@@ -69,6 +69,31 @@ namespace FixedWidthParser.Tests
             Assert.Equal(padded, Format(generatedPadding));
         }
 
+        [Theory]
+        [InlineData(" 0 0 * * *")]
+        [InlineData("0 0 0*** *")]
+        [InlineData("  0  ** * ")]
+        public void Nullable_BlankDetection_MixedSpacesAndTrimChar(string text)
+        {
+            Assert.True(FixedWidth.TryParse(Bytes(text), FixedWidthLayout.FromAttributes<NullablePaddingModel>(), Ctx, out var attributes));
+            Assert.Null(attributes.Value);
+            Assert.Null(attributes.DoubleValue);
+            Assert.True(FixedWidth.TryParse<GenNullablePaddingModel>(Bytes(text), Ctx, out var generated));
+            Assert.Null(generated.Value);
+            Assert.Null(generated.DoubleValue);
+        }
+
+        [Fact]
+        public void Generated_KeywordNames_ParseAndFormat()
+        {
+            Assert.True(FixedWidth.TryParse<@operator>(Bytes("42 7  "), Ctx, out var model));
+            Assert.Equal(42, model.@event);
+            Assert.Equal(7, model.@int);
+            Assert.Equal("42 7  ", Format(model));
+            Assert.True(FixedWidth.TryParse<@operator>(Bytes("42    "), Ctx, out var blank));
+            Assert.Null(blank.@int);
+        }
+
         [Fact]
         public void SignAware_ZeroPadding()
         {

@@ -74,6 +74,20 @@ namespace FixedWidthParser.Generator
             "Column '{0}' in '{1}' sets {2} to '{3}', which is not an ASCII character; column positions are bytes, so it must be one byte in every supported encoding",
             "FixedWidthParser", DiagnosticSeverity.Error, isEnabledByDefault: true);
 
+        private static readonly DiagnosticDescriptor MustNotBeGeneric = new(
+            "FWP013", "Fixed-width model must not be generic",
+            "Type '{0}' is generic; generated fixed-width parsing currently supports only non-generic types",
+            "FixedWidthParser", DiagnosticSeverity.Error, isEnabledByDefault: true);
+
+        private static readonly DiagnosticDescriptor ColumnEndOverflow = new(
+            "FWP014", "Fixed-width column ends past int.MaxValue",
+            "Column '{0}' in '{1}' starts at {2} with Length {3}, so it ends past int.MaxValue",
+            "FixedWidthParser", DiagnosticSeverity.Error, isEnabledByDefault: true);
+
+        // The namespace as C# source: dotted, without 'global::', keywords escaped.
+        private static readonly SymbolDisplayFormat NamespaceFormat =
+            SymbolDisplayFormat.FullyQualifiedFormat.WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted);
+
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
             var models = context.SyntaxProvider.CreateSyntaxProvider(
@@ -123,7 +137,7 @@ namespace FixedWidthParser.Generator
 
             string? ns = symbol.ContainingNamespace.IsGlobalNamespace
                 ? null
-                : symbol.ContainingNamespace.ToDisplayString();
+                : symbol.ContainingNamespace.ToDisplayString(NamespaceFormat);
 
             return new ModelInfo(
                 ns,
@@ -133,6 +147,7 @@ namespace FixedWidthParser.Generator
                 new EquatableArray<ColumnInfo>(columns.ToImmutable()),
                 declaration.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)),
                 symbol.ContainingType is not null,
+                symbol.TypeParameters.Length > 0,
                 declaration.Identifier.GetLocation());
         }
 
@@ -366,6 +381,12 @@ namespace FixedWidthParser.Generator
                 spc.ReportDiagnostic(Diagnostic.Create(MustBePartial, model.Location, model.TypeName));
                 return;
             }
+            // ponytail: rejected rather than emitted; supporting them means carrying type parameters and constraints.
+            if (model.IsGeneric)
+            {
+                spc.ReportDiagnostic(Diagnostic.Create(MustNotBeGeneric, model.Location, model.TypeName));
+                return;
+            }
 
             // The interface needs both methods, so any column error blocks the whole emission.
             bool error = false;
@@ -380,7 +401,8 @@ namespace FixedWidthParser.Generator
                 return;
             }
 
-            spc.AddSource(model.FullyQualifiedName.Replace("global::", string.Empty) + ".FixedWidth.g.cs", BuildSource(model));
+            // A hint name takes no '@', which escapes a keyword in the qualified name.
+            spc.AddSource(model.FullyQualifiedName.Replace("global::", string.Empty).Replace("@", string.Empty) + ".FixedWidth.g.cs", BuildSource(model));
         }
 
         private static bool ReportColumnErrors(SourceProductionContext spc, ModelInfo model, ColumnInfo column)
@@ -426,6 +448,10 @@ namespace FixedWidthParser.Generator
             if (column.Length < 1)
             {
                 Report(InvalidLength, column.Name, model.TypeName, column.Length);
+            }
+            else if (column.Start > int.MaxValue - column.Length)
+            {
+                Report(ColumnEndOverflow, column.Name, model.TypeName, column.Start, column.Length);
             }
             return error;
         }
@@ -481,7 +507,7 @@ namespace FixedWidthParser.Generator
                 indent = string.Empty;
             }
 
-            sb.Append(indent).Append(model.TypeKeywords).Append(' ').Append(model.TypeName).AppendLine();
+            sb.Append(indent).Append(model.TypeKeywords).Append(' ').Append(Identifier(model.TypeName)).AppendLine();
             sb.Append(indent).AppendLine("{");
 
             string body = indent + "    ";
@@ -577,7 +603,7 @@ namespace FixedWidthParser.Generator
             sb.Append(stmt).AppendLine("{");
             for (int i = 0; i < columns.Length; i++)
             {
-                sb.Append(stmt).Append("    ").Append(columns[i].Name).Append(" = __v").Append(i).AppendLine(",");
+                sb.Append(stmt).Append("    ").Append(Identifier(columns[i].Name)).Append(" = __v").Append(i).AppendLine(",");
             }
             sb.Append(stmt).AppendLine("};");
             sb.Append(stmt).AppendLine("return true;");
@@ -662,11 +688,11 @@ namespace FixedWidthParser.Generator
             string slice = "__line.Slice(" + c.Start + ", " + c.Length + ")";
             if (!c.IsNullable)
             {
-                AppendColumnKindFormat(sb, stmt, c, slice, i, "model." + c.Name);
+                AppendColumnKindFormat(sb, stmt, c, slice, i, "model." + Identifier(c.Name));
                 return;
             }
 
-            sb.Append(stmt).Append("if (model.").Append(c.Name).Append(" is { } __u").Append(i).AppendLine(")");
+            sb.Append(stmt).Append("if (model.").Append(Identifier(c.Name)).Append(" is { } __u").Append(i).AppendLine(")");
             sb.Append(stmt).AppendLine("{");
             AppendColumnKindFormat(sb, stmt + "    ", c, slice, i, "__u" + i);
             sb.Append(stmt).AppendLine("}");
@@ -698,6 +724,12 @@ namespace FixedWidthParser.Generator
                     // Unsupported kinds were reported in Emit, which then skips generation.
                     break;
             }
+        }
+
+        // A symbol's name as C# source: a keyword, such as a member declared as @event, needs its '@' back.
+        private static string Identifier(string name)
+        {
+            return SyntaxFacts.GetKeywordKind(name) == SyntaxKind.None ? name : "@" + name;
         }
 
         private static string ByteLiteral(char value)
@@ -742,8 +774,9 @@ namespace FixedWidthParser.Generator
             WriteKind WKind, int Alignment, char Padding, string? Format, int Overflow, char TrimChar, int TrimMode);
 
         private sealed class ModelInfo(string? ns, string typeKeywords, string typeName, string fullyQualifiedName,
-                                       EquatableArray<ColumnInfo> columns, bool isPartial, bool isNested, Location location) : IEquatable<ModelInfo>
+                                       EquatableArray<ColumnInfo> columns, bool isPartial, bool isNested, bool isGeneric, Location location) : IEquatable<ModelInfo>
         {
+            public bool IsGeneric { get; } = isGeneric;
             public string? Namespace { get; } = ns;
             public string TypeKeywords { get; } = typeKeywords;
             public string TypeName { get; } = typeName;
@@ -761,6 +794,7 @@ namespace FixedWidthParser.Generator
                 return other is not null
                        && IsPartial == other.IsPartial
                        && IsNested == other.IsNested
+                       && IsGeneric == other.IsGeneric
                        && string.Equals(Namespace, other.Namespace, StringComparison.Ordinal)
                        && string.Equals(TypeKeywords, other.TypeKeywords, StringComparison.Ordinal)
                        && string.Equals(TypeName, other.TypeName, StringComparison.Ordinal)
@@ -787,6 +821,7 @@ namespace FixedWidthParser.Generator
                     hash = hash * 31 + Columns.GetHashCode();
                     hash = hash * 31 + (IsPartial ? 1 : 0);
                     hash = hash * 31 + (IsNested ? 1 : 0);
+                    hash = hash * 31 + (IsGeneric ? 1 : 0);
                     return hash;
                 }
             }

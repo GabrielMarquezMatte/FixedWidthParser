@@ -44,19 +44,37 @@ namespace FixedWidthParser.Native.Writing
             {
                 return status;
             }
+            string target = Encoding.UTF8.GetString(path);
+            // Writes a sibling, then moves it over the target: a failed write leaves an existing file as it was. Its
+            // name is short and independent of the target's, which may already be as long as a name can be.
+            string temp = Path.Combine(Path.GetDirectoryName(target) ?? string.Empty, Path.GetRandomFileName() + ".tmp");
             try
             {
                 long total = formatter!.Rows * lineBytes;
                 // Asynchronous, though every write waits: Windows runs one synchronous I/O at a time on a handle,
                 // which would serialize the parallel batches.
-                using var handle = File.OpenHandle(Encoding.UTF8.GetString(path), FileMode.Create, FileAccess.Write, FileShare.None, FileOptions.Asynchronous, total);
-                RandomAccess.SetLength(handle, total);
-                return Run(formatter, settings!, lineBytes, (first, count) => WriteBatch(handle, formatter, settings!, layout, first, count, lineBytes));
+                using (var handle = File.OpenHandle(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, FileOptions.Asynchronous, total))
+                {
+                    RandomAccess.SetLength(handle, total);
+                    status = Run(formatter, settings!, lineBytes, (first, count) => WriteBatch(handle, formatter, settings!, layout, first, count, lineBytes));
+                }
+                if (status == NativeStatus.Ok)
+                {
+                    File.Move(temp, target, overwrite: true);
+                }
+                return status;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
             {
                 NativeApi.SetLastError(ex.Message);
                 return NativeStatus.Error;
+            }
+            finally
+            {
+                if (File.Exists(temp))
+                {
+                    File.Delete(temp);
+                }
             }
         }
 
