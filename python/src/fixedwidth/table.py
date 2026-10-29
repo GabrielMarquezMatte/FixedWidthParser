@@ -106,9 +106,10 @@ class Table:
         validity = pa.foreign_buffer(column.validity, (n + 7) // 8, base=self._owner) if column.validity else None
         if kind is ColumnType.DECIMAL:
             # ponytail: decimals go through Python objects; fw.read_arrow() hands them over natively.
+            # From a string, exactly: scaleb would round to the caller's decimal context.
             mask = self.validity(name)
             values = self[name]
-            decimals = [None if mask is not None and not mask[i] else Decimal(int(v)).scaleb(-column.scale) for i, v in enumerate(values)]
+            decimals = [None if mask is not None and not mask[i] else Decimal(f"{int(v)}E-{column.scale}") for i, v in enumerate(values)]
             return pa.array(decimals, type=pa.decimal128(18, column.scale))
         if kind is ColumnType.STRING:
             offsets = pa.foreign_buffer(column.values, (n + 1) * 4, base=self._owner)

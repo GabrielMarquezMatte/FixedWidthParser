@@ -27,6 +27,15 @@ int main()
     CHECK(fw::write_stream(out, *table, layout, {.degree_of_parallelism = 4, .batch_rows = 1}).has_value());
     CHECK(out.str() == std::string(serial->begin(), serial->end()));
 
+    // failbit alone stops a stream's writes too, so it is an error, as badbit is.
+    std::ostringstream failed;
+    failed.setstate(std::ios::failbit);
+    auto refused = fw::write_stream(failed, *table, layout);
+    CHECK(!refused.has_value() && refused.error().message.find("std::ostream") != std::string::npos);
+    CHECK(failed.str().empty());
+    std::ostream unbuffered{nullptr};
+    CHECK(!fw::write_stream(unbuffered, *table, layout).has_value());
+
     const std::string path = "fw_cpp_write.txt";
     CHECK(fw::write_file(path, *table, layout).has_value());
     std::FILE* file = std::fopen(path.c_str(), "rb");

@@ -10,7 +10,7 @@ namespace FixedWidthParser.Native
         {
             if (path is null || pathLength <= 0 || outReader is null)
             {
-                return InvalidArgument("fw_reader_open_file needs a path and out_reader.");
+                return NativeApi.InvalidArgument("fw_reader_open_file needs a path and out_reader.");
             }
             *outReader = 0;
             return WithLayout(layout, l =>
@@ -26,7 +26,7 @@ namespace FixedWidthParser.Native
         {
             if ((data is null && dataLength != 0) || dataLength < 0 || outReader is null)
             {
-                return InvalidArgument("fw_reader_open_memory needs data for a non-zero data_len, and out_reader.");
+                return NativeApi.InvalidArgument("fw_reader_open_memory needs data for a non-zero data_len, and out_reader.");
             }
             *outReader = 0;
             return WithLayout(layout, l =>
@@ -42,7 +42,7 @@ namespace FixedWidthParser.Native
         {
             if (outReader is null)
             {
-                return InvalidArgument("fw_reader_open_stream needs out_reader.");
+                return NativeApi.InvalidArgument("fw_reader_open_stream needs out_reader.");
             }
             *outReader = 0;
 #pragma warning disable CA2000 // The reader takes the stream over, or it is disposed below.
@@ -76,7 +76,7 @@ namespace FixedWidthParser.Native
         {
             if (outTable is null)
             {
-                return InvalidArgument("fw_reader_next needs out_table.");
+                return NativeApi.InvalidArgument("fw_reader_next needs out_table.");
             }
             return ReaderApi.Next(reader, outTable);
         }

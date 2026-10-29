@@ -177,8 +177,7 @@ namespace FixedWidthParser.Native.Reading
             }
             if (raw.BatchRows is < 0 or > int.MaxValue || (raw.Read.StructSize != 0 && raw.Read.StructSize != sizeof(NativeReadOptionsRaw)))
             {
-                NativeApi.SetLastError("fw_reader_options: batch_rows must be 0..2147483647, and read.struct_size must be 0 or sizeof(fw_read_options).");
-                return NativeStatus.InvalidArgument;
+                return NativeApi.InvalidArgument("fw_reader_options: batch_rows must be 0..2147483647, and read.struct_size must be 0 or sizeof(fw_read_options).");
             }
             batchRows = raw.BatchRows;
             var read = raw.Read with { StructSize = sizeof(NativeReadOptionsRaw) };

@@ -11,7 +11,7 @@ namespace FixedWidthParser.Native
         {
             if (path is null || pathLength <= 0 || table is null)
             {
-                return InvalidArgument("fw_write_file needs a path and a table.");
+                return NativeApi.InvalidArgument("fw_write_file needs a path and a table.");
             }
             return WithLayout(layout, l => WriteApi.WriteFile(new ReadOnlySpan<byte>(path, pathLength), table, l, options));
         }
@@ -21,7 +21,7 @@ namespace FixedWidthParser.Native
         {
             if (table is null || outBuffer is null)
             {
-                return InvalidArgument("fw_write_memory needs a table and out_buffer.");
+                return NativeApi.InvalidArgument("fw_write_memory needs a table and out_buffer.");
             }
             *outBuffer = default;
             return WithLayout(layout, l => WriteApi.WriteMemory(table, l, options, outBuffer));
@@ -32,7 +32,7 @@ namespace FixedWidthParser.Native
         {
             if (table is null)
             {
-                return InvalidArgument("fw_write_stream needs a table.");
+                return NativeApi.InvalidArgument("fw_write_stream needs a table.");
             }
 #pragma warning disable CA2000 // Disposed by the using below; the sink has nothing to release.
             if (!CallbackWriteStream.TryCreate(sink, out var created))

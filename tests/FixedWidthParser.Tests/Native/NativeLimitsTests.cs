@@ -65,6 +65,31 @@ namespace FixedWidthParser.Tests.Native
             Assert.Throws<InvalidOperationException>(() => GrowableNativeBuffer<byte>.NextCapacity(int.MaxValue, (long)int.MaxValue + 1));
         }
 
+        // A TableArena reserves a STRING column's full width on every row; trimmed text often uses a sliver of it.
+        [Fact]
+        public unsafe void TrimExcess_ShrinksOnlyAnOwnedMostlyEmptyBlock()
+        {
+            using var sparse = new GrowableNativeBuffer<byte>();
+            sparse.Reserve(1000);
+            "OK"u8.CopyTo(sparse.Append(2));
+            sparse.TrimExcess(2);
+            Assert.Equal(2, sparse.Capacity);
+            Assert.True(sparse.Span.SequenceEqual("OK"u8));
+
+            using var dense = new GrowableNativeBuffer<byte>();
+            dense.Reserve(1000);
+            dense.Append(600);
+            dense.TrimExcess(600);
+            Assert.Equal(1000, dense.Capacity);
+
+            byte* lent = stackalloc byte[1000];
+            using var borrowed = new GrowableNativeBuffer<byte>();
+            borrowed.Borrow(lent, 1000);
+            borrowed.TrimExcess(2);
+            Assert.Equal(1000, borrowed.Capacity);
+            Assert.True(borrowed.Pointer == lent);
+        }
+
         [Fact]
         public void DecimalBuffer_SizeIsComputedIn64Bits()
         {

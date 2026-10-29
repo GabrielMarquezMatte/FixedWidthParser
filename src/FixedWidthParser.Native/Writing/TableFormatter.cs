@@ -34,8 +34,7 @@ namespace FixedWidthParser.Native.Writing
             string? error = Check(table, layout);
             if (error is not null)
             {
-                NativeApi.SetLastError(error);
-                return NativeStatus.InvalidArgument;
+                return NativeApi.InvalidArgument(error);
             }
             formatter = new TableFormatter(layout, table, encoding);
             return NativeStatus.Ok;
@@ -56,12 +55,38 @@ namespace FixedWidthParser.Native.Writing
                 {
                     return $"Column '{column.Name}' has type {raw.Type} (scale {raw.Scale}) in the table and {column.Type} (scale {column.Scale}) in the layout.";
                 }
-                if (raw.Length != table->RowCount || (raw.Values is null && raw.Length > 0) || (raw.Data is null && raw.DataLen > 0))
+                if (raw.Length != table->RowCount || (raw.Values is null && raw.Length > 0) || (raw.Data is null && raw.DataLen > 0) || raw.DataLen < 0)
                 {
                     return $"Column '{column.Name}' has {raw.Length} values for {table->RowCount} rows, or a buffer that does not match its length.";
                 }
+                if (column.Type == NativeType.String && !OffsetsWithinData(raw))
+                {
+                    return $"Column '{column.Name}' has string offsets that descend or fall outside its {raw.DataLen} data bytes.";
+                }
             }
             return null;
+        }
+
+        /// <summary>True when a string column's offsets ascend within <c>0..DataLen</c>, so no row reads past its data.</summary>
+        private static bool OffsetsWithinData(NativeColumnRaw raw)
+        {
+            if (raw.Length == 0)
+            {
+                return true;
+            }
+            var offsets = (int*)raw.Values;
+            if (offsets[0] < 0)
+            {
+                return false;
+            }
+            for (long row = 0; row < raw.Length; row++)
+            {
+                if (offsets[row + 1] < offsets[row])
+                {
+                    return false;
+                }
+            }
+            return offsets[raw.Length] <= raw.DataLen;
         }
 
         /// <summary>Writes row <paramref name="row"/> into <paramref name="line"/>, whose length is the layout's line length.</summary>
@@ -98,16 +123,37 @@ namespace FixedWidthParser.Native.Writing
                     FixedWidthRuntime.FormatUtf8Value(DateOnly.FromDayNumber(NativeType.EpochDay + ((int*)raw->Values)[row]), slice, in _context, options, column.Name);
                     return;
                 case NativeType.Time:
-                    FixedWidthRuntime.FormatUtf8Value(new TimeOnly(((long*)raw->Values)[row] * TimeSpan.TicksPerMicrosecond), slice, in _context, options, column.Name);
+                    FixedWidthRuntime.FormatUtf8Value(new TimeOnly(Ticks(column, raw, row, 0, TimeSpan.TicksPerDay - 1)), slice, in _context, options, column.Name);
                     return;
                 case NativeType.Timestamp:
-                    var ticks = DateTime.UnixEpoch.Ticks + (((long*)raw->Values)[row] * TimeSpan.TicksPerMicrosecond);
+                    long epoch = DateTime.UnixEpoch.Ticks;
+                    var ticks = epoch + Ticks(column, raw, row, DateTime.MinValue.Ticks - epoch, DateTime.MaxValue.Ticks - epoch);
                     FixedWidthRuntime.FormatUtf8Value(new DateTime(ticks, DateTimeKind.Unspecified), slice, in _context, options, column.Name);
+                    return;
+                case NativeType.Decimal:
+                    long unscaled = ((long*)raw->Values)[row];
+                    // The reader takes at most 18 digits; writing more would make a line it cannot read back.
+                    if (unscaled is <= -NativeType.DecimalLimit or >= NativeType.DecimalLimit)
+                    {
+                        throw new InvalidOperationException($"Value {unscaled} of column \"{column.Name}\" has more than 18 digits, which a DECIMAL cannot read back.");
+                    }
+                    FixedWidthRuntime.FormatUtf8Value(unscaled, slice, in _context, options, column.Name);
                     return;
                 default:
                     FixedWidthRuntime.FormatUtf8Value(((long*)raw->Values)[row], slice, in _context, options, column.Name);
                     return;
             }
+        }
+
+        /// <summary>The row's microseconds as ticks, checked against <paramref name="min"/>..<paramref name="max"/> before scaling so it cannot wrap.</summary>
+        private static long Ticks(NativeColumn column, NativeColumnRaw* raw, long row, long min, long max)
+        {
+            long micros = ((long*)raw->Values)[row];
+            if (micros < min / TimeSpan.TicksPerMicrosecond || micros > max / TimeSpan.TicksPerMicrosecond)
+            {
+                throw new InvalidOperationException($"Value {micros} of column \"{column.Name}\" is out of range in microseconds.");
+            }
+            return micros * TimeSpan.TicksPerMicrosecond;
         }
 
         private void FormatFloat(NativeColumn column, double value, Span<byte> slice)

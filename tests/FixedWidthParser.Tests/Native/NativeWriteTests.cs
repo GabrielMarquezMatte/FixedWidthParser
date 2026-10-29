@@ -208,6 +208,56 @@ namespace FixedWidthParser.Tests.Native
             }
         }
 
+        [Fact]
+        public void Write_FileFailure_KeepsTheExistingFile()
+        {
+            var read = Build(new Col("n", 0, 2, TInt64));
+            var write = Build(new Col("n", 0, 1, TInt64));
+            var table = ReadTable("12\n"u8.ToArray(), read);
+            string directory = Directory.CreateTempSubdirectory().FullName;
+            string path = Path.Combine(directory, "out.txt");
+            try
+            {
+                File.WriteAllText(path, "ORIGINAL");
+
+                Assert.Equal(NativeStatus.Error, WriteApi.WriteFile(Encoding.UTF8.GetBytes(path), &table, write, null));
+
+                Assert.Equal("ORIGINAL", File.ReadAllText(path));
+                Assert.Equal([path], Directory.GetFiles(directory));
+            }
+            finally
+            {
+                NativeTable.Free(&table);
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+
+        [Theory]
+        [InlineData("out.txt")]
+        [InlineData(null)]
+        public void Write_File_ReplacesTheExistingFile(string? name)
+        {
+            var layout = EveryTypeLayout();
+            var table = ReadTable(Encoding.UTF8.GetBytes(EveryType), layout);
+            string directory = Directory.CreateTempSubdirectory().FullName;
+            // null stands for the longest name a file may have: 255 characters on every supported platform.
+            string path = Path.Combine(directory, name ?? new string('a', 251) + ".txt");
+            try
+            {
+                File.WriteAllText(path, new string('x', 1000));
+
+                Assert.Equal(NativeStatus.Ok, WriteApi.WriteFile(Encoding.UTF8.GetBytes(path), &table, layout, null));
+
+                Assert.Equal(WriteMemory(&table, layout).Bytes, File.ReadAllBytes(path));
+                Assert.Equal([path], Directory.GetFiles(directory));
+            }
+            finally
+            {
+                NativeTable.Free(&table);
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+
         [Theory]
         [InlineData(1, 0)]
         [InlineData(4, 1)]
@@ -346,6 +396,108 @@ namespace FixedWidthParser.Tests.Native
             var write = Build(new Col("d", 0, 10, TDate));
 
             Assert.Equal("2023-10-24\n", Encoding.UTF8.GetString(RoundTrip("20231024\n", read, write)));
+        }
+
+        /// <summary>Writes one string row whose offsets and declared length are given, over five allocated bytes "ABCDE".</summary>
+        private static (int Status, byte[] Bytes, string Error) WriteString(int start, int end, long dataLen)
+        {
+            int* offsets = stackalloc int[] { start, end };
+            byte* data = stackalloc byte[] { (byte)'A', (byte)'B', (byte)'C', (byte)'D', (byte)'E' };
+            var column = new NativeColumnRaw { Type = TString, Length = 1, Values = offsets, Data = data, DataLen = dataLen };
+            var table = new NativeTableRaw { ColumnCount = 1, RowCount = 1, Columns = &column };
+            return WriteMemory(&table, Build(new Col("s", 0, 5, TString)));
+        }
+
+        [Theory]
+        [InlineData(0, 5, 1L)]
+        [InlineData(3, 1, 5L)]
+        [InlineData(-1, 2, 5L)]
+        [InlineData(0, 0, -1L)]
+        public void Write_StringOffsetsOutsideTheData_AreInvalidArgument(int start, int end, long dataLen)
+        {
+            var (status, _, error) = WriteString(start, end, dataLen);
+
+            Assert.Equal(NativeStatus.InvalidArgument, status);
+            Assert.Contains("'s'", error, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void Write_StringOffsetsWithinTheData_Write()
+        {
+            var (status, bytes, error) = WriteString(1, 4, 5);
+
+            Assert.True(status == NativeStatus.Ok, error);
+            Assert.Equal("BCD  \n", Encoding.UTF8.GetString(bytes));
+        }
+
+        private static (int Status, byte[] Bytes, string Error) WriteDecimal(long unscaled, NativeLayout layout)
+        {
+            var column = new NativeColumnRaw { Type = TDecimal, Length = 1, Values = &unscaled };
+            var table = new NativeTableRaw { ColumnCount = 1, RowCount = 1, Columns = &column };
+            return WriteMemory(&table, layout);
+        }
+
+        [Theory]
+        [InlineData(999_999_999_999_999_999L)]
+        [InlineData(-999_999_999_999_999_999L)]
+        public void Write_Decimal18Digits_ReadsBack(long unscaled)
+        {
+            var layout = Build(new Col("d", 0, 20, TDecimal));
+
+            var (status, bytes, error) = WriteDecimal(unscaled, layout);
+
+            Assert.True(status == NativeStatus.Ok, error);
+            Assert.Equal([unscaled], FromMemory(bytes, layout).Column(0));
+        }
+
+        [Theory]
+        [InlineData(1_000_000_000_000_000_000L)]
+        [InlineData(-1_000_000_000_000_000_000L)]
+        public void Write_DecimalOver18Digits_IsError(long unscaled)
+        {
+            var (status, _, error) = WriteDecimal(unscaled, Build(new Col("d", 0, 20, TDecimal)));
+
+            Assert.Equal(NativeStatus.Error, status);
+            Assert.Contains("\"d\"", error, StringComparison.Ordinal);
+        }
+
+        private static (int Status, byte[] Bytes, string Error) WriteMicros(int type, long micros)
+        {
+            var column = new NativeColumnRaw { Type = type, Length = 1, Values = &micros };
+            var table = new NativeTableRaw { ColumnCount = 1, RowCount = 1, Columns = &column };
+            string format = type == TTime ? "HHmmss" : "yyyyMMddHHmmss";
+            return WriteMemory(&table, Build(new Col("t", 0, format.Length, type) { Format = format }));
+        }
+
+        [Theory]
+        [InlineData(TTime, -1L)]
+        [InlineData(TTime, 86_400_000_000L)]
+        [InlineData(TTime, 1844674407370955162L)]
+        [InlineData(TTimestamp, 1844674407370955162L)]
+        [InlineData(TTimestamp, 253402300800000000L)]
+        [InlineData(TTimestamp, -62135596800000001L)]
+        [InlineData(TTimestamp, long.MaxValue)]
+        [InlineData(TTimestamp, long.MinValue)]
+        public void Write_TemporalOutOfRange_IsError(int type, long micros)
+        {
+            var (status, _, error) = WriteMicros(type, micros);
+
+            Assert.Equal(NativeStatus.Error, status);
+            Assert.Contains("\"t\"", error, StringComparison.Ordinal);
+        }
+
+        [Theory]
+        [InlineData(TTime, 0L, "000000\n")]
+        [InlineData(TTime, 86_399_999_999L, "235959\n")]
+        [InlineData(TTimestamp, 1698154200000000L, "20231024133000\n")]
+        [InlineData(TTimestamp, 253402300799999999L, "99991231235959\n")]
+        [InlineData(TTimestamp, -62135596800000000L, "00010101000000\n")]
+        public void Write_TemporalEndpoints_Format(int type, long micros, string expected)
+        {
+            var (status, bytes, error) = WriteMicros(type, micros);
+
+            Assert.True(status == NativeStatus.Ok, error);
+            Assert.Equal(expected, Encoding.UTF8.GetString(bytes));
         }
 
         [Fact]

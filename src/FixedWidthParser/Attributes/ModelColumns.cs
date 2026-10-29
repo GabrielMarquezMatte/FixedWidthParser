@@ -47,6 +47,22 @@ namespace FixedWidthParser.Attributes
         }
 
         /// <summary>
+        /// A new <paramref name="converterType"/>, after checking that it converts <paramref name="valueType"/>.
+        /// The parser and the writer each create their own, since a converter may carry state.
+        /// </summary>
+        public static object CreateConverter(Type converterType, Type valueType, string memberName)
+        {
+            var requiredInterface = typeof(IFixedWidthConverter<>).MakeGenericType(valueType);
+            if (!requiredInterface.IsAssignableFrom(converterType))
+            {
+                throw new InvalidOperationException(
+                    $"Converter '{converterType}' for column '{memberName}' must implement '{requiredInterface}'.");
+            }
+            return Activator.CreateInstance(converterType)
+                ?? throw new InvalidOperationException($"Could not instantiate converter '{converterType}' for column '{memberName}'.");
+        }
+
+        /// <summary>
         /// Builds the by-ref model parameter and the member access for <paramref name="member"/>,
         /// returning the member's type too. The caller turns this into a setter (an assignment) or a
         /// getter (a read).

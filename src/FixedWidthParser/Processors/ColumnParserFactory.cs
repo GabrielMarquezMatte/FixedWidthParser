@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using FixedWidthParser.Attributes;
 using FixedWidthParser.Infrastructure;
 
 namespace FixedWidthParser.Processors
@@ -35,14 +36,7 @@ namespace FixedWidthParser.Processors
         {
             if (converterType is not null)
             {
-                var requiredInterface = typeof(IFixedWidthConverter<>).MakeGenericType(valueType);
-                if (!requiredInterface.IsAssignableFrom(converterType))
-                {
-                    throw new InvalidOperationException(
-                        $"Converter '{converterType}' for column '{memberName}' must implement '{requiredInterface}'.");
-                }
-                var converter = Activator.CreateInstance(converterType)
-                    ?? throw new InvalidOperationException($"Could not instantiate converter '{converterType}' for column '{memberName}'.");
+                var converter = ModelColumns.CreateConverter(converterType, valueType, memberName);
                 return (ColumnParser<TModel>)Method(nameof(ForConverter), typeof(TModel), valueType, converterType)
                     .Invoke(null, [setter, converter, options])!;
             }

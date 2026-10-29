@@ -40,6 +40,35 @@ namespace FixedWidthParser.Tests
             return value.TryFormat(destination, out bytesWritten, provider: context.FormatProvider);
         }
     }
+
+    /// <summary>Counts its instances; used by one test only, so the count is that test's.</summary>
+    public sealed class CountedConverter : IFixedWidthConverter<int>
+    {
+        private static int _created;
+
+        public CountedConverter()
+        {
+            Interlocked.Increment(ref _created);
+        }
+
+        public static int Created => Volatile.Read(ref _created);
+
+        public bool TryParse(ReadOnlySpan<byte> column, in FixedWidthContext context, out int value)
+        {
+            return int.TryParse(column, context.FormatProvider, out value);
+        }
+
+        public bool TryFormat(int value, Span<byte> destination, in FixedWidthContext context, out int bytesWritten)
+        {
+            return value.TryFormat(destination, out bytesWritten, provider: context.FormatProvider);
+        }
+    }
+
+    public sealed class CountedConverterModel
+    {
+        [FixedColumn(0, 5, Converter = typeof(CountedConverter))] public int Value { get; set; }
+    }
+
     /// <summary>Single custom-converted column, exercised by both the reflection parser/writer and the generator.</summary>
     public readonly record struct CentsConverterModel
     {

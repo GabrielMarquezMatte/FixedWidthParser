@@ -31,6 +31,19 @@ def test_read_arrow_decimal():
     assert str(table.column("v")[0].as_py()) == "123.45"
 
 
+def test_table_to_arrow_decimal_ignores_the_decimal_context():
+    import decimal
+
+    columns = fw.Layout([fw.Column("v", 0, 20, fw.Decimal, scale=2)])
+    table = fw.read(b"-0000000123456789012\n", columns)
+
+    with decimal.localcontext() as context:
+        context.prec = 6
+        arrow = table.to_arrow()
+
+    assert str(arrow.column("v")[0].as_py()) == "-1234567890.12"
+
+
 def test_arrow_stream_to_pyarrow_and_polars(cotahist, options):
     reader_options = fw.ReaderOptions(read=options, batch_rows=2)
 
